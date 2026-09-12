@@ -1,5 +1,38 @@
 # 02 — anomalyco/OpenCode
 
+## Pente fino adicional
+
+A análise deve tratar OpenCode como um sistema de composição, não apenas um coding CLI. O ponto estrutural mais importante é a separação entre **agent profile, model, tool, permission, Skill e task**. Isso evita o erro de transformar cada especialidade em um prompt monolítico.
+
+### Agentes como perfis operacionais
+
+Os perfis `build`, `plan` e `general` mostram uma divisão prática: leitura/análise pode ter permissões menores que implementação. No Braim, isso deve virar uma matriz de capacidades e permissões, não nomes fixos.
+
+### Tasks e trabalho multi-etapas
+
+A existência de mecanismos de tarefas/progresso indica que o agente precisa representar trabalho intermediário explicitamente. No Braim, cada item do roadmap deve possuir estado persistente, dependências, tentativas, responsável, artefatos e critérios de conclusão.
+
+### Skills como descoberta dinâmica
+
+O loader de Skills confirma que conhecimento operacional pode ser descoberto sem virar código do core. O Braim deve guardar `skill_id`, versão, origem, licença e score antes de carregar a instrução.
+
+### Tool permissions
+
+A permissão deve estar no nível da ferramenta/ação. Um agente “capaz de programar” não deve automaticamente poder publicar, apagar, acessar secrets ou executar rede irrestrita.
+
+### Separação importante
+
+```text
+Model      = inteligência linguística
+Agent      = papel + política + capacidades
+Skill      = procedimento/conhecimento
+Tool       = ação executável
+Task       = trabalho persistente
+Workflow   = sequência de tarefas/passos
+```
+
+Essa taxonomia deve virar entidades do Braim.
+
 ## Objetivo
 
 Estudar como um coding agent organiza agentes, Skills, ferramentas, permissões, sessões, tarefas e configuração sem transformar o LLM no núcleo do sistema.
@@ -10,7 +43,7 @@ OpenCode possui agentes com papéis diferentes. O `build` tem acesso amplo para 
 
 ## Skills
 
-O loader procura diretórios contendo `SKILL.md`. A Skill é uma unidade de conhecimento operacional que pode ser carregada quando necessária. O Braim deve adotar a mesma ideia: não colocar todas as instruções de todos os domínios no prompt permanente.
+O loader procura diretórios contendo `SKILL.md`. A Skill é uma unidade de conhecimento operacional que pode ser carregada quando a tarefa exige. O Braim deve adotar a mesma ideia: não colocar todas as instruções de todos os domínios no prompt permanente.
 
 Uma Skill do Braim deve conter:
 
@@ -89,7 +122,9 @@ Misturar essas cinco coisas dificulta aprendizado e recuperação.
 - configuração declarativa;
 - seleção de modelo separada do papel do agente;
 - subagente para pesquisa complexa;
-- comandos humanos como camada de entrada.
+- comandos humanos como camada de entrada;
+- matriz Capability × Tool × Permission;
+- estado persistente por task/attempt.
 
 ## O que não copiar
 
@@ -140,4 +175,4 @@ OpenCode usa MIT. A licença permite reutilização, mas qualquer cópia literal
 
 ## Conclusão
 
-O maior aprendizado é separar **capacidade, Skill, agente, ferramenta e modelo**. Essa separação deve ser estrutural no Braim desde o primeiro commit, porque será a base para seleção automática e aprendizado posterior.
+O maior aprendizado é separar **capacidade, Skill, agente, ferramenta e modelo**. O pente fino acrescenta que permissões e estado de tarefa também precisam ser entidades próprias. Essa separação deve ser estrutural no Braim desde o primeiro commit.

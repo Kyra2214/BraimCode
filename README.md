@@ -48,3 +48,13 @@ FASE H — Integração: descongelar Sandbox, implementar o contrato, E2E comple
 `qa`, `delivery` e `orchestrator` ficaram como pastas vazias por enquanto —
 fazem mais sentido depois da Fase C (cérebro mínimo) estar de pé, porque
 dependem do contrato do Sandbox (Fase A/H) para ter o que testar/entregar.
+
+## Runtime executável do roadmap
+
+A implementação funcional das fases C–H está em `brain_runtime/`, usando Python 3 e biblioteca padrão. Ela inclui `PolicyBroker`, `EventStore`, pipeline substituível, memória SQLite, registro de Skills, engine de workflows, catálogo dinâmico de APIs, executor Sandbox, QA gate e orquestração E2E. A suíte pode ser executada com:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
+O estado detalhado de cada fase está em `docs/ROADMAP_IMPLEMENTADO.md`.

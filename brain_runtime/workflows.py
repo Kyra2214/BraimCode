@@ -49,8 +49,10 @@ class WorkflowEngine:
         if result is True: return {"success": True}
         return {"success": bool(result)}
     def _write_state(self, key: str, state: dict) -> None:
-        previous = self._runs.get(key); state = dict(state); state["updated_at"] = datetime.now(timezone.utc).isoformat(); state["transitions"] = list(previous.get("transitions", [])) if previous else []
-        if not previous or previous.get("status") != state.get("status"): state["transitions"].append({"from": previous.get("status") if previous else None, "to": state.get("status"), "at": state["updated_at"]})
+        previous = self._runs.get(key); state = dict(state); state["updated_at"] = datetime.now(timezone.utc).isoformat(); state["transitions"] = list(previous.get("transitions", [])) if previous else []; state["events"] = list(previous.get("events", [])) if previous else []
+        if not previous or previous.get("status") != state.get("status"):
+            transition = {"from": previous.get("status") if previous else None, "to": state.get("status"), "at": state["updated_at"], "node": state.get("current_node")}
+            state["transitions"].append(transition); state["events"].append({"type": "WorkflowTransition", **transition})
         self._runs[key] = state; self._save()
     def renew_lease(self, idempotency_key: str, owner: str, lease_seconds: int = 300) -> dict:
         if lease_seconds <= 0: raise ValueError("lease must be positive")
@@ -86,7 +88,7 @@ class WorkflowEngine:
                     if decision.decision is not Decision.ALLOW: raise PermissionError(f"workflow policy denied '{capability}': {decision.reason}")
             started_at = existing.get("started_at", now.isoformat()) if existing else now.isoformat(); completed = set(existing.get("completed", [])) if existing else set(); attempts = existing.get("attempts", {}) if existing else {}; outputs = existing.get("outputs", {}) if existing else {}; input_data = existing.get("outputs", {}) if existing else {}; runtime_limit = timeout_seconds if timeout_seconds is not None else manifest.max_runtime_seconds
             def state(status: str, current: str | None = None, error: str | None = None) -> dict:
-                base = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": status, "owner": owner, "lease_until": (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat(), "started_at": started_at, "current_node": current, "completed": sorted(completed), "attempts": attempts, "outputs": outputs}
+                base = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": status, "owner": owner, "lease_until": (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat(), "started_at": started_at, "current_node": current, "completed": sorted(completed), "attempts": attempts, "outputs": outputs, "events": list(existing.get("events", [])) if existing else []}
                 if distributed_lease: base["fencing_token"] = distributed_lease.fencing_token
                 if error: base["error"] = error
                 return base
@@ -117,8 +119,8 @@ class WorkflowEngine:
     def _compensate(self, result: dict, nodes: dict[str, WorkflowNode], outputs: dict, completed: set[str], compensator: Callable | None, key: str) -> dict:
         if compensator and completed:
             result = dict(result); result["status"] = "compensating"; self._write_state(key, result)
-            for node_id in reversed(list(completed)):
+            for node_id in reversed([node_id for node_id in nodes if node_id in completed]):
                 node = nodes[node_id]
                 if node.compensatable: compensator(node, outputs.get(node_id, {}))
             result["status"] = "cancelled" if result.get("error", "").startswith("cancel") else result.get("status", "failed"); self._write_state(key, result)
-        return result
+        return self._runs.get(key, result)

@@ -26,6 +26,19 @@ class Observability:
         return finished
     def increment(self, name: str, value: int = 1) -> None:
         with self._lock: self._counters[name] = self._counters.get(name, 0) + value
+    def record_policy(self, decision: str) -> None:
+        self.increment(f"policy.decision:{decision}")
+        if decision == "DENY": self.increment("policy.denied")
+    def record_provider(self, provider: str, *, success: bool, cost: float = 0.0, latency_ms: float = 0.0) -> None:
+        prefix = f"provider:{provider}"
+        self.increment(f"{prefix}.success" if success else f"{prefix}.failure")
+        self.increment("provider.calls")
+        self.gauge(f"{prefix}.latency_ms", latency_ms)
+        self.gauge(f"{prefix}.cost", cost)
+    def record_retry(self, component: str = "pipeline") -> None:
+        self.increment(f"{component}.retry")
+    def record_delivery(self, delivered: bool) -> None:
+        self.increment("delivery.delivered" if delivered else "delivery.rejected")
     def gauge(self, name: str, value: float) -> None:
         with self._lock: self._gauges[name] = float(value)
     def alert(self, name: str, message: str, context: TraceContext | None = None) -> None:

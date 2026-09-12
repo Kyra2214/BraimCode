@@ -13,7 +13,7 @@ class SandboxJob:
     max_processes: int = 32; max_open_files: int = 64; max_disk_bytes: int = 100 * 1024 * 1024
     allowed_extensions: tuple[str, ...] = (); cancel_event: object | None = None
     isolation_required: bool = False; network_namespace: bool = False
-    filesystem_jail: bool = False; cgroup_path: str = ""
+    filesystem_jail: bool = False; cgroup_path: str = ""; allowed_artifact_dirs: tuple[str, ...] = (); modified_artifacts_only: bool = False
 
 @dataclass(frozen=True)
 class SandboxJobResult:
@@ -115,12 +115,17 @@ class SandboxExecutor:
             for path in root.rglob("*"):
                 if path.is_symlink(): return SandboxJobResult(job.job_id, "REJECTED", process.returncode, stdout_text, stderr_text, diagnostics=("symlink artifact rejected",), run_id=job.run_id, session_id=job.session_id)
                 if not path.is_file(): continue
+                relative = path.relative_to(root)
+                if job.allowed_artifact_dirs and not any(relative == Path(item) or Path(item) in relative.parents for item in job.allowed_artifact_dirs):
+                    diagnostics.append(f"artifact directory rejected: {relative}"); continue
                 size = path.stat().st_size; total += size
                 if total > job.max_disk_bytes: diagnostics.append("disk limit exceeded"); break
                 if job.allowed_extensions and path.suffix.lower() not in job.allowed_extensions: diagnostics.append(f"artifact extension rejected: {path.name}"); continue
                 if size > job.max_artifact_bytes: diagnostics.append(f"artifact limit exceeded: {path.name}"); continue
                 if len(artifacts) >= job.max_artifacts: diagnostics.append("artifact count limit exceeded"); break
-                artifacts.append({"path": str(path.relative_to(root)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "size": size, "modified": path not in before or path.stat().st_size != before[path]})
+                modified = path not in before or path.stat().st_size != before[path]
+                if job.modified_artifacts_only and not modified: continue
+                artifacts.append({"path": str(relative), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "size": size, "modified": modified})
             failures = [item for item in diagnostics if not item.startswith("isolation:")]
             status = "SUCCEEDED" if process.returncode == 0 and not failures else ("FAILED" if process.returncode != 0 else "REJECTED")
             duration = int((time.monotonic() - started) * 1000); diagnostics.append(f"duration_ms={duration}")

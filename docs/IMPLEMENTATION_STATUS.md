@@ -171,3 +171,13 @@ Os contratos receberam validação formal de tipos aninhados, incluindo dataclas
 O catálogo de APIs recebeu persistência atômica de estado, quota por janela, cooldown com recuperação, reserva e reconciliação duráveis, probes e waterfall limitado a capabilities equivalentes. Skills externas passaram a reforçar licença, assinatura, provenance e revogação persistente por versão; credenciais continuam sendo injetadas apenas na fronteira de execução e nunca persistidas em requests ou eventos. A revogação é verificada antes de qualquer outra validação do manifesto. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 103 testes aprovados.
 
 As frentes adicionais de sandbox e workflows desta rodada não foram declaradas concluídas sem validação completa. Elas continuam dependentes dos controles já existentes e, em parte, de garantias do host como cgroups, Bubblewrap e coordenação distribuída.
+
+## Hardening final de workflows, Sandbox e operação — 2026-09-12
+
+O engine de workflows passou a persistir um histórico estruturado de transições junto do estado, incluindo o node corrente, e a compensação reversa passou a seguir a ordem determinística do grafo. O histórico é retornado também nas operações de cancelamento e falha, permitindo auditoria e recuperação sem depender apenas do status final.
+
+O Sandbox agora aceita diretórios permitidos para artefatos e um modo `modified_artifacts_only`, evitando devolver arquivos preexistentes como resultado quando a política exige somente alterações da execução. Os controles existentes de rede deny-by-default, namespaces, limites de recursos, cancelamento, extensões e symlinks permanecem ativos.
+
+A observabilidade recebeu métricas padronizadas para decisões de Policy, providers, custo, latência, retry e delivery. Pipeline e DeliveryPipeline passaram a emitir essas métricas diretamente, mantendo os counters anteriores para compatibilidade. Foram adicionados testes de transições persistidas, compensação determinística, métricas operacionais e filtragem de artefatos; a suíte executada com `python3 -m unittest discover -s tests -q` totaliza 106 testes aprovados.
+
+Continuam dependentes da infraestrutura de implantação os controles que exigem cgroups graváveis, Bubblewrap plenamente configurado, backend distribuído multi-host e isolamento de rede/processos que o kernel local não permita.

@@ -27,9 +27,9 @@ class DeliveryPipeline:
         try:
             report = self.qa.validate(result, required_output)
             if not report.passed:
-                if self.observability: self.observability.increment("delivery.validation_failed")
+                if self.observability: self.observability.increment("delivery.validation_failed"); self.observability.record_delivery(False)
                 return ExecutionResult(result.request_id, False, result.output, "; ".join(report.diagnostics), result.evidence, "VALIDATION_FAILED", result.metrics, result.provenance)
-            if self.observability: self.observability.increment("delivery.delivered")
+            if self.observability: self.observability.record_delivery(True)
             return ExecutionResult(result.request_id, True, result.output, None, report.evidence, "DELIVERED", result.metrics, result.provenance)
         finally:
             if span: self.observability.finish(span, "OK")

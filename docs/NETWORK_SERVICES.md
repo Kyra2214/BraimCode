@@ -1,0 +1,19 @@
+# Rede e serviços do Sandbox
+
+## Política
+
+`NetworkPolicy` é deny-by-default. Um acesso só é permitido quando existe uma `NetworkRule` correspondente ao serviço, protocolo, porta e, quando configurado, host. Protocolos aceitos são TCP e UDP, portas ficam limitadas ao intervalo 1–65535 e destinos locais, loopback, link-local e site-local são rejeitados.
+
+`NetworkPolicyBroker` apenas avalia pedidos. Ele não resolve DNS de forma operacional, não abre sockets e não altera firewall. A execução do serviço continua pertencendo ao runtime do Sandbox e deve ser autorizada pela Policy superior antes de iniciar.
+
+## Serviços
+
+A camada complementa `ServiceManager`, que mantém o lifecycle de processos e logs. A integração completa deverá associar cada `SandboxService` a um conjunto de regras e exigir uma decisão do `NetworkPolicyBroker` antes de expor portas ou habilitar egress.
+
+## Limitações atuais
+
+A implementação fornece o contrato, a validação e a decisão segura, mas ainda não configura namespaces, firewall, proxy ou cgroups de rede. Essas funções dependem do ambiente de implantação e não devem ser simuladas como se já estivessem disponíveis.
+
+## Testes
+
+Os testes cobrem deny-by-default, autorização por regra, escopo por serviço/porta, regra sem hosts e rejeição de loopback, portas inválidas e protocolos desconhecidos. A validação do módulo Android exige Android SDK configurado.

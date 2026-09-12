@@ -69,7 +69,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 **Status: ❌ não implementado**
 
 - **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e planos allowlisted cobrem detecção e preparação segura para Java, Python, Node, C/C++, Rust e Go; execução autorizada, SDK/NDK Android e lifecycle persistente ainda pendentes.
-- **Sandbox Fase 6 — Rede e serviços**: nenhum código de gerenciamento de rede/serviços encontrado.
+- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default para serviço/protocolo/porta/host e rejeitam destinos locais; firewall, namespaces, egress real e integração final com `ServiceManager` ainda pendentes.
 
 ---
 
@@ -123,6 +123,10 @@ Implementados `RemotePluginCatalog`, `RemoteCatalogSnapshot` e `RemoteComponentM
 ### Sessão 2026-09-12 — Base declarativa de toolchains
 
 Implementados `ToolchainProfile`, `ToolchainDetector`, `ToolchainInstallPlan` e perfis iniciais para Java, Python, Node.js, C/C++, Rust e Go. A detecção usa somente comandos declarados; o plano de instalação aceita apenas nomes de pacotes allowlisted e não executa automaticamente. Foram adicionados testes de detecção, diagnóstico, geração de plano e rejeição de metacaracteres. A documentação está em `docs/TOOLCHAINS.md`. A validação do módulo `:app` depende de Android SDK configurado.
+
+### Sessão 2026-09-12 — Política declarativa de rede e serviços
+
+Implementados `NetworkPolicy`, `NetworkRule`, `NetworkAccessRequest` e `NetworkPolicyBroker`. A decisão é deny-by-default, exige serviço/protocolo/porta declarados, permite restringir hosts e rejeita loopback, link-local, site-local e destinos reservados. A camada não abre sockets nem configura firewall; a documentação está em `docs/NETWORK_SERVICES.md`. Foram adicionados testes de autorização, escopo e rejeições de segurança. A integração efetiva com `ServiceManager` e controles OS-level permanece pendente.
 
 ## Critério de sucesso do projeto
 

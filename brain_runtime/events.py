@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, os, re, threading
+import hashlib, json, os, re, threading, fcntl
 from pathlib import Path
 from typing import Any
 from .models import Event, EventType, now_iso, new_id
@@ -39,7 +39,22 @@ class EventStore:
     def append(self, run_id: str, session_id: str, task_id: str, event_type: EventType | str,
                payload: dict[str, Any], idempotency_key: str | None = None) -> Event:
         with self._lock:
-            if idempotency_key and idempotency_key in self._idempotency: return self._idempotency[idempotency_key]
+            lock_stream = None
+            if self.path:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                lock_stream = self.path.open("a+", encoding="utf-8")
+                fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX)
+                lock_stream.seek(0)
+                self._events, self._idempotency = [], {}
+                for line in lock_stream:
+                    if line.strip():
+                        event = Event(**json.loads(line)); self._events.append(event)
+                        if event.idempotency_key: self._idempotency[event.idempotency_key] = event
+            if idempotency_key and idempotency_key in self._idempotency:
+                existing = self._idempotency[idempotency_key]
+                if lock_stream:
+                    fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN); lock_stream.close()
+                return existing
             event_name = event_type.value if isinstance(event_type, EventType) else str(event_type)
             safe_payload = redact(payload)
             previous = self._events[-1].hash if self._events else "GENESIS"
@@ -47,10 +62,10 @@ class EventStore:
                           len(self._events), safe_payload, True, previous, "", idempotency_key)
             data = event.__dict__.copy(); data["hash"] = _digest(data); event = Event(**data)
             if self.path:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with self.path.open("a", encoding="utf-8") as stream:
-                    stream.write(json.dumps(event.__dict__, ensure_ascii=False, sort_keys=True) + "\n")
-                    stream.flush(); os.fsync(stream.fileno())
+                lock_stream.seek(0, os.SEEK_END)
+                lock_stream.write(json.dumps(event.__dict__, ensure_ascii=False, sort_keys=True) + "\n")
+                lock_stream.flush(); os.fsync(lock_stream.fileno())
+                fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN); lock_stream.close()
             self._events.append(event)
             if idempotency_key: self._idempotency[idempotency_key] = event
             return event

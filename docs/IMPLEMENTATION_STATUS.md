@@ -17,3 +17,7 @@ O Sandbox agora suporta cancelamento cooperativo, timeout com encerramento do gr
 ## Atualização de discovery e extensibilidade — 2026-09-12
 
 Foi adicionada uma camada de pesquisa com fontes HTTPS, evidências com hash, confiança e validação de suficiência. Os adapters GitSkills e Anthropic agora exigem metadados de licença, persistem hash do corpo e mantêm skills não verificadas em quarentena. A descoberta dinâmica de APIs valida licença, custo, probe e provenance antes de registrar candidatos no catálogo.
+
+## Atualização de aprovação e recovery — 2026-09-12
+
+O runtime agora possui `ApprovalStore` persistente com decisões de uso único e expiração, `CredentialVault` baseado exclusivamente em referências, lock de arquivo para append multi-processo no EventStore e `StateReconstructor` para reconstrução de execução por replay de eventos. A suíte cobre concorrência, aprovação, isolamento de credenciais e recovery.

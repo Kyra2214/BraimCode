@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'java='; java -version 2>&1 | head -1
+JAVA_BIN="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+command -v "$JAVA_BIN" >/dev/null 2>&1 || { echo "java=NOT_FOUND:$JAVA_BIN"; exit 2; }
+printf 'java='; "$JAVA_BIN" -version 2>&1 | head -1
 if [[ -n "${ANDROID_HOME:-}" && -d "$ANDROID_HOME" ]]; then
   echo "android_sdk=$ANDROID_HOME"
 else

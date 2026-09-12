@@ -46,7 +46,7 @@ class SecurityProjectScanner(
                     skipped++
                     return@forEach
                 }
-                val content = runCatching { Files.readString(path) }.getOrNull() ?: run {
+                val content = runCatching { path.toFile().readText() }.getOrNull() ?: run {
                     skipped++
                     return@forEach
                 }
@@ -65,7 +65,7 @@ class SecurityProjectScanner(
                 findings += ProjectScanFinding(rule, path, index + 1, redact(line))
             }
             when {
-                "-----begin " in line && " private key-----" in line -> add(ScanRule.PRIVATE_KEY)
+                "-----begin " in lower && " private key-----" in lower -> add(ScanRule.PRIVATE_KEY)
                 Regex("(?i)(api[_-]?key|secret|password|token)\\s*[:=]\\s*['\"]?[^'\"\\s]{8,}").containsMatchIn(line) -> add(ScanRule.CREDENTIAL_ASSIGNMENT)
                 Regex("(?i)(curl|wget).*(\\$\\{|`[^`]+`)").containsMatchIn(line) -> add(ScanRule.SHELL_INTERPOLATION)
                 "insecure_skip_verify" in lower || "verify=false" in lower || "check_hostname=false" in lower -> add(ScanRule.DISABLED_TLS_VALIDATION)

@@ -16,7 +16,7 @@ class SecurityProjectScannerTest {
         val report = SecurityProjectScanner().scan(root)
 
         assertEquals(3, report.findings.size)
-        assertEquals(2, report.blockers.size)
+        assertEquals(3, report.blockers.size)
         assertTrue(report.findings.first { it.rule == ScanRule.CREDENTIAL_ASSIGNMENT }.evidence.contains("<redacted>"))
         assertFalse(report.findings.any { it.evidence.contains("super-secret-value") })
     }

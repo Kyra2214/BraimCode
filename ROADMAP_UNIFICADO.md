@@ -164,3 +164,8 @@ Uma execução relevante deve permitir responder: por que essa estratégia foi e
 ## Registro da entrega — 2026-09-12 — Cinco frentes
 
 Foi criado `LocalLLMSecretario` com fallback seguro, adicionado o perfil Android ao catálogo declarativo de toolchains, criado `SecurityScenarioCatalog` com seis cenários baseline e publicada a documentação em `docs/FASES_1_A_5_ENTREGA.md`. A suíte Python passou com 134 testes. A validação Kotlin permanece bloqueada neste ambiente pela ausência do JDK 17 exigido pelo Gradle; a validação Android depende de SDK configurado. As dependências externas não são simuladas como concluídas.
+
+
+### 2026-09-12 — Validação Android local
+
+Ambiente preparado com JDK 17, Android SDK API 34, Build Tools 34.0.0 e platform-tools. `:app:testDebugUnitTest` e `:app:assembleDebug` passaram. A rodada corrigiu compatibilidade de leitura de arquivos no `SecurityProjectScanner`, detecção case-insensitive de chave privada, contrato de exceção do `ServiceManager` e o relatório do script de ambiente. APK debug gerado com SHA-256 `d4bcfbc1a961218e0115f70e2080ea0c8d5ec6a77add147aa6888e5f34eb0247`. Instalação em emulador/dispositivo físico, RootFS/proot e assinatura release continuam pendentes.

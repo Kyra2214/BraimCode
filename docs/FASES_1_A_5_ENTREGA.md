@@ -43,3 +43,20 @@ A entrega não substitui a validação de produção. Continuam abertas a integr
 ## Critério para chamar as cinco fases de prontas
 
 Cada bloqueio externo deve ser convertido em evidência de implantação: build com JDK 17, testes Android, execução do RootFS em dispositivo/emulador, relatório do Security Test Lab com todas as probes baseline, readiness sem blockers, assinatura verificável e teste de recovery com backend escolhido. Até lá, o status correto é **base implementada, validação de implantação pendente**.
+
+
+## Validação Android adicional — 2026-09-12
+
+O ambiente foi preparado com **JDK 17** e **Android SDK API 34** em `/usr/lib/android-sdk`, incluindo Build Tools 34.0.0 e platform-tools. A primeira compilação revelou duas incompatibilidades reais: `Files.readString` não está disponível no caminho Android usado pelo scanner e `requireNotNull` produzia `IllegalArgumentException`, contrariando o contrato do teste de autorização. O scanner passou a usar `File.readText()`, a detecção de chave privada tornou-se case-insensitive e o `ServiceManager` passou a lançar `IllegalStateException` para autorização ausente.
+
+A validação final passou:
+
+```text
+./gradlew :app:testDebugUnitTest --no-daemon       BUILD SUCCESSFUL
+./gradlew :app:assembleDebug --no-daemon           BUILD SUCCESSFUL
+APK: app/build/outputs/apk/debug/app-debug.apk
+SHA-256: d4bcfbc1a961218e0115f70e2080ea0c8d5ec6a77add147aa6888e5f34eb0247
+Tamanho: 17 MiB
+```
+
+O APK é um artefato debug gerado localmente. Ainda não houve instalação em emulador ou dispositivo físico, portanto a validação de runtime Android, RootFS/proot, lifecycle e desempenho continua pendente.

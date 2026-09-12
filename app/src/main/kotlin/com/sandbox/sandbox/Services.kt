@@ -24,7 +24,7 @@ class ServiceManager(
     fun start(service: SandboxService, networkRequest: NetworkAccessRequest? = null): ServiceStatus {
         require(service.id.matches(Regex("[A-Za-z0-9._-]+"))) { "ID de serviço inválido" }
         if (service.port != null) {
-            val request = requireNotNull(networkRequest) { "Serviço com porta exige autorização explícita de rede" }
+            val request = checkNotNull(networkRequest) { "Serviço com porta exige autorização explícita de rede" }
             check(request.serviceId == service.id && request.port == service.port) { "Autorização não corresponde ao serviço" }
             check(networkPolicy.decide(request).allowed) { "Rede negada para ${service.id}: ${networkPolicy.decide(request).reason}" }
         } else {

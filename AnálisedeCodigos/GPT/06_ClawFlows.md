@@ -1,5 +1,25 @@
 # 06 — nikilster/clawflows
 
+## Pente fino adicional
+
+O ponto mais útil é a separação entre definição declarativa e execução. Um `WORKFLOW.md` pode ser tratado como uma especificação versionável que o Brain transforma em passos executáveis.
+
+### Workflow como artefato
+
+Registrar hash/versão, origem, autor, licença, dependências, schedule, última execução e resultados. Isso permite rollback e auditoria.
+
+### Importação segura
+
+`import` remoto não deve significar ativação imediata. O fluxo correto no Braim:
+
+```text
+fetch → parse → schema → trust → license → security → dry-run → activate
+```
+
+### Scheduler separado
+
+Scheduler deve acordar Tasks; não decidir lógica de negócio. IaBrain continua sendo o Orchestrator.
+
 ## Objetivo
 
 Estudar workflows persistentes, agendamento, reutilização, importação e estado para a futura camada OpenClaw — Tarefas do Braim.
@@ -99,7 +119,7 @@ Workflow importado é código/instrução externa. Deve passar por:
 
 ## Prioridade
 
-**MÉDIA/ALTA**, depois do cérebro mínimo funcionar.
+**MÉDIA/ALTA**, depois do cérebro mínimo funcionar end-to-end.
 
 ## Fontes
 
@@ -109,4 +129,4 @@ Workflow importado é código/instrução externa. Deve passar por:
 
 ## Conclusão
 
-ClawFlows fornece um excelente modelo para a futura área de **Tarefas**: declarativa, persistente, agendada, versionada e reutilizável. O Braim deve absorver o conceito, não virar um clone do OpenClaw.
+ClawFlows fornece um excelente modelo para a futura área de **Tarefas**: declarativa, persistente, agendada, versionada e reutilizável. O pente fino reforça que workflow importado deve ser tratado como artefato externo não confiável até passar por validação e sandbox.

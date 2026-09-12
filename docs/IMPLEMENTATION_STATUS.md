@@ -69,3 +69,11 @@ A memória SQLite passou a deduplicar experiências por hash de conteúdo, prese
 O `LearningStore` agora mantém hash de conteúdo, versão, provider, agent e skill, com deduplicação append-only e validação de métricas e evidências. O `ExecutionLearningBridge` conecta resultados de execução à memória e ao learning record, incluindo custo, latência, evidências e política de retenção. O pipeline aceita esse bridge opcional e emite `LearningRecorded` ou `LearningRejected`.
 
 Foram adicionados testes de deduplicação, retenção, provenance, rejeição de injection/secrets e persistência integrada. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 51 testes aprovados.
+
+## Atualização de contratos e configuração — 2026-09-12
+
+O `ContractRegistry` passou a fornecer schemas formais para `TaskSpec`, `Plan`, `PlanStep`, `ExecutionRequest`, `ExecutionResult`, `SandboxJob`, `SandboxJobResult` e `Event`, incluindo campos obrigatórios, versão e validação de tipos básicos. A compatibilidade com schemas customizados e campos deprecated foi preservada.
+
+Foi adicionado o `ConfigurationManager`, que carrega seções JSON ou TOML da pasta de configuração, valida deny-by-default, timeout e ausência de secrets, e só substitui o snapshot depois que a nova configuração está totalmente validada. O reload é seguro e atômico em relação aos leitores.
+
+Eventos agora possuem `correlation_id` persistido, com fallback para `run_id` em logs legados. Foram adicionados contract tests, testes de reload e teste de persistência de correlação. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 54 testes aprovados.

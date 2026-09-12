@@ -58,7 +58,7 @@ class PolicyDecision:
 class Event:
     event_id: str; run_id: str; session_id: str; task_id: str; timestamp: str; type: str
     version: int; sequence: int; payload: dict[str, Any]; redacted: bool = True
-    previous_hash: str = ""; hash: str = ""; idempotency_key: str | None = None
+    previous_hash: str = ""; hash: str = ""; idempotency_key: str | None = None; correlation_id: str = ""
 
 @dataclass(frozen=True)
 class Capability:

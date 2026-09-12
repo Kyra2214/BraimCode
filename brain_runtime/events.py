@@ -42,12 +42,12 @@ class EventStore:
                     with self.path.open("rb+") as repair: repair.truncate(sum(len(item) for item in lines[:-1]))
                     break
                 raise ValueError(f"invalid event at line {number}")
-            _validate_event(data); event = Event(**data)
+            data.setdefault("correlation_id", data.get("run_id", "")); _validate_event(data); event = Event(**data)
             if self._events and (event.previous_hash != self._events[-1].hash or event.sequence != self._events[-1].sequence + 1): raise ValueError(f"event chain mismatch at line {number}")
             self._events.append(event)
             if event.idempotency_key: self._idempotency[event.idempotency_key] = event
 
-    def append(self, run_id: str, session_id: str, task_id: str, event_type: EventType | str, payload: dict[str, Any], idempotency_key: str | None = None) -> Event:
+    def append(self, run_id: str, session_id: str, task_id: str, event_type: EventType | str, payload: dict[str, Any], idempotency_key: str | None = None, correlation_id: str | None = None) -> Event:
         if not isinstance(payload, dict): raise ValueError("event payload must be an object")
         with self._lock:
             lock_stream = None
@@ -58,7 +58,7 @@ class EventStore:
                 if lock_stream: fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN); lock_stream.close()
                 return existing
             event_name = event_type.value if isinstance(event_type, EventType) else str(event_type); previous = self._events[-1].hash if self._events else "GENESIS"
-            event = Event(new_id("event"), run_id, session_id, task_id, now_iso(), event_name, 1, len(self._events), redact(payload), True, previous, "", idempotency_key)
+            event = Event(new_id("event"), run_id, session_id, task_id, now_iso(), event_name, 1, len(self._events), redact(payload), True, previous, "", idempotency_key, correlation_id or run_id)
             data = event.__dict__.copy(); data["hash"] = _digest(data); event = Event(**data); _validate_event(event.__dict__)
             if lock_stream:
                 lock_stream.seek(0, os.SEEK_END); lock_stream.write(json.dumps(event.__dict__, ensure_ascii=False, sort_keys=True) + "\n"); lock_stream.flush(); os.fsync(lock_stream.fileno()); fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN); lock_stream.close()

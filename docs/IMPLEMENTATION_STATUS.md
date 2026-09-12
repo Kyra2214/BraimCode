@@ -25,3 +25,7 @@ O runtime agora possui `ApprovalStore` persistente com decisões de uso único e
 ## Atualização de qualidade e observabilidade — 2026-09-12
 
 Foram adicionados correlation IDs, spans e métricas; `LearningStore` e `FeedbackLoop` append-only com evidência de validação; `DeliveryPipeline` com QA gate obrigatório; e validação de configuração deny-by-default com isolamento de paths. A suíte cobre essas integrações e totaliza 32 testes.
+
+## Atualização de hardening — 2026-09-12
+
+Foi adicionado um registry versionado de contratos com campos deprecated, lease expirável para workflows concorrentes e guards adversariais contra traversal, secrets em texto e marcadores de prompt injection. A suíte agora totaliza 35 testes.

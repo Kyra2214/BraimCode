@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json, os, threading
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -40,11 +41,14 @@ class WorkflowEngine:
             visiting.remove(node_id); visited.add(node_id)
         for node in nodes: visit(node)
         return nodes
-    def run(self, manifest: WorkflowManifest, run_id: str, idempotency_key: str, handler: Callable[[WorkflowNode], bool]) -> dict:
+    def run(self, manifest: WorkflowManifest, run_id: str, idempotency_key: str, handler: Callable[[WorkflowNode], bool], owner: str = "local", lease_seconds: int = 300) -> dict:
         with self._lock:
             if not manifest.enabled: raise PermissionError("workflow desabilitado")
             nodes = self._validate(manifest); existing = self._runs.get(idempotency_key)
             if existing and existing["status"] == "completed": return existing
+            if lease_seconds <= 0: raise ValueError("lease must be positive")
+            if existing and existing.get("status") == "running" and existing.get("owner") != owner and existing.get("lease_until", "") > datetime.now(timezone.utc).isoformat():
+                raise RuntimeError("workflow run is leased by another owner")
             if self.policy:
                 capabilities = set(manifest.required_capabilities) | {node.capability for node in manifest.nodes}
                 for capability in capabilities:
@@ -64,6 +68,6 @@ class WorkflowEngine:
                 if not success:
                     state = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": "failed", "completed": sorted(completed), "attempts": attempts}
                     self._runs[idempotency_key] = state; self._save(); return state
-                self._runs[idempotency_key] = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": "running", "completed": sorted(completed), "attempts": attempts}; self._save()
+                self._runs[idempotency_key] = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": "running", "owner": owner, "lease_until": (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat(), "completed": sorted(completed), "attempts": attempts}; self._save()
             state = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": "completed", "completed": sorted(completed), "attempts": attempts}
             self._runs[idempotency_key] = state; self._save(); return state

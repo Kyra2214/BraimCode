@@ -21,3 +21,7 @@ Foi adicionada uma camada de pesquisa com fontes HTTPS, evidências com hash, co
 ## Atualização de aprovação e recovery — 2026-09-12
 
 O runtime agora possui `ApprovalStore` persistente com decisões de uso único e expiração, `CredentialVault` baseado exclusivamente em referências, lock de arquivo para append multi-processo no EventStore e `StateReconstructor` para reconstrução de execução por replay de eventos. A suíte cobre concorrência, aprovação, isolamento de credenciais e recovery.
+
+## Atualização de qualidade e observabilidade — 2026-09-12
+
+Foram adicionados correlation IDs, spans e métricas; `LearningStore` e `FeedbackLoop` append-only com evidência de validação; `DeliveryPipeline` com QA gate obrigatório; e validação de configuração deny-by-default com isolamento de paths. A suíte cobre essas integrações e totaliza 32 testes.

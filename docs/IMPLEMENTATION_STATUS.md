@@ -53,3 +53,11 @@ O engine de workflows passou a persistir estados explícitos de execução, incl
 Retry agora registra tentativas, aceita backoff exponencial limitado e valida o output de cada node por schema declarativo ou callback. Inputs também podem ser validados antes do dispatch. Workflows que configurarem nodes compensáveis podem executar uma compensação reversa após cancelamento ou falha, com persistência atômica do estado intermediário. A compatibilidade com handlers booleanos e idempotência existentes foi preservada.
 
 Foram adicionados testes para cancelamento com compensação, validação de input/output e retry por falha de contrato. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 44 testes aprovados.
+
+## Atualização de research e roteamento — 2026-09-12
+
+A camada de research passou a ranquear evidências por confiança e frescor, preservar provenance e hash de conteúdo e colocar fontes com marcadores de prompt injection em quarentena. O pipeline pode receber uma `ResearchLayer` e fontes HTTPS, registrar `ResearchCollected` e incluir evidências delimitadas como dados não confiáveis no prompt, sem tratá-las como instruções.
+
+O catálogo de APIs passou a oferecer seleção por qualidade, confiabilidade, latência, custo e disponibilidade; reserva e reconciliação de quota antes e depois do dispatch; timestamp de probes; e fallback somente entre entradas que declaram a capability equivalente. Credential references continuam sendo referências, sem exposição de secrets.
+
+Foram adicionados testes de quarentena de research, provenance, reserva de quota, seleção de provider equivalente e integração da evidência ao pipeline. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 48 testes aprovados.

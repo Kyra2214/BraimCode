@@ -60,6 +60,18 @@ def _namespace_command(argv: tuple[str, ...], job: SandboxJob) -> tuple[list[str
         command.append("--net"); diagnostics += ("isolation:network namespace enabled",)
     return command + ["--"] + list(argv), diagnostics
 
+
+def strict_isolation_available(*, require_filesystem_jail: bool = False, require_cgroup: bool = False) -> tuple[bool, tuple[str, ...]]:
+    """Probe deployment prerequisites without claiming isolation the host lacks."""
+    diagnostics: list[str] = []
+    if not shutil.which("unshare"):
+        diagnostics.append("unshare unavailable")
+    if require_filesystem_jail and not shutil.which("bwrap"):
+        diagnostics.append("bubblewrap unavailable")
+    if require_cgroup and not Path("/sys/fs/cgroup").is_dir():
+        diagnostics.append("cgroup filesystem unavailable")
+    return not diagnostics, tuple(diagnostics)
+
 class SandboxExecutor:
     def execute(self, job: SandboxJob) -> SandboxJobResult:
         if not job.argv or job.argv[0] not in job.allowed_commands or any(token in job.argv[0] for token in ("/", "\\")):

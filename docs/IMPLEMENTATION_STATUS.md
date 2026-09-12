@@ -117,3 +117,11 @@ Foi adicionada a fachada `RuntimeCoordinator`, que encadeia pipeline, QA/deliver
 O runtime também aceita fault injection por estágio, permitindo testar crash antes e depois de pipeline/delivery sem ocultar a transição no EventStore. O `StateReconstructor` passou a reconhecer estados finais de job, além de approval, validation e delivery.
 
 Foram adicionados testes E2E para o fluxo completo, crash injetado recuperável por replay e cancelamento persistido. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 71 testes aprovados.
+
+## Atualização de security suite e golden events — 2026-09-12
+
+Foi adicionada a validação `golden_events`, que verifica o contrato completo, a sequência, a correlação e a hash chain sem depender de timestamps fixos. A suíte cobre recovery após uma última linha JSONL parcial, integridade após replay e append concorrente de múltiplos processos com idempotency keys distintas.
+
+As fronteiras de confiança agora possuem auditoria recursiva para secrets por chave e prompt injection em objetivo, contexto, skill e memória. O objetivo é rejeitado antes da classificação, contexto é rejeitado antes da construção do prompt e eventos permanecem redacted antes da persistência.
+
+Foram adicionados testes de golden events, crash recovery, concorrência multiprocesso, vazamento de credentials e injection. A suíte executada com `python3 -W error::ResourceWarning -m unittest discover -s tests -q` totaliza 74 testes aprovados.

@@ -147,3 +147,13 @@ O `ApprovalStore` agora pode reidratar requests a partir de eventos persistidos,
 Foi adicionado `AuthorizedFallback`, que reautoriza cada provider candidato com a mesma capability, actor, run e task, registra cada tentativa e usa idempotency keys por provider. Providers negados pela Policy não são chamados, e apenas resultados de providers explicitamente autorizados podem ser retornados.
 
 Foram adicionados testes de restore append-safe, anti-replay, reautorização por provider e idempotência. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 84 testes aprovados.
+
+## Atualização de modos strict e hardening operacional — 2026-09-12
+
+Foram adicionados modos explícitos `development`, `offline`, `sandboxed` e `strict`. Os modos protegidos exigem QA, observabilidade, dispatcher e Policy; `offline` e `strict` recusam network por contrato. O EventStore passou a aplicar `retention_events` e expor segmentos rotacionados para arquivamento externo.
+
+O sistema de leases recebeu `assert_current` para validar fencing tokens em cada transição e `LeaseHeartbeat` para renovação periódica. O `CredentialDispatcher` conecta `CredentialVault` aos dispatchers sem alterar requests persistidas. Skills agora suportam revogação por versão, carregamento da revogação persistente e bloqueio antes do registro.
+
+Foram adicionados testes de modo fail-closed, retenção do EventStore, heartbeat/fencing e revogação de skill após restart. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 88 testes aprovados.
+
+Continuam dependentes de infraestrutura externa a troca do SQLite por Postgres/Redis/etcd, cgroups graváveis, Bubblewrap efetivo, autoridade de chaves remota e testes multi-host. Os adapters agora falham explicitamente quando essas garantias são exigidas, sem alegar isolamento que o host não fornece.

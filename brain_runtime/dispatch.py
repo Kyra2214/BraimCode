@@ -5,6 +5,7 @@ from .binding import bind_execution
 from .models import ExecutionRequest, ExecutionResult
 from .sandbox import SandboxExecutor, SandboxJob
 from time import monotonic
+from .credentials import CredentialRef, CredentialVault
 
 @dataclass
 class SandboxDispatcher:
@@ -33,3 +34,11 @@ class RoutedDispatcher:
             try: self.catalog.reconcile(name, model)
             except Exception: pass
             raise
+
+@dataclass
+class CredentialDispatcher:
+    vault: CredentialVault
+    dispatcher: object
+    credential_ref: CredentialRef | None = None
+    def dispatch(self, request: ExecutionRequest) -> ExecutionResult:
+        return self.vault.dispatch(self.dispatcher.dispatch, request, self.credential_ref)

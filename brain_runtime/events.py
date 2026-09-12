@@ -65,7 +65,9 @@ class EventStore:
                 lock_stream.seek(0, os.SEEK_END); lock_stream.write(json.dumps(event.__dict__, ensure_ascii=False, sort_keys=True) + "\n"); lock_stream.flush(); os.fsync(lock_stream.fileno()); fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN); lock_stream.close()
             self._events.append(event); self._stream_sequences[(run_id, task_id)] = self._stream_sequences.get((run_id, task_id), 0) + 1
             if idempotency_key: self._idempotency[idempotency_key] = event
-            self._rotate_if_needed(); return event
+            self._rotate_if_needed()
+            if self.retention_events is not None and len(self._events) > self.retention_events: self.compact(self.retention_events)
+            return event
     def migrate(self, migrator: Callable[[dict[str, Any]], dict[str, Any]]) -> int:
         with self._lock:
             changed = 0
@@ -109,6 +111,10 @@ class EventStore:
             if event.sequence != index or event.previous_hash != previous or event.hash != _digest(data): return False
             previous = event.hash
         return True
+
+    def segments(self) -> tuple[Path, ...]:
+        if not self.path: return ()
+        return tuple(sorted(self.path.parent.glob(self.path.name + ".*")))
 
 def datetime_stamp() -> str:
     return now_iso().replace(":", "").replace("+", "_").replace(".", "")

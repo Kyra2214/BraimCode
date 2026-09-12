@@ -181,3 +181,11 @@ O Sandbox agora aceita diretórios permitidos para artefatos e um modo `modified
 A observabilidade recebeu métricas padronizadas para decisões de Policy, providers, custo, latência, retry e delivery. Pipeline e DeliveryPipeline passaram a emitir essas métricas diretamente, mantendo os counters anteriores para compatibilidade. Foram adicionados testes de transições persistidas, compensação determinística, métricas operacionais e filtragem de artefatos; a suíte executada com `python3 -m unittest discover -s tests -q` totaliza 106 testes aprovados.
 
 Continuam dependentes da infraestrutura de implantação os controles que exigem cgroups graváveis, Bubblewrap plenamente configurado, backend distribuído multi-host e isolamento de rede/processos que o kernel local não permita.
+
+## Project Intelligence e Readiness — 2026-09-12
+
+Foi implementado o `ProjectScanner`, que transforma a estrutura observável do repositório em um contexto versionável em `.projectbrain/`, cobrindo arquitetura, módulos, dependências, providers, APIs, testes, CI/CD, nomes de arquivos sensíveis, releases e riscos sem persistir valores de secrets. O `ReadinessGate` formaliza a sequência implementação, testes, QA, segurança, arquitetura, regressão e release, produzindo status, score, blockers, warnings e exit code.
+
+O `ReleaseIntelligence` compara referências Git e identifica mudanças por área, sinalizando heurísticas de regressão quando o runtime muda sem alterações correspondentes nos testes. O `EvidenceEngine` separa claim, evidência verificável, estado externo, confiança e decisão, rejeitando secrets e marcadores de prompt injection. O `ContextBuilder` gera um Agent Context Pack com task, arquitetura, memória, riscos, providers e execução como dados não confiáveis. Por fim, `FixVerifyLearn` encadeia scan, task, fix, verify e learn, podendo ser conectado ao `LearningStore` existente.
+
+Foram adicionados testes focados desses seis componentes e a suíte executada com `python3 -m unittest discover -s tests -q` totaliza 111 testes aprovados.

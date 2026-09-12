@@ -47,6 +47,12 @@ class SQLiteExperienceMemory:
         now = datetime.now(timezone.utc).isoformat(); rows = self._connection.execute("SELECT * FROM experiences WHERE problem LIKE ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY created_at DESC LIMIT ?", (f"%{problem}%", now, limit)).fetchall()
         return [Experience(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], tuple(json.loads(row[8])), tuple(json.loads(row[9])), row[10], row[11], row[12], row[13]) for row in rows]
 
+    def search_strategy(self, strategy: str, *, problem: str = "", limit: int = 10) -> list[Experience]:
+        if limit <= 0: return []
+        now = datetime.now(timezone.utc).isoformat()
+        rows = self._connection.execute("SELECT * FROM experiences WHERE strategy LIKE ? AND problem LIKE ? AND (expires_at IS NULL OR expires_at > ?) ORDER BY quality DESC, created_at DESC LIMIT ?", (f"%{strategy}%", f"%{problem}%", now, limit)).fetchall()
+        return [Experience(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], tuple(json.loads(row[8])), tuple(json.loads(row[9])), row[10], row[11], row[12], row[13]) for row in rows]
+
     def expire(self, before: str | None = None) -> int:
         cutoff = before or datetime.now(timezone.utc).isoformat()
         with self._lock:

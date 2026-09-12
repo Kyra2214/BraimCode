@@ -13,6 +13,7 @@ from .project_intelligence import ProjectScanner, ProjectSnapshot
 from .readiness import ReadinessGate, ReadinessReport
 from .modes import RuntimeMode, requirements
 from .authorization import ExecutionAuthorization
+from .api_discovery import ApiCandidate, ApiDiscovery
 
 class FaultInjected(RuntimeError): pass
 
@@ -23,7 +24,7 @@ class RuntimeRunResult:
 
 class RuntimeCoordinator:
     """Orquestra pipeline -> QA/delivery -> replay state com falhas observáveis e recuperação segura."""
-    def __init__(self, pipeline: BrainPipeline, delivery: DeliveryPipeline, events: EventStore, observability: Observability | None = None, fault_injector: Callable[[str], None] | None = None, project_scanner: ProjectScanner | None = None, readiness_gate: ReadinessGate | None = None, enforce_readiness: bool | None = None, mode: RuntimeMode | str = RuntimeMode.DEVELOPMENT):
+    def __init__(self, pipeline: BrainPipeline, delivery: DeliveryPipeline, events: EventStore, observability: Observability | None = None, fault_injector: Callable[[str], None] | None = None, project_scanner: ProjectScanner | None = None, readiness_gate: ReadinessGate | None = None, enforce_readiness: bool | None = None, mode: RuntimeMode | str = RuntimeMode.DEVELOPMENT, api_discovery: ApiDiscovery | None = None, api_candidates: Iterable[ApiCandidate] = ()):
         self.pipeline, self.delivery, self.events, self.observability, self.fault_injector = pipeline, delivery, events, observability, fault_injector
         self.mode = RuntimeMode(mode); self.requirements = requirements(self.mode)
         if hasattr(pipeline, "mode") and pipeline.mode is not self.mode:
@@ -33,6 +34,10 @@ class RuntimeCoordinator:
         if self.requirements.require_readiness and readiness_gate is None:
             raise ValueError(f"{self.mode.value} mode requires a readiness gate")
         self.project_scanner, self.readiness_gate = project_scanner, readiness_gate
+        self.api_discovery = api_discovery
+        self.discovered_providers = api_discovery.ingest(tuple(api_candidates)) if api_discovery else ()
+        if self.discovered_providers:
+            self.events.append("runtime", "runtime", "runtime", "ProvidersDiscovered", {"count": len(self.discovered_providers), "providers": [f"{item.provider}/{item.model}" for item in self.discovered_providers]})
         self.enforce_readiness = self.requirements.require_readiness if enforce_readiness is None else enforce_readiness
         self.execution_authorization = ExecutionAuthorization._issue(pipeline, self.mode)
     def _fault(self, stage: str) -> None:

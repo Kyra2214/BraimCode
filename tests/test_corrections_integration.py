@@ -10,6 +10,7 @@ from brain_runtime.policy import PolicyBroker
 from brain_runtime.sandbox import SandboxExecutor, SandboxJob
 from brain_runtime.workflows import WorkflowEngine
 from brain_runtime.evidence import Evidence, EvidenceEngine
+from brain_runtime.memory import Experience, SQLiteExperienceMemory, SemanticMemory
 
 class FailingOnce:
     def __init__(self): self.calls = 0
@@ -51,6 +52,22 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotEqual(dispatcher.prompts[0], dispatcher.prompts[1])
         self.assertIn("Correction diagnostics", dispatcher.prompts[1])
         self.assertIn("bad output", dispatcher.prompts[1])
+
+    def test_retrieved_experience_influences_next_prompt(self):
+        class CapturingDispatcher:
+            def __init__(self): self.prompts = []
+            def dispatch(self, request):
+                self.prompts.append(request.objective)
+                return ExecutionResult(request.request_id, True, evidence=("validated",))
+
+        memory = SemanticMemory(SQLiteExperienceMemory())
+        memory.remember(Experience("e", "old-run", "old-task", "Pesquise dados", "execution", "use primary sources", "prior validated result", .9, provenance=("validation:old",)))
+        dispatcher = CapturingDispatcher()
+        pipeline = self.make_pipeline(EventStore(), dispatcher)
+        pipeline.memory = memory
+        pipeline.run_internal_for_tests("Pesquise dados", "s")
+        self.assertIn("Relevant prior experiences", dispatcher.prompts[0])
+        self.assertIn("use primary sources", dispatcher.prompts[0])
 
     def test_plan_steps_run_through_persistent_workflow(self):
         with tempfile.TemporaryDirectory() as directory:

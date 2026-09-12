@@ -1,5 +1,45 @@
 # 04 — affaan-m/ECC
 
+## Pente fino adicional
+
+O valor do ECC fica mais claro quando se olha para ele como uma **camada de engenharia ao redor dos agentes**. O padrão plan → test → implement → review → verify → remember → improve deve ser convertido no Braim em estados persistentes, hooks e evidências.
+
+### Hooks como middleware de segurança
+
+Hooks não devem conter lógica de negócio de cada agente. Eles devem aplicar políticas transversais: validar tool call, registrar execução, detectar segredo, rodar teste, bloquear entrega e registrar aprendizado.
+
+```text
+Agent
+ ↓
+before_agent_run
+ ↓
+before_tool_call
+ ↓
+Tool
+ ↓
+after_tool_call
+ ↓
+after_agent_run
+ ↓
+Evaluation
+```
+
+### Rules versus Skills
+
+Rule = política/limite que deve prevalecer.
+Skill = procedimento para executar algo.
+Memory = evidência do que ocorreu.
+
+Essa separação evita que uma experiência ruim vire automaticamente uma regra ou Skill.
+
+### Learning loop
+
+O aprendizado deve registrar recompensa/penalidade baseada em resultado real, e não apenas na opinião do LLM. O mínimo: sucesso, teste, qualidade, custo, tempo, erro e correção.
+
+### Segurança de agentes
+
+O conceito de AgentShield é especialmente útil para o futuro minerador de Skills/agents: conteúdo externo deve ser analisado antes de entrar no ambiente de execução.
+
 ## Objetivo
 
 Estudar um framework grande de agentes, Skills, hooks, regras, memória, aprendizado contínuo e segurança para absorver padrões de operação no Braim.
@@ -35,8 +75,6 @@ Hooks são interessantes para políticas automáticas antes/depois de ações. N
 - `before_delivery`;
 - `on_failure`;
 - `on_secret_access`.
-
-Isso permite segurança e aprendizado sem colocar regras dentro de cada agente.
 
 ### 5. Rules
 
@@ -107,4 +145,4 @@ O repositório é MIT. Ainda assim, cada recurso e integração pode possuir con
 
 ## Conclusão
 
-O maior valor do ECC para o Braim é mostrar que **um agente produtivo é um sistema de engenharia ao redor do LLM**. O LLM não precisa carregar sozinho planejamento, revisão, memória, segurança e regras. Essas capacidades devem ser componentes do Brain.
+O maior valor do ECC para o Braim é mostrar que **um agente produtivo é um sistema de engenharia ao redor do LLM**. O pente fino acrescenta a separação Rule/Skill/Memory e o uso de hooks como middleware transversal de segurança, observabilidade e aprendizado.

@@ -101,3 +101,11 @@ Foi adicionado `HostCapabilityProbe` para reportar capacidades reais do host, in
 Foi adicionado o `SecureIPC`, um protocolo de socket Unix com framing de tamanho, nonce, HMAC e sanitização de credenciais para o boundary Brain/Sandbox. O `DistributedLeaseStore` fornece leases transacionais SQLite com renovação, release e fencing tokens monotônicos, e o `WorkflowEngine` aceita esse backend opcional para coordenação entre processos ou hosts que compartilhem o armazenamento transacional.
 
 O `SignatureVerifier` define uma interface fail-closed para chaves Ed25519 confiáveis e mantém a decisão de confiança fora do manifesto da skill. Foram adicionados testes de fencing tokens, autenticação IPC, sanitização e probe de capacidades. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 65 testes aprovados.
+
+## Atualização de binding e boundary de execução — 2026-09-12
+
+O pipeline passou a criar um `ExecutionBinding` imutável após a decisão de Policy, cobrindo run, task, step, capability, provider, resource e decision ID. O digest é incluído nos inputs e no evento `AgentDispatched`, permitindo detectar troca de provider, capability ou recurso entre autorização e dispatch.
+
+O QA gate pode ser conectado diretamente ao pipeline antes do correction loop, de modo que resultados sem evidência ou sem output requerido não sejam entregues como sucesso. O importador de skills externas aceita uma `SignatureVerifier` Ed25519 opcional e, quando configurada, exige uma autoridade de chave confiável em vez de confiar apenas no manifesto.
+
+Foram adicionados testes de digest anti-tampering, binding persistido e QA gate integrado. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 68 testes aprovados.

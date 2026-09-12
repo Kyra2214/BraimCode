@@ -131,3 +131,11 @@ Foram adicionados testes de golden events, crash recovery, concorrência multipr
 Foram adicionados wrappers de telemetria para Policy, Approval, Planner, Router, API Catalog e Learning, com spans, counters e gauges por decisão, request, seleção, latência e registro. O `SandboxDispatcher` valida o digest do `ExecutionBinding`, correlação de run/session e só então cria o `SandboxJob`, convertendo o resultado para `ExecutionResult` com evidência e provenance.
 
 A configuração agora possui `validate_cross_component`, que rejeita conflitos entre network/filesystem do Sandbox e Policy, capabilities roteadas fora da allowlist e references de credenciais não declaradas. Foram adicionados testes de boundary tamperado, execução válida no Sandbox, Approval telemetry e métricas transversais. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 78 testes aprovados.
+
+## Atualização de research externa e routing — 2026-09-12
+
+A `ResearchLayer` agora possui `HTTPSResearchFetcher` com HTTPS obrigatório, bloqueio de credenciais na URL, allowlist opcional de hosts, resolução DNS com rejeição de loopback/private/link-local/reserved/multicast, bloqueio de redirects, timeout, limite de bytes e validação de content type. Fontes aceitas recebem `retrieved_at`, hash de conteúdo e provenance preservada; injection continua sendo colocada em quarentena.
+
+O `RoutedDispatcher` reserva quota antes do dispatch, reconcilia no retorno, atualiza confiabilidade/latência do provider e inclui custo estimado, duração e provider nas métricas do `ExecutionResult`. Falhas liberam a reserva e não fazem fallback fora da capability roteada.
+
+Foram adicionados testes de SSRF, esquema inseguro, limite de excerpt, provenance, quarentena de conteúdo externo e reserva/reconciliação com custo. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 82 testes aprovados.

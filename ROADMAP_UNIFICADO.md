@@ -34,7 +34,7 @@ RootFS Ubuntu 24.04, download/extração, `proot`, runtime de execução de coma
 
 | Item | Python (`brain_runtime/`) | Kotlin (`brain/`) |
 |---|---|---|
-| D — Memória persistente | ✅ SQLite/WAL, dedup, retenção, provenance | 🟡 `FileExperienceMemory` persistente existe e é testada; integração completa com o pipeline Kotlin ainda pendente |
+| D — Memória persistente | ✅ SQLite/WAL, dedup, retenção, provenance | ✅ `FileExperienceMemory` persistente integrada ao `BrainExecutionCoordinator`; experiências de sucesso, falha e correção após retry são registradas e recuperáveis após reinício |
 | E — Skills | ✅ registry com licença, provenance, assinatura, quarentena, revogação | ✅ `SkillRegistry` com manifesto, proveniência, confiança, hash, revogação e consulta por capability; loader de prompts resolve Skill relacionada |
 | F — Workflows | ✅ estado persistente, leases, retry/backoff, compensação | ✅ `WorkflowEngine` com dependências, detecção de ciclos, autorização, retry, persistência e idempotência |
 | G — APIs dinâmicas | ✅ quota, cooldown, probes, fallback equivalente, discovery | ✅ `ResilientApiCatalog` com quota por janela de minuto/dia, reservas, reconciliação, cooldown e waterfall; discovery avançada ainda pendente |
@@ -108,6 +108,10 @@ Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime es
 
 Implementados `SkillRegistry`, `WorkflowEngine`, resolução de Skills no `PromptLibraryLoader` e quota real no `ResilientApiCatalog`. Foram adicionados testes automatizados para registro e revogação de Skills, retry e idempotência de Workflows e janelas de quota e waterfall. Validação: 134 testes Python aprovados e `./gradlew :brain:test` concluído com `BUILD SUCCESSFUL` usando JDK 17.
 
+### Sessão 2026-09-12 — Integração de memória persistente no pipeline Kotlin
+
+O `BrainExecutionCoordinator` passou a aceitar `ExperienceMemory` e registrar uma experiência por etapa executada. O registro diferencia `SUCESSO`, `FALHA` e `CORRIGIDO_APOS_FALHA`, preserva a estratégia provider/modelo escolhida, tempo de execução e diagnóstico, e usa uma identidade determinística por `runId` e etapa para manter idempotência. O teste de integração confirma retry corretivo, persistência em JSONL e recuperação após reabrir o arquivo. Validação: `./gradlew :brain:test` concluído com `BUILD SUCCESSFUL` usando JDK 17.
+
 ## Critério de sucesso do projeto
 
 Uma execução relevante deve permitir responder: por que essa estratégia foi escolhida, por que esse agente/provedor, qual Policy autorizou, o que foi executado, o que falhou, como foi corrigido, qual evidência comprovou o resultado, e o que o Brain aprendeu.
@@ -116,6 +120,6 @@ Uma execução relevante deve permitir responder: por que essa estratégia foi e
 
 ## Resumo executivo — o que falta, sem duplicar
 
-1. **Brain no Kotlin** já possui memória em arquivo, catálogo de Skills e engine de Workflows; permanecem a integração completa da memória no pipeline e o discovery avançado de APIs.
+1. **Brain no Kotlin** já possui memória persistente integrada ao coordenador, catálogo de Skills e engine de Workflows; permanece o discovery avançado de APIs.
 2. **Sandbox Mobile** ainda não tem: catálogo remoto de plugins (Fase 2), gerenciamento de toolchains (Fase 5), rede/serviços (Fase 6), e um Security Test Lab de verdade com attack simulation (Fase 6 deste documento / P4).
 3. **Validação final em produção** (device físico, RootFS real, assinatura de release, infra distribuída) continua em aberto — é o gate para chamar o projeto de "Fase 8 / 100% completo".

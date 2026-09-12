@@ -45,6 +45,7 @@ data class ToolchainInstallPlan(
 
 object BuiltInToolchains {
     val all: List<ToolchainProfile> = listOf(
+        ToolchainProfile("android", ToolchainKind.ANDROID, "Android SDK/NDK", "sdkmanager", listOf("--version"), listOf("android-sdk", "android-sdk-platform-tools", "android-sdk-build-tools")),
         ToolchainProfile("java", ToolchainKind.JAVA, "Java", "java", listOf("--version"), listOf("default-jdk")),
         ToolchainProfile("python", ToolchainKind.PYTHON, "Python", "python3", listOf("--version"), listOf("python3", "python3-pip")),
         ToolchainProfile("node", ToolchainKind.NODE, "Node.js", "node", listOf("--version"), listOf("nodejs", "npm")),

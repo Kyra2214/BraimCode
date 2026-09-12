@@ -159,3 +159,8 @@ Uma execução relevante deve permitir responder: por que essa estratégia foi e
 1. **Brain no Kotlin** já possui memória persistente integrada ao coordenador, catálogo de Skills, engine de Workflows e discovery avançado de APIs; a integração com fontes de transporte reais permanece dependência de implantação.
 2. **Sandbox Mobile** ainda não tem: catálogo remoto de plugins (Fase 2), gerenciamento de toolchains (Fase 5), rede/serviços (Fase 6), e um Security Test Lab de verdade com attack simulation (Fase 6 deste documento / P4).
 3. **Validação final em produção** (device físico, RootFS real, assinatura de release, infra distribuída) continua em aberto — é o gate para chamar o projeto de "Fase 8 / 100% completo".
+
+
+## Registro da entrega — 2026-09-12 — Cinco frentes
+
+Foi criado `LocalLLMSecretario` com fallback seguro, adicionado o perfil Android ao catálogo declarativo de toolchains, criado `SecurityScenarioCatalog` com seis cenários baseline e publicada a documentação em `docs/FASES_1_A_5_ENTREGA.md`. A suíte Python passou com 134 testes. A validação Kotlin permanece bloqueada neste ambiente pela ausência do JDK 17 exigido pelo Gradle; a validação Android depende de SDK configurado. As dependências externas não são simuladas como concluídas.

@@ -4,6 +4,56 @@
 
 Estudar o Codex como referência para execução de agentes de código, ferramentas, sandbox, aprovações, contexto, testes e integração Brain ↔ Sandbox. A ideia não é copiar o Codex: é extrair padrões que façam sentido para o Braim.
 
+## Pente fino adicional — estruturas concretas encontradas
+
+A árvore atual do repositório mostra que o próprio Codex usa uma camada `.codex/skills/` com Skills reais, além de `agents/`, `references/` e `scripts/`. Isso é importante porque demonstra uma Skill como pacote operacional, não apenas texto de prompt. Exemplos observados incluem `babysit-pr`, `code-review`, `code-review-testing`, `code-review-context`, `remote-tests`, `test-tui`, `path-types` e `update-v8-version`. Algumas Skills possuem scripts Python de execução/teste e referências auxiliares.
+
+O padrão que vale absorver é:
+
+```text
+Skill
+├── SKILL.md
+├── agents/        # configuração opcional do agente
+├── references/    # conhecimento auxiliar
+└── scripts/       # automação determinística
+```
+
+Isso reforça uma decisão importante para o Braim: **Skill não deve ser somente prompt**. Ela pode conter conhecimento, scripts determinísticos, testes e metadados.
+
+### Skill + script determinístico
+
+Quando uma operação pode ser código normal, não devemos gastar tokens de LLM. Um exemplo é um watcher de PR: a Skill orienta e o script executa. No Braim, isso vira:
+
+```text
+Skill → decide como fazer
+Tool/Script → executa operação determinística
+LLM → interpreta apenas onde há ambiguidade
+```
+
+### Skill com subagente
+
+A presença de arquivos `agents/*.yaml` dentro de algumas Skills mostra outra possibilidade: uma capacidade pode declarar qual perfil especializado deve executá-la. No Braim isso pode alimentar o `AgentSelector`, sem amarrar Skill a um modelo específico.
+
+### Referências externas separadas
+
+`references/` evita inflar o `SKILL.md`. O Braim deve adotar carregamento progressivo: primeiro metadados, depois instrução principal, depois somente a referência necessária.
+
+### Testes da própria Skill
+
+O repositório também mantém testes junto de scripts de Skill. Portanto, Skill pode ter um ciclo de validação próprio:
+
+```text
+Skill instalada
+→ validar estrutura
+→ executar testes
+→ registrar versão/resultado
+→ liberar para uso
+```
+
+### Ambientes declarados
+
+A existência de `.codex/environments/environment.toml` reforça a ideia de descrever o ambiente esperado separadamente da lógica da Skill. Isso combina com o contrato Brain→Sandbox: o Brain declara capacidades/requisitos; o Sandbox resolve o ambiente.
+
 ## O que o repositório oferece
 
 O Codex é um coding agent executado no terminal e implementado principalmente em Rust. A arquitetura atual possui um núcleo de execução de ferramentas, `exec_command`, `apply_patch`, gerenciamento de processos, políticas de aprovação, sandbox, eventos, hooks, MCP, ambientes de execução e testes de integração. O próprio repositório mantém regras detalhadas de engenharia em `AGENTS.md`, inclusive limites de contexto, testes de integração e organização modular.
@@ -75,6 +125,9 @@ O Codex possui gerenciamento de MCP e ferramentas dinâmicas. O Braim pode absor
 - Testes de integração para comportamento do agente.
 - Contexto com tamanho máximo.
 - Registro de cada tentativa.
+- Skills compostas por instrução + referências + scripts + testes.
+- Agente declarado por Skill quando necessário.
+- Ambiente/requisitos declarados separadamente.
 
 ## Modelo sugerido para o contrato
 
@@ -146,4 +199,4 @@ O Codex é Apache License 2.0. Qualquer reutilização literal de código deve p
 
 ## Conclusão
 
-O maior aprendizado do Codex para o Braim não é “como rodar código”. É **como transformar execução em uma operação observável, controlável, cancelável, testável e rastreável**. Isso deve entrar no contrato Brain ↔ Sandbox desde o começo.
+O maior aprendizado do Codex para o Braim não é “como rodar código”. É **como transformar execução em uma operação observável, controlável, cancelável, testável e rastreável**. A árvore atual acrescenta uma segunda lição: Skills podem ser pacotes executáveis com referências, scripts, testes e agentes especializados. Isso deve entrar no desenho desde o começo.

@@ -16,12 +16,12 @@ class BindingPipelineTests(unittest.TestCase):
 
     def test_pipeline_persists_binding_digest(self):
         events = EventStore(); pipeline = BrainPipeline(KeywordSecretary({"x": ("x",)}), StaticRouter({"default": "p"}), DefaultPromptBuilder(), PolicyBroker(["x"], {"brain": ["x"]}), events, Dispatcher())
-        result = pipeline.run("x", "session")[0]
+        result = pipeline.run_internal_for_tests("x", "session")[0]
         self.assertTrue(result.success); dispatched = next(event for event in events.all() if event.type == "AgentDispatched"); self.assertTrue(dispatched.payload["binding_digest"])
 
     def test_pipeline_can_apply_qa_gate_before_delivery(self):
         events = EventStore(); pipeline = BrainPipeline(KeywordSecretary({"x": ("x",)}), StaticRouter({"default": "p"}), DefaultPromptBuilder(), PolicyBroker(["x"], {"brain": ["x"]}), events, Dispatcher(), qa_gate=QAGate())
-        result = pipeline.run("x", "session")[0]
+        result = pipeline.run_internal_for_tests("x", "session")[0]
         self.assertTrue(result.success)
 
 if __name__ == "__main__": unittest.main()

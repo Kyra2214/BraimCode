@@ -1,0 +1,4 @@
+{
+  "schema_version": "1.0",
+  "events": ["TaskCreated","TaskClassified","PlanCreated","CapabilitySelected","PolicyChecked","ApprovalRequested","AgentDispatched","AgentCompleted","ValidationStarted","ValidationFailed","CorrectionRequested","Retry","ValidationPassed","Delivered"]
+}

@@ -20,7 +20,7 @@ class ObservabilityIntegrationTests(unittest.TestCase):
     def test_pipeline_records_execution_span_and_policy_alert(self):
         telemetry = Observability(); events = EventStore()
         pipeline = BrainPipeline(KeywordSecretary({"research": ("pesquise",)}), StaticRouter({"default": "local"}), DefaultPromptBuilder(), PolicyBroker(), events, Dispatcher(), observability=telemetry)
-        result = pipeline.run("Pesquise algo", "session")[0]
+        result = pipeline.run_internal_for_tests("Pesquise algo", "session")[0]
         self.assertEqual(result.status, "DENIED"); self.assertTrue(any(span.name == "pipeline.execute" for span in telemetry.spans())); self.assertEqual(telemetry.alerts()[0]["name"], "policy_denied")
 
     def test_delivery_records_metrics(self):

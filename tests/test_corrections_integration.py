@@ -23,7 +23,7 @@ class IntegrationTests(unittest.TestCase):
 
     def test_failed_validation_is_corrected_and_retried(self):
         events = EventStore(); pipeline = self.make_pipeline(events, FailingOnce())
-        result = pipeline.run("Pesquise dados", "s")[0]
+        result = pipeline.run_internal_for_tests("Pesquise dados", "s")[0]
         self.assertTrue(result.success)
         types = [item.type for item in events.all()]
         self.assertIn(EventType.CORRECTION_REQUESTED.value, types)
@@ -42,14 +42,14 @@ class IntegrationTests(unittest.TestCase):
                 decision.risk_class, Decision.ASK, ApprovalRequired.USER, decision.sandbox_required, decision.network_allowed,
                 decision.filesystem_roots, decision.budget, decision.expires_at, "approval required", decision.resource)
         pipeline.policy.authorize = ask
-        paused = pipeline.run("Pesquise dados", "s")[0]
+        paused = pipeline.run_internal_for_tests("Pesquise dados", "s")[0]
         approval_id = paused.output["approval_id"]
         run_id = store.get(approval_id).run_id
-        resumed = pipeline.resume(approval_id, "user", True)[0]
+        resumed = pipeline.resume_internal_for_tests(approval_id, "user", True)[0]
         self.assertTrue(resumed.success)
         self.assertEqual(run_id, store.get(approval_id).run_id)
         self.assertIn(EventType.APPROVAL_GRANTED.value, [e.type for e in events.all()])
-        with self.assertRaises(KeyError): pipeline.resume(approval_id, "user", True)
+        with self.assertRaises(KeyError): pipeline.resume_internal_for_tests(approval_id, "user", True)
 
     def test_approval_restart_preserves_same_step(self):
         class CapturingDispatcher:
@@ -72,14 +72,14 @@ class IntegrationTests(unittest.TestCase):
                     decision.risk_class, Decision.ASK, ApprovalRequired.USER, decision.sandbox_required, decision.network_allowed,
                     decision.filesystem_roots, decision.budget, decision.expires_at, "approval required", decision.resource)
             first.policy.authorize = ask
-            paused = first.run("Pesquise dados", "s")[0]
+            paused = first.run_internal_for_tests("Pesquise dados", "s")[0]
             approval_id = paused.output["approval_id"]
             requested = next(event for event in first_events.all() if event.type == EventType.APPROVAL_REQUESTED.value)
             step_id = requested.payload["step_id"]
 
             restarted_events = EventStore(events_path)
             restarted = self.make_pipeline(restarted_events, CapturingDispatcher(), ApprovalStore(approval_path))
-            resumed = restarted.resume(approval_id, "user", True)[0]
+            resumed = restarted.resume_internal_for_tests(approval_id, "user", True)[0]
             dispatched = next(event for event in restarted_events.all() if event.type == EventType.AGENT_DISPATCHED.value)
             self.assertTrue(resumed.success)
             self.assertEqual(step_id, dispatched.payload["step_id"])

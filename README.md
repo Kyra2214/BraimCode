@@ -2,7 +2,7 @@
 
 O Braim é um runtime experimental para execução de tarefas com Policy, approval, eventos auditáveis, Sandbox, workflows, memória, routing de providers e gates de QA. A implementação executável atual está em `brain_runtime/` e usa Python 3 com a biblioteca padrão.
 
-> **Estado de segurança:** o projeto possui hardening significativo e 112 testes aprovados, mas ainda depende de infraestrutura do host para isolamento OS-level completo. Não deve ser interpretado como container ou ambiente de produção isolado sem uma implantação adequada.
+> **Estado de segurança:** o projeto possui hardening significativo e 116 testes aprovados, mas ainda depende de infraestrutura do host para isolamento OS-level completo. Não deve ser interpretado como container ou ambiente de produção isolado sem uma implantação adequada.
 
 ## Executar testes
 
@@ -33,7 +33,7 @@ A validação atual inclui contratos formais, policy/approval, hash chain e reco
 
 ## Integração de Project Intelligence
 
-O scanner e o readiness gate são opcionais no `RuntimeCoordinator`:
+O scanner e o readiness gate permanecem opcionais apenas no modo `development`:
 
 ```python
 from brain_runtime.project_intelligence import ProjectScanner
@@ -47,16 +47,26 @@ runtime = RuntimeCoordinator(
     project_scanner=ProjectScanner("/path/to/project"),
     readiness_gate=ReadinessGate(),
     enforce_readiness=True,
+    mode="production",
 )
 ```
 
-Quando configurado, o runtime atualiza `.projectbrain/`, emite `ProjectScanned` e `ReadinessEvaluated`, e bloqueia a conclusão quando `enforce_readiness=True` e existem blockers.
+Os modos `offline`, `sandboxed`, `strict` e `production` exigem `ReadinessGate` e não aceitam `enforce_readiness=False`. Em `development`, o default continua compatível (`False`). A configuração equivalente fica em `execution.mode` e `execution.enforce_readiness`; a validação rejeita a desativação em modos protegidos.
+
+Quando configurado, o runtime atualiza `.projectbrain/`, emite `ProjectScanned` e `ReadinessEvaluated`, e bloqueia a conclusão quando existem blockers. O `RuntimeCoordinator` emite uma `ExecutionAuthorization` vinculada à instância e ao modo do pipeline; `BrainPipeline.run()` e `resume()` rejeitam chamadas sem essa capability. A rota `run_internal_for_tests()`/`resume_internal_for_tests()` existe apenas para `development` e é bloqueada em modos protegidos.
 
 ## Kotlin e Android
 
-O diretório `app/` contém contratos e componentes Kotlin de referência. O aplicativo Android não está implementado nesta fase. Ainda não há Gradle, `AndroidManifest.xml`, UI, Keystore, foreground service ou APK.
+O repositório agora também contém o projeto Gradle do Sandbox Mobile integrado ao BrainCode. O módulo `:brain` é Kotlin/JVM puro para Policy, Router, Planner, Prompt, QA e contratos; `:android-module` fornece a sessão de agente, resolução de capabilities e runtime Sandbox; `:app` contém o cliente Android Compose e os recursos do RootFS. O plano de integração está em [`docs/PLANO_INTEGRACAO_BRAIN_SANDBOX.md`](docs/PLANO_INTEGRACAO_BRAIN_SANDBOX.md).
 
-A decisão é deliberada: o runtime e seus contratos devem ser estabilizados antes de criar o cliente móvel.
+Validações locais disponíveis:
+
+```bash
+./gradlew :brain:test
+python3 -m unittest discover -s tests -q
+```
+
+Os testes de `:android-module` exigem Android SDK configurado via `ANDROID_HOME` ou `local.properties`; sem esse SDK, o Gradle não consegue configurar a biblioteca Android.
 
 ## Documentação técnica
 

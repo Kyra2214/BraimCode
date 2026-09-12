@@ -7,11 +7,19 @@ from brain_runtime.host_controls import DistributedLeaseStore, LeaseHeartbeat
 from brain_runtime.modes import RuntimeMode, validate_runtime_components
 from brain_runtime.models import EventType
 from brain_runtime.skills import SkillManifest, SkillRegistry
+from brain_runtime.runtime import RuntimeCoordinator
+from brain_runtime.readiness import ReadinessGate
 
 class RemainingHardeningTests(unittest.TestCase):
     def test_modes_are_fail_closed(self):
         with self.assertRaises(RuntimeError): validate_runtime_components(RuntimeMode.STRICT, has_qa=False, has_observability=True, has_dispatcher=True, has_policy=True)
         self.assertEqual(validate_runtime_components(RuntimeMode.OFFLINE, has_qa=True, has_observability=True, has_dispatcher=True, has_policy=True).mode, RuntimeMode.OFFLINE)
+
+    def test_non_development_modes_require_readiness_and_cannot_disable_it(self):
+        with self.assertRaises(ValueError): RuntimeCoordinator(object(), object(), EventStore(), mode=RuntimeMode.PRODUCTION)
+        with self.assertRaises(ValueError): RuntimeCoordinator(object(), object(), EventStore(), readiness_gate=ReadinessGate(), enforce_readiness=False, mode=RuntimeMode.STRICT)
+        runtime = RuntimeCoordinator(object(), object(), EventStore(), readiness_gate=ReadinessGate(), mode=RuntimeMode.PRODUCTION)
+        self.assertTrue(runtime.enforce_readiness)
 
     def test_event_retention_and_segments(self):
         with tempfile.TemporaryDirectory() as directory:

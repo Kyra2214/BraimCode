@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "description": "External Skill sources used by Braim Skill Intelligence. Sources are queried as registries; content is loaded only after selection, validation and policy checks.",
+  "sources": [
+    {"id":"anthropic.skills","name":"Anthropic Agent Skills","kind":"git_repository","repository":"anthropics/skills","url":"https://github.com/anthropics/skills","role":"reference_and_compatible_skills","enabled":true,"trust_default":"review_required","license_policy":"verify_per_skill"},
+    {"id":"gitskills.huggingface","name":"GitSkills Dataset","kind":"huggingface_dataset","dataset":"mvaccargiu/gitskills","url":"https://huggingface.co/datasets/mvaccargiu/gitskills","role":"external_skill_discovery_index","enabled":true,"trust_default":"unverified","license_policy":"verify_source_repository"}
+  ]
+}

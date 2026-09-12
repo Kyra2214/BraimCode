@@ -11,6 +11,8 @@ from .pipeline import BrainPipeline
 from .recovery import StateReconstructor, RunState
 from .project_intelligence import ProjectScanner, ProjectSnapshot
 from .readiness import ReadinessGate, ReadinessReport
+from .modes import RuntimeMode, requirements
+from .authorization import ExecutionAuthorization
 
 class FaultInjected(RuntimeError): pass
 
@@ -21,9 +23,18 @@ class RuntimeRunResult:
 
 class RuntimeCoordinator:
     """Orquestra pipeline -> QA/delivery -> replay state com falhas observáveis e recuperação segura."""
-    def __init__(self, pipeline: BrainPipeline, delivery: DeliveryPipeline, events: EventStore, observability: Observability | None = None, fault_injector: Callable[[str], None] | None = None, project_scanner: ProjectScanner | None = None, readiness_gate: ReadinessGate | None = None, enforce_readiness: bool = False):
+    def __init__(self, pipeline: BrainPipeline, delivery: DeliveryPipeline, events: EventStore, observability: Observability | None = None, fault_injector: Callable[[str], None] | None = None, project_scanner: ProjectScanner | None = None, readiness_gate: ReadinessGate | None = None, enforce_readiness: bool | None = None, mode: RuntimeMode | str = RuntimeMode.DEVELOPMENT):
         self.pipeline, self.delivery, self.events, self.observability, self.fault_injector = pipeline, delivery, events, observability, fault_injector
-        self.project_scanner, self.readiness_gate, self.enforce_readiness = project_scanner, readiness_gate, enforce_readiness
+        self.mode = RuntimeMode(mode); self.requirements = requirements(self.mode)
+        if hasattr(pipeline, "mode") and pipeline.mode is not self.mode:
+            raise ValueError("pipeline mode must match coordinator mode")
+        if enforce_readiness is False and self.requirements.require_readiness:
+            raise ValueError(f"{self.mode.value} mode cannot disable readiness")
+        if self.requirements.require_readiness and readiness_gate is None:
+            raise ValueError(f"{self.mode.value} mode requires a readiness gate")
+        self.project_scanner, self.readiness_gate = project_scanner, readiness_gate
+        self.enforce_readiness = self.requirements.require_readiness if enforce_readiness is None else enforce_readiness
+        self.execution_authorization = ExecutionAuthorization._issue(pipeline, self.mode)
     def _fault(self, stage: str) -> None:
         if self.fault_injector: self.fault_injector(stage)
     def run(self, objective: str, session_id: str, actor: str = "brain", cancel_event: Event | None = None, timeout_seconds: float | None = None) -> RuntimeRunResult:
@@ -31,7 +42,7 @@ class RuntimeCoordinator:
         try:
             if self.project_scanner:
                 snapshot = self.project_scanner.scan(); self.project_scanner.write_context(snapshot)
-            self._fault("before_pipeline"); results = self.pipeline.run(objective, session_id, actor); events = self.events.all(); run_id = events[-1].run_id if events else new_id("run"); task_id = events[-1].task_id if events else ""
+            self._fault("before_pipeline"); results = self.pipeline.run(objective, session_id, actor, authorization=self.execution_authorization); events = self.events.all(); run_id = events[-1].run_id if events else new_id("run"); task_id = events[-1].task_id if events else ""
             if snapshot: self.events.append(run_id, session_id, task_id, "ProjectScanned", {"files": snapshot.architecture.get("file_count", 0), "modules": len(snapshot.modules), "risks": len(snapshot.risks)})
             self._fault("after_pipeline")
             for result in results:

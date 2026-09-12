@@ -2,17 +2,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-class RuntimeMode(str, Enum): DEVELOPMENT = "development"; OFFLINE = "offline"; SANDBOXED = "sandboxed"; STRICT = "strict"
+class RuntimeMode(str, Enum): DEVELOPMENT = "development"; OFFLINE = "offline"; SANDBOXED = "sandboxed"; STRICT = "strict"; PRODUCTION = "production"
 @dataclass(frozen=True)
 class RuntimeRequirements:
-    mode: RuntimeMode; require_qa: bool; require_observability: bool; require_dispatcher: bool; require_policy: bool; allow_network: bool
+    mode: RuntimeMode; require_qa: bool; require_observability: bool; require_dispatcher: bool; require_policy: bool; allow_network: bool; require_readiness: bool
 
 def requirements(mode: RuntimeMode | str) -> RuntimeRequirements:
     mode = RuntimeMode(mode)
-    if mode is RuntimeMode.STRICT: return RuntimeRequirements(mode, True, True, True, True, False)
-    if mode is RuntimeMode.SANDBOXED: return RuntimeRequirements(mode, True, True, True, True, False)
-    if mode is RuntimeMode.OFFLINE: return RuntimeRequirements(mode, True, True, True, True, False)
-    return RuntimeRequirements(mode, False, False, False, True, False)
+    if mode is RuntimeMode.STRICT: return RuntimeRequirements(mode, True, True, True, True, False, True)
+    if mode is RuntimeMode.SANDBOXED: return RuntimeRequirements(mode, True, True, True, True, False, True)
+    if mode is RuntimeMode.OFFLINE: return RuntimeRequirements(mode, True, True, True, True, False, True)
+    if mode is RuntimeMode.PRODUCTION: return RuntimeRequirements(mode, True, True, True, True, False, True)
+    return RuntimeRequirements(mode, False, False, False, True, False, False)
 
 def validate_runtime_components(mode: RuntimeMode | str, *, has_qa: bool, has_observability: bool, has_dispatcher: bool, has_policy: bool, network_allowed: bool = False) -> RuntimeRequirements:
     req = requirements(mode)

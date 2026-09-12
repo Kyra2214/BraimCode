@@ -1,0 +1,4 @@
+{
+  "schema_version": "1.0",
+  "capabilities": ["code_generation","code_analysis","web_research","reasoning","vision","document_analysis","translation","summarization","embedding","reranking","image_generation","speech_to_text","text_to_speech","structured_output"]
+}

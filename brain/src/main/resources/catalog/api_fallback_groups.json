@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "groups": [],
+  "selection_rule": "Prefer compatible providers in the same fallback group after capability and policy checks."
+}

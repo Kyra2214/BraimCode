@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "limits": [],
+  "rules": ["Track documented rate, quota, context and payload limits when known.","Do not store credentials."]
+}

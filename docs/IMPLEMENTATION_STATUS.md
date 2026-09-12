@@ -195,3 +195,9 @@ Foram adicionados testes focados desses seis componentes e a suíte executada co
 O `RuntimeCoordinator` agora aceita `ProjectScanner` e `ReadinessGate` opcionais. Quando configurado, cada execução faz o scan do projeto antes do pipeline, atualiza `.projectbrain/`, emite `ProjectScanned`, executa delivery/QA, avalia as sete etapas de readiness e emite `ReadinessEvaluated` com status, score, blockers e warnings. O campo `readiness` foi adicionado ao resultado da execução sem quebrar chamadas existentes. Com `enforce_readiness=True`, uma execução bloqueada não emite `JobCompleted` e é encerrada com `JobFailed` na etapa de readiness.
 
 Foi adicionado teste E2E cobrindo scan, persistência de contexto, avaliação de readiness e replay de eventos. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 112 testes aprovados.
+
+## Política de readiness por modo e auditoria de bypass — 2026-09-12
+
+O controle de readiness passou a ser definido pelo modo de execução. `development` preserva o comportamento compatível, enquanto `offline`, `sandboxed`, `strict` e `production` exigem `ReadinessGate` e não permitem desabilitar `enforce_readiness`. A mesma regra é aplicada na validação da configuração em `execution.mode` e `execution.enforce_readiness`.
+
+O probe de auditoria confirmou que uma chamada direta a `BrainPipeline.run()` conseguia executar o dispatcher sem passar pelo `RuntimeCoordinator`. Para fechar esse caminho, foi introduzida `ExecutionAuthorization`, uma capability vinculada à instância e emitida somente pelo `RuntimeCoordinator`; `run()` e `resume()` agora rejeitam chamadas sem autorização. As APIs `run_internal_for_tests()` e `resume_internal_for_tests()` preservam testes e desenvolvimento, mas são bloqueadas fora de `development`. Foram adicionados testes de regressão, elevando a suíte para 116 testes aprovados.

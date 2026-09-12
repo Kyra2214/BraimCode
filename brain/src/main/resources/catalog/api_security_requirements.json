@@ -1,0 +1,4 @@
+{
+  "schema_version": "1.0",
+  "requirements": ["credential_reference_only","no_secret_persistence","tls_required","provenance_required","provider_health_tracking"]
+}

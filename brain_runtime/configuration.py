@@ -3,6 +3,7 @@ import json, os, threading, tomllib
 from pathlib import Path
 from typing import Any, Mapping
 from .contracts import ContractError
+from .modes import RuntimeMode, requirements
 
 REQUIRED_SECTIONS = ("policy", "execution", "providers", "routing")
 CONFIG_VERSION = 1
@@ -17,6 +18,12 @@ def validate_configuration(config: Mapping[str, Any]) -> dict[str, Any]:
     if policy.get("deny_by_default") is not True: raise ContractError("policy must be deny-by-default")
     if "secrets" in config or any("secret" in str(key).lower() for key in config): raise ContractError("raw secrets cannot be part of configuration")
     execution = config["execution"]
+    try:
+        mode = RuntimeMode(execution.get("mode", RuntimeMode.DEVELOPMENT))
+    except ValueError as error:
+        raise ContractError("unsupported execution mode") from error
+    if execution.get("enforce_readiness") is False and requirements(mode).require_readiness:
+        raise ContractError(f"{mode.value} mode cannot disable readiness")
     if "timeout_seconds" in execution and (not isinstance(execution["timeout_seconds"], int) or execution["timeout_seconds"] <= 0): raise ContractError("invalid execution timeout")
     result = dict(config)
     if "schemaVersion" in config: result["schemaVersion"] = CONFIG_VERSION

@@ -25,6 +25,12 @@ class ContractConfigurationTests(unittest.TestCase):
             self.assertEqual(manager.reload()["execution"]["timeout_seconds"], 20)
             with self.assertRaises(ContractError): validate_configuration({"policy": {"deny_by_default": False}, "execution": {}, "providers": {}, "routing": {}})
 
+    def test_protected_modes_cannot_disable_readiness_in_configuration(self):
+        base = {"policy": {"deny_by_default": True}, "execution": {}, "providers": {}, "routing": {}}
+        self.assertEqual(validate_configuration({**base, "execution": {"mode": "development", "enforce_readiness": False}})["execution"]["mode"], "development")
+        with self.assertRaises(ContractError): validate_configuration({**base, "execution": {"mode": "production", "enforce_readiness": False}})
+        with self.assertRaises(ContractError): validate_configuration({**base, "execution": {"mode": "strict", "enforce_readiness": False}})
+
     def test_event_correlation_id_is_persisted(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"; store = EventStore(path)

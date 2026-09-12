@@ -33,7 +33,7 @@ class ResearchRoutingTests(unittest.TestCase):
     def test_pipeline_includes_research_evidence_as_untrusted_context(self):
         events = EventStore(); layer = ResearchLayer(lambda _: "evidence")
         pipeline = BrainPipeline(KeywordSecretary({"research": ("pesquise",)}), CatalogRouter(DynamicApiCatalog([ApiCatalogEntry("p", "m", ("research",), "g")])), DefaultPromptBuilder(), PolicyBroker(["research"], {"brain": ["research"]}), events, Dispatcher(), research=layer, research_sources=(ResearchSource("s", "https://s", "S"),))
-        result = pipeline.run("Pesquise algo", "session")[0]
+        result = pipeline.run_internal_for_tests("Pesquise algo", "session")[0]
         self.assertTrue(result.success)
         self.assertIn("evidence", result.output["prompt"])
         self.assertIn("ResearchCollected", [e.type for e in events.all()])

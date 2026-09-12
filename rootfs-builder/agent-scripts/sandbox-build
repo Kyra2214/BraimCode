@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+if [ -f package.json ]; then exec npm run build -- "$@"; fi
+if [ -f Cargo.toml ]; then exec cargo build "$@"; fi
+if [ -f go.mod ]; then exec go build ./... "$@"; fi
+if [ -f pyproject.toml ]; then exec python3 -m build "$@"; fi
+echo 'Nenhum build suportado detectado.' >&2
+exit 2

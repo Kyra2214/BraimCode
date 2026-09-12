@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "agents": [],
+  "note": "Future agent registry. Metadata only; authorization remains PolicyBroker authority."
+}

@@ -1,5 +1,32 @@
 # 08 — StarTrail-org/LEANN
 
+## Pente fino adicional
+
+LEANN é mais interessante como **índice semântico sobre uma fonte de verdade estruturada** do que como banco principal do Brain.
+
+### Memória em duas camadas
+
+```text
+SQLite / structured store = verdade
+LEANN = recuperação semântica
+
+Experience → structured record → semantic index
+```
+
+Se o índice for perdido, ele deve poder ser reconstruído a partir da memória estruturada.
+
+### Pesquisa híbrida
+
+O Brain deve primeiro aplicar filtros baratos (projeto, linguagem, agente, provider, erro, data, sucesso) e só então usar busca semântica. Depois, ranking histórico decide quais experiências merecem entrar no contexto.
+
+### Memória não é prompt
+
+Resultado de busca é evidência/contexto; nunca deve virar automaticamente uma instrução confiável. A origem, data e score precisam acompanhar cada memória recuperada.
+
+### Incrementalidade
+
+Atualizar somente novos/alterados registros reduz custo e permite que o aprendizado comece no primeiro teste.
+
 ## Objetivo
 
 Estudar memória semântica local, RAG, índice eficiente, MCP e recuperação de contexto para o aprendizado contínuo do Braim.
@@ -60,7 +87,8 @@ brain-memory/
 - busca com score/contexto;
 - possibilidade de embeddings locais;
 - recuperação por arquivos/código/documentos;
-- memória portátil.
+- memória portátil;
+- recuperação híbrida estruturada + semântica + histórico.
 
 ## Estratégia correta para o Braim
 
@@ -119,4 +147,4 @@ LEANN é MIT. Código reutilizado deve preservar o aviso de licença.
 
 ## Conclusão
 
-LEANN pode virar a camada de **memória semântica do Braim**, enquanto SQLite/JSON continua sendo a fonte de verdade estruturada. Essa combinação é muito mais robusta que depender apenas de vector DB.
+LEANN pode virar a camada de **memória semântica do Braim**, enquanto SQLite/JSON continua sendo a fonte de verdade estruturada. O pente fino reforça provenance, reconstrução do índice e pesquisa híbrida como requisitos.

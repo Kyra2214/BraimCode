@@ -189,3 +189,9 @@ Foi implementado o `ProjectScanner`, que transforma a estrutura observável do r
 O `ReleaseIntelligence` compara referências Git e identifica mudanças por área, sinalizando heurísticas de regressão quando o runtime muda sem alterações correspondentes nos testes. O `EvidenceEngine` separa claim, evidência verificável, estado externo, confiança e decisão, rejeitando secrets e marcadores de prompt injection. O `ContextBuilder` gera um Agent Context Pack com task, arquitetura, memória, riscos, providers e execução como dados não confiáveis. Por fim, `FixVerifyLearn` encadeia scan, task, fix, verify e learn, podendo ser conectado ao `LearningStore` existente.
 
 Foram adicionados testes focados desses seis componentes e a suíte executada com `python3 -m unittest discover -s tests -q` totaliza 111 testes aprovados.
+
+## Integração operacional do Project Intelligence — 2026-09-12
+
+O `RuntimeCoordinator` agora aceita `ProjectScanner` e `ReadinessGate` opcionais. Quando configurado, cada execução faz o scan do projeto antes do pipeline, atualiza `.projectbrain/`, emite `ProjectScanned`, executa delivery/QA, avalia as sete etapas de readiness e emite `ReadinessEvaluated` com status, score, blockers e warnings. O campo `readiness` foi adicionado ao resultado da execução sem quebrar chamadas existentes. Com `enforce_readiness=True`, uma execução bloqueada não emite `JobCompleted` e é encerrada com `JobFailed` na etapa de readiness.
+
+Foi adicionado teste E2E cobrindo scan, persistência de contexto, avaliação de readiness e replay de eventos. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 112 testes aprovados.

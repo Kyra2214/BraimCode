@@ -93,3 +93,11 @@ Skills externas passaram a validar licença contra allowlist, executar scan de c
 Foram adicionados testes finais para streams, compactação, leases, credentials e skills assinadas. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 61 testes aprovados.
 
 Permanecem dependências de implantação que não podem ser simuladas com segurança em Python puro: namespace de rede quando o kernel o bloqueia, filesystem jail/chroot real, cgroups, isolamento multiprocesso entre máquinas e verificação criptográfica baseada em uma autoridade de assinatura externa. O runtime trata esses casos com fail-closed ou expõe interfaces explícitas para o host/container fornecer a garantia.
+
+## Atualização de fronteiras de implantação — 2026-09-12
+
+Foi adicionado `HostCapabilityProbe` para reportar capacidades reais do host, incluindo `unshare`, Bubblewrap, cgroup v2, permissões de escrita e user namespaces. O sandbox aceita filesystem jail via Bubblewrap quando disponível e um `cgroup_path` opcional; em modo estrito, a ausência de qualquer controle solicitado rejeita a execução em vez de simular isolamento.
+
+Foi adicionado o `SecureIPC`, um protocolo de socket Unix com framing de tamanho, nonce, HMAC e sanitização de credenciais para o boundary Brain/Sandbox. O `DistributedLeaseStore` fornece leases transacionais SQLite com renovação, release e fencing tokens monotônicos, e o `WorkflowEngine` aceita esse backend opcional para coordenação entre processos ou hosts que compartilhem o armazenamento transacional.
+
+O `SignatureVerifier` define uma interface fail-closed para chaves Ed25519 confiáveis e mantém a decisão de confiança fora do manifesto da skill. Foram adicionados testes de fencing tokens, autenticação IPC, sanitização e probe de capacidades. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 65 testes aprovados.

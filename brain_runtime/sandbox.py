@@ -2,6 +2,7 @@ from __future__ import annotations
 import hashlib, os, resource, signal, shutil, subprocess, time
 from dataclasses import dataclass
 from pathlib import Path
+from .host_controls import CgroupController
 
 @dataclass(frozen=True)
 class SandboxJob:
@@ -12,6 +13,7 @@ class SandboxJob:
     max_processes: int = 32; max_open_files: int = 64; max_disk_bytes: int = 100 * 1024 * 1024
     allowed_extensions: tuple[str, ...] = (); cancel_event: object | None = None
     isolation_required: bool = False; network_namespace: bool = False
+    filesystem_jail: bool = False; cgroup_path: str = ""
 
 @dataclass(frozen=True)
 class SandboxJobResult:
@@ -36,6 +38,13 @@ def _namespace_command(argv: tuple[str, ...], job: SandboxJob) -> tuple[list[str
     unshare = shutil.which("unshare")
     if not unshare:
         return ([], ("unshare is unavailable",)) if job.isolation_required else (list(argv), ("isolation:namespace unavailable; resource limits only",))
+    if job.filesystem_jail:
+        bwrap = shutil.which("bwrap")
+        if bwrap:
+            command = [bwrap, "--die-with-parent", "--unshare-pid", "--proc", "/proc", "--dev", "/dev", "--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin", "--bind", str(Path(job.cwd).resolve()), "/workspace", "--chdir", "/workspace"]
+            if not job.network_allowed: command.append("--unshare-net")
+            return command + ["--"] + list(argv), ("isolation:bubblewrap filesystem jail enabled", "isolation:network namespace enabled" if not job.network_allowed else "isolation:network namespace not requested")
+        if job.isolation_required: return [], ("bubblewrap unavailable; strict filesystem jail refused",)
     command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork", "--mount-proc"]
     diagnostics = ("isolation:user namespace enabled", "isolation:mount namespace enabled", "isolation:PID namespace enabled")
     if job.network_namespace:
@@ -75,6 +84,15 @@ class SandboxExecutor:
             process = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 env={"PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1", "HOME": str(root), "PYTHONHASHSEED": "random"},
                 start_new_session=True, preexec_fn=lambda: _limit_process(job.memory_mb, None if command[0].endswith("unshare") else job.max_processes, job.max_open_files, job.max_disk_bytes))
+            if job.cgroup_path:
+                try:
+                    controller = CgroupController(job.cgroup_path)
+                    controller.configure(memory_mb=job.memory_mb, pids=job.max_processes, cpu_seconds=job.timeout_seconds)
+                    controller.attach(process.pid)
+                except (OSError, PermissionError) as error:
+                    if job.isolation_required:
+                        os.killpg(process.pid, signal.SIGKILL); process.communicate()
+                        return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=(f"cgroup isolation unavailable: {error}",), run_id=job.run_id, session_id=job.session_id)
             deadline = started + job.timeout_seconds
             while True:
                 if job.cancel_event is not None and getattr(job.cancel_event, "is_set", lambda: False)():

@@ -1,5 +1,35 @@
 # 03 — anthropics/skills
 
+## Pente fino adicional
+
+A principal descoberta operacional é que Skill é um **pacote carregável**, e não um texto gigante permanente. A estrutura permite combinar `SKILL.md` com scripts, referências, exemplos e recursos. Isso deve ser reproduzido conceitualmente no Braim.
+
+### Skill como plugin de conhecimento
+
+```text
+Skill
+├── metadata
+├── SKILL.md
+├── scripts/
+├── references/
+├── examples/
+└── tests/
+```
+
+O Braim deve validar a Skill antes de permitir seu uso: schema, origem, licença, dependências, ferramentas requeridas e testes.
+
+### Descoberta antes de carregamento
+
+O catálogo deve manter apenas metadados baratos no contexto. O conteúdo completo entra somente depois do `SkillRanker` escolher a Skill. Isso reduz tokens e permite centenas de Skills.
+
+### Skill ≠ memória
+
+Skill é procedimento generalizável; experiência é evidência histórica. Uma experiência pode atualizar o score de uma Skill, mas não deve ser automaticamente transformada em instrução sem validação.
+
+### Licença por recurso
+
+O repositório mistura recursos com diferentes condições. O minerador do Braim deve registrar licença por Skill/recurso, nunca assumir que todo conteúdo do repositório pode ser copiado.
+
 ## Objetivo
 
 Estudar o padrão Agent Skills e transformar o que for útil em uma arquitetura de Skills própria do Braim.
@@ -149,4 +179,4 @@ registrar resultado
 
 ## Conclusão
 
-O Braim deve ter um **formato próprio, compatível conceitualmente com Agent Skills**, mas com memória de desempenho, licença, versão, requisitos e score. A grande vantagem será poder aprender quais Skills realmente funcionam e quais devem deixar de ser usadas.
+O Braim deve ter um **formato próprio, compatível conceitualmente com Agent Skills**, mas com memória de desempenho, licença, versão, requisitos e score. O pente fino reforça que Skill deve ser um pacote validável e versionável, com carregamento progressivo e execução determinística separada do LLM.

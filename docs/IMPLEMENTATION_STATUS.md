@@ -83,3 +83,13 @@ Eventos agora possuem `correlation_id` persistido, com fallback para `run_id` em
 A camada de observabilidade passou a suportar gauges, alertas correlacionados e exportação JSON estruturada contendo spans, counters, gauges e alerts. O pipeline aceita `Observability`, gera spans por execução e retry, mede o status dos resultados e emite alerta específico para decisões de Policy negadas.
 
 O `DeliveryPipeline` aceita telemetria e `TraceContext`, registra spans do QA gate e counters separados para validação recusada e entrega concluída. A correlação entre trace, run, sessão e task é preservada nos spans exportados. Foram adicionados testes de exportação, alertas de Policy, spans do pipeline e métricas de delivery. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 57 testes aprovados.
+
+## Atualização final de hardening — 2026-09-12
+
+O EventStore recebeu sequência por stream, rotação por tamanho, compactação com reconstrução da hash chain, recovery de linha parcial e migração de payloads. Workflows receberam renovação explícita de lease, cancelamento persistente e histórico de transições. O `CredentialVault` agora possui um dispatcher wrapper que injeta o secret somente na chamada de execução, mantendo a request e os eventos sem o valor sensível.
+
+Skills externas passaram a validar licença contra allowlist, executar scan de conteúdo, registrar URL/commit/signature e exigir assinatura quando metadados imutáveis são fornecidos. O registry suporta quarentena persistente e revogação que impede novas autorizações. Compatibility mode para manifests legados verificados permanece disponível para migração gradual.
+
+Foram adicionados testes finais para streams, compactação, leases, credentials e skills assinadas. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 61 testes aprovados.
+
+Permanecem dependências de implantação que não podem ser simuladas com segurança em Python puro: namespace de rede quando o kernel o bloqueia, filesystem jail/chroot real, cgroups, isolamento multiprocesso entre máquinas e verificação criptográfica baseada em uma autoridade de assinatura externa. O runtime trata esses casos com fail-closed ou expõe interfaces explícitas para o host/container fornecer a garantia.

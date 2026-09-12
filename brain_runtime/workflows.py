@@ -55,7 +55,29 @@ class WorkflowEngine:
         return {"success": bool(result)}
 
     def _write_state(self, key: str, state: dict) -> None:
+        previous = self._runs.get(key)
+        state = dict(state); state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        state["transitions"] = list(previous.get("transitions", [])) if previous else []
+        if not previous or previous.get("status") != state.get("status"):
+            state["transitions"].append({"from": previous.get("status") if previous else None, "to": state.get("status"), "at": state["updated_at"]})
         self._runs[key] = state; self._save()
+
+    def renew_lease(self, idempotency_key: str, owner: str, lease_seconds: int = 300) -> dict:
+        if lease_seconds <= 0: raise ValueError("lease must be positive")
+        with self._lock:
+            state = self._runs.get(idempotency_key)
+            if not state: raise KeyError(idempotency_key)
+            if state.get("status") in self.TERMINAL: raise RuntimeError("workflow is terminal")
+            if state.get("owner") != owner: raise PermissionError("lease owner mismatch")
+            state = dict(state); state["lease_until"] = (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat(); state["updated_at"] = datetime.now(timezone.utc).isoformat(); self._runs[idempotency_key] = state; self._save(); return state
+
+    def cancel(self, idempotency_key: str, owner: str) -> dict:
+        with self._lock:
+            state = self._runs.get(idempotency_key)
+            if not state: raise KeyError(idempotency_key)
+            if state.get("owner") not in (None, owner): raise PermissionError("lease owner mismatch")
+            if state.get("status") in self.TERMINAL: return state
+            state = dict(state); state["status"] = "cancelled"; state["error"] = "cancelled by owner"; self._write_state(idempotency_key, state); return self._runs[idempotency_key]
 
     def run(self, manifest: WorkflowManifest, run_id: str, idempotency_key: str, handler: Callable[[WorkflowNode], Any], owner: str = "local",
             lease_seconds: int = 300, cancel_event: object | None = None, timeout_seconds: int | None = None,

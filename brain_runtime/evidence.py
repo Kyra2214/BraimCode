@@ -16,7 +16,9 @@ class Evidence:
     def __post_init__(self):
         if not self.source or not self.statement: raise ValueError("evidence requires source and statement")
         if _SECRET.search(self.statement) or _INJECTION.search(self.statement): raise ValueError("unsafe evidence")
-        if not self.digest: object.__setattr__(self, "digest", hashlib.sha256(self.statement.encode()).hexdigest())
+        expected = hashlib.sha256(self.statement.encode()).hexdigest()
+        if self.digest and self.digest != expected: raise ValueError("evidence digest mismatch")
+        if not self.digest: object.__setattr__(self, "digest", expected)
 
 @dataclass(frozen=True)
 class ClaimAssessment:

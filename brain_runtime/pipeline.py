@@ -45,13 +45,10 @@ class EvidenceCritic:
     def diagnose(self, result: ExecutionResult, task: TaskSpec, capability: str) -> str | None:
         if not result.success:
             return result.error or "execution failed"
-        if not result.evidence and not result.provenance:
-            return None
-        source = result.provenance[0] if result.provenance else "execution-result"
-        items = tuple(Evidence(source, item, kind="execution", verified=True) for item in result.evidence)
-        if not items:
-            items = (Evidence(source, "execution completed", kind="execution", verified=True),)
-        assessment = self.engine.assess(f"{capability} produced a valid result", items, required_kinds=self.required_kinds, external_state="known")
+        items = tuple(item for item in result.evidence if isinstance(item, Evidence))
+        sources = set(result.provenance)
+        external_state = "known" if items and all(item.source in sources for item in items) else "unknown"
+        assessment = self.engine.assess(f"{capability} produced a valid result", items, required_kinds=self.required_kinds, external_state=external_state)
         return None if assessment.decision == "supported" else f"evidence confidence too low ({assessment.confidence}): {', '.join(assessment.missing) or 'insufficient evidence'}"
 @dataclass
 class KeywordSecretary:
@@ -75,7 +72,7 @@ class DefaultPromptBuilder:
 
 class BrainPipeline:
     def __init__(self, secretary: Secretary, router: Router, prompt_builder: PromptBuilder, policy: PolicyBroker, events: EventStore, dispatcher: Dispatcher, planner: Planner | None = None, approval_store: ApprovalStore | None = None, critic: Critic | None = None, max_retries: int = 1, research: ResearchLayer | None = None, research_sources: Iterable[ResearchSource] = (), learning_bridge=None, observability: Observability | None = None, qa_gate=None, mode: RuntimeMode | str = RuntimeMode.DEVELOPMENT, workflow_engine: WorkflowEngine | None = None, evidence_engine: EvidenceEngine | None = None):
-        self.secretary, self.router, self.prompt_builder = secretary, router, prompt_builder; self.policy, self.events, self.dispatcher, self.planner = policy, events, dispatcher, planner or Planner(); self.approvals, self.critic, self.max_retries = approval_store or ApprovalStore(), critic or (EvidenceCritic(evidence_engine) if evidence_engine else DefaultCritic()), max(0, max_retries); self.research, self.research_sources, self.learning_bridge, self.observability, self.qa_gate, self.workflow_engine = research, tuple(research_sources), learning_bridge, observability, qa_gate, workflow_engine; self._pending: dict[str, dict] = {}
+        self.secretary, self.router, self.prompt_builder = secretary, router, prompt_builder; self.policy, self.events, self.dispatcher, self.planner = policy, events, dispatcher, planner or Planner(); self.approvals, self.critic, self.max_retries = approval_store or ApprovalStore(), critic or (EvidenceCritic(evidence_engine) if evidence_engine else DefaultCritic()), max(0, max_retries); self.research, self.research_sources, self.learning_bridge, self.observability, self.qa_gate, self.workflow_engine = research, tuple(research_sources), learning_bridge, observability, qa_gate, workflow_engine; self._pending: dict[str, dict] = {}; self._workflow_context: dict[str, dict] = {}
         self.mode = RuntimeMode(mode)
     def _record_learning(self, task, run_id: str, capability: str, provider: str, result: ExecutionResult) -> None:
         if not self.learning_bridge: return
@@ -86,7 +83,7 @@ class BrainPipeline:
         self.events.append(run_id, session_id, task.task_id, EventType.POLICY_CHECKED, {"decision": decision.decision.value, "reason": decision.reason, "decision_id": decision.decision_id})
         if self.observability: self.observability.record_policy(decision.decision.value)
         if decision.decision is Decision.ASK:
-            approval = self.approvals.request(decision); self._pending[approval.approval_id] = {"task": task, "run_id": run_id, "session_id": session_id, "actor": actor, "capability": capability, "provider": provider, "step_id": step_id}; self.events.append(run_id, session_id, task.task_id, EventType.APPROVAL_REQUESTED, {"approval_id": approval.approval_id, "decision_id": decision.decision_id, "run_id": run_id, "task_id": task.task_id, "step_id": step_id, "actor": actor, "capability": capability, "provider": provider, "resource": provider, "required": approval.required.value, "created_at": approval.created_at, "expires_at": approval.expires_at, "objective": task.objective, "session_id": session_id, "capabilities": task.capabilities, "success_criteria": task.success_criteria, "context": task.context}); return ExecutionResult(new_id("request"), False, status="PAUSED", error="approval required", output={"approval_id": approval.approval_id})
+            approval = self.approvals.request(decision); self._pending[approval.approval_id] = {"task": task, "run_id": run_id, "session_id": session_id, "actor": actor, "capability": capability, "provider": provider, "step_id": step_id, "workflow": self._workflow_context.get(run_id)}; self.events.append(run_id, session_id, task.task_id, EventType.APPROVAL_REQUESTED, {"approval_id": approval.approval_id, "decision_id": decision.decision_id, "run_id": run_id, "task_id": task.task_id, "step_id": step_id, "actor": actor, "capability": capability, "provider": provider, "resource": provider, "required": approval.required.value, "created_at": approval.created_at, "expires_at": approval.expires_at, "objective": task.objective, "session_id": session_id, "capabilities": task.capabilities, "success_criteria": task.success_criteria, "context": task.context}); return ExecutionResult(new_id("request"), False, status="PAUSED", error="approval required", output={"approval_id": approval.approval_id})
         if decision.decision is not Decision.ALLOW:
             if self.observability: self.observability.alert("policy_denied", decision.reason, TraceContext(run_id, run_id, session_id, task.task_id))
             return ExecutionResult(new_id("request"), False, status="DENIED", error=decision.reason)
@@ -102,7 +99,7 @@ class BrainPipeline:
                 if self.observability: self.observability.record_retry("pipeline")
                 corrected_task = replace(task, context={**task.context, "correction_diagnostics": (diagnosis,)})
                 return self._execute_core(corrected_task, run_id, session_id, actor, capability, provider, step_id, attempt + 1, authorized=authorized, decision_id=decision_id)
-            self.events.append(run_id, session_id, task.task_id, EventType.AGENT_COMPLETED, {"success": False, "diagnostic": diagnosis}); self._record_learning(task, run_id, capability, provider, result); return result
+            self.events.append(run_id, session_id, task.task_id, EventType.AGENT_COMPLETED, {"success": False, "diagnostic": diagnosis}); self._record_learning(task, run_id, capability, provider, result); return ExecutionResult(result.request_id, False, result.output, diagnosis, result.evidence, "VALIDATION_FAILED", result.metrics, result.provenance)
         self.events.append(run_id, session_id, task.task_id, EventType.VALIDATION_PASSED, {"request_id": request.request_id}); self.events.append(run_id, session_id, task.task_id, EventType.AGENT_COMPLETED, {"success": result.success});
         if result.success: self.events.append(run_id, session_id, task.task_id, EventType.DELIVERED, {"request_id": request.request_id})
         self._record_learning(task, run_id, capability, provider, result); return result
@@ -131,12 +128,16 @@ class BrainPipeline:
         results: dict[str, ExecutionResult] = {}
         nodes = tuple(WorkflowNode(step.step_id, step.capability, retry_limit=step.retry_limit, dependencies=step.dependencies) for step in plan.steps)
         manifest = WorkflowManifest(f"task:{task.task_id}", "1", nodes, required_capabilities=task.capabilities)
+        self._workflow_context[run_id] = {"manifest": manifest, "task": task, "results": results, "session_id": session_id, "actor": actor}
         def execute_step(node):
             result = self._execute(task, run_id, session_id, actor, node.capability, self.router.select(node.capability), node.node_id)
             results[node.node_id] = result
-            return {"success": result.success, "request_id": result.request_id, "status": result.status}
+            return {"success": result.success, "request_id": result.request_id, "status": result.status, "output": result.output, "error": result.error}
         state = self.workflow_engine.run(manifest, run_id, run_id, execute_step)
         if state.get("status") != "completed":
+            if state.get("status") == "paused":
+                payload = state.get("pause_payload", {})
+                return [ExecutionResult(payload.get("request_id", new_id("request")), False, output=payload.get("output", {}), status="PAUSED", error=payload.get("error", "approval required"))]
             return list(results.values()) or [ExecutionResult(new_id("request"), False, status="WORKFLOW_FAILED", error=state.get("error", "workflow failed"))]
         return [results[node.step_id] for node in plan.steps if node.step_id in results]
 
@@ -159,6 +160,15 @@ class BrainPipeline:
         if pending is None: raise KeyError("unknown or already resumed approval")
         approval = self.approvals.decide(approval_id, approver, approve, run_id=pending["run_id"], task_id=pending["task"].task_id, capability=pending["capability"], resource=pending["provider"]); task, run_id, session_id = pending["task"], pending["run_id"], pending["session_id"]; event = EventType.APPROVAL_GRANTED if approve else EventType.APPROVAL_DENIED; self.events.append(run_id, session_id, task.task_id, event, {"approval_id": approval_id, "approver": approver}); del self._pending[approval_id]
         if not approve: return [ExecutionResult(new_id("request"), False, status="DENIED", error="approval denied")]
+        workflow = pending.get("workflow")
+        if workflow and self.workflow_engine:
+            results = workflow["results"]
+            def resume_step(node):
+                result = self._execute(task, run_id, session_id, pending["actor"], node.capability, self.router.select(node.capability), node.node_id, authorized=True, decision_id=approval.decision_id)
+                results[node.node_id] = result
+                return {"success": result.success, "request_id": result.request_id, "status": result.status, "output": result.output, "error": result.error}
+            state = self.workflow_engine.run(workflow["manifest"], run_id, run_id, resume_step)
+            return list(results.values()) if state.get("status") == "completed" else [results.get(pending["step_id"], ExecutionResult(new_id("request"), False, status="WORKFLOW_FAILED", error=state.get("error", "workflow failed")))]
         return [self._execute(task, run_id, session_id, pending["actor"], pending["capability"], pending["provider"], pending["step_id"], authorized=True, decision_id=approval.decision_id)]
 
     def resume(self, approval_id: str, approver: str, approve: bool, *, authorization: ExecutionAuthorization | None = None) -> list[ExecutionResult]:

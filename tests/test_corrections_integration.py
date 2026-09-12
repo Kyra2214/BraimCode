@@ -9,7 +9,7 @@ from brain_runtime.pipeline import BrainPipeline, DefaultPromptBuilder, KeywordS
 from brain_runtime.policy import PolicyBroker
 from brain_runtime.sandbox import SandboxExecutor, SandboxJob
 from brain_runtime.workflows import WorkflowEngine
-from brain_runtime.evidence import EvidenceEngine
+from brain_runtime.evidence import Evidence, EvidenceEngine
 
 class FailingOnce:
     def __init__(self): self.calls = 0
@@ -80,11 +80,50 @@ class IntegrationTests(unittest.TestCase):
     def test_evidence_critic_is_used_when_configured(self):
         class EvidenceDispatcher:
             def dispatch(self, request):
-                return ExecutionResult(request.request_id, True, evidence=("verified execution receipt",), provenance=("sandbox:job",))
+                return ExecutionResult(request.request_id, True, evidence=(Evidence("sandbox:job", "verified execution receipt", kind="execution", verified=True),), provenance=("sandbox:job",))
 
         pipeline = self.make_pipeline(EventStore(), EvidenceDispatcher(), evidence_engine=EvidenceEngine())
         result = pipeline.run_internal_for_tests("Pesquise dados", "s")[0]
         self.assertTrue(result.success)
+
+    def test_weak_evidence_is_rejected_by_configured_critic(self):
+        class WeakEvidenceDispatcher:
+            def dispatch(self, request):
+                return ExecutionResult(request.request_id, True, evidence=("unverified text",), provenance=("sandbox:job",))
+
+        result = self.make_pipeline(EventStore(), WeakEvidenceDispatcher(), evidence_engine=EvidenceEngine()).run_internal_for_tests("Pesquise dados", "s")[0]
+        self.assertFalse(result.success)
+        self.assertIn("evidence confidence too low", result.error)
+
+    def test_workflow_pauses_for_approval_and_resumes_without_retry_or_compensation(self):
+        events = EventStore(); store = ApprovalStore(); workflow = WorkflowEngine()
+        pipeline = BrainPipeline(
+            KeywordSecretary({"research": ("pesquise",)}), StaticRouter({"research": "local"}),
+            DefaultPromptBuilder(), PolicyBroker(["research"], {"brain": ["research"]}), events,
+            FailingOnce(), approval_store=store, max_retries=0, workflow_engine=workflow,
+        )
+        original = pipeline.policy.authorize
+        asked = {"value": False}
+        def ask_once(*args, **kwargs):
+            decision = original(*args, **kwargs)
+            if asked["value"]:
+                return decision
+            asked["value"] = True
+            from brain_runtime.models import PolicyDecision, Decision
+            return PolicyDecision(decision.decision_id, decision.run_id, decision.task_id, decision.actor, decision.capability,
+                decision.risk_class, Decision.ASK, ApprovalRequired.USER, decision.sandbox_required, decision.network_allowed,
+                decision.filesystem_roots, decision.budget, decision.expires_at, "approval required", decision.resource)
+        pipeline.policy.authorize = ask_once
+
+        paused = pipeline.run_internal_for_tests("Pesquise dados", "s")[0]
+        approval_id = paused.output["approval_id"]
+        state = workflow._runs[next(iter(workflow._runs))]
+        self.assertEqual(paused.status, "PAUSED")
+        self.assertEqual(state["status"], "paused")
+        self.assertEqual(state["attempts"], {state["current_node"]: 0})
+        resumed = pipeline.resume_internal_for_tests(approval_id, "user", True)[0]
+        self.assertTrue(resumed.success)
+        self.assertEqual(workflow._runs[next(iter(workflow._runs))]["status"], "completed")
 
     def test_approval_pauses_and_resumes_same_run(self):
         events = EventStore(); store = ApprovalStore(); pipeline = self.make_pipeline(events, FailingOnce(), store)

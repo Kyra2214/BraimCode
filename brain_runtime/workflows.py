@@ -87,10 +87,11 @@ class WorkflowEngine:
                     decision = self.policy.authorize(self.actor, capability, manifest.workflow_id, PolicyContext(run_id, manifest.workflow_id, self.actor))
                     if decision.decision is not Decision.ALLOW: raise PermissionError(f"workflow policy denied '{capability}': {decision.reason}")
             started_at = existing.get("started_at", now.isoformat()) if existing else now.isoformat(); completed = set(existing.get("completed", [])) if existing else set(); attempts = existing.get("attempts", {}) if existing else {}; outputs = existing.get("outputs", {}) if existing else {}; input_data = existing.get("outputs", {}) if existing else {}; runtime_limit = timeout_seconds if timeout_seconds is not None else manifest.max_runtime_seconds
-            def state(status: str, current: str | None = None, error: str | None = None) -> dict:
+            def state(status: str, current: str | None = None, error: str | None = None, pause_payload: dict | None = None) -> dict:
                 base = {"run_id": run_id, "workflow_id": manifest.workflow_id, "workflow_version": manifest.workflow_version, "status": status, "owner": owner, "lease_until": (datetime.now(timezone.utc) + timedelta(seconds=lease_seconds)).isoformat(), "started_at": started_at, "current_node": current, "completed": sorted(completed), "attempts": attempts, "outputs": outputs, "events": list(existing.get("events", [])) if existing else []}
                 if distributed_lease: base["fencing_token"] = distributed_lease.fencing_token
                 if error: base["error"] = error
+                if pause_payload is not None: base["pause_payload"] = pause_payload
                 return base
             try:
                 for node in manifest.nodes:
@@ -106,6 +107,15 @@ class WorkflowEngine:
                         attempt += 1; attempts[node.node_id] = attempt; self._write_state(idempotency_key, state("running", node.node_id))
                         try: payload = self._result_payload(handler(node))
                         except Exception as exc: payload = {"success": False, "error": str(exc)}
+                        if payload.get("status") == "PAUSED":
+                            # A human approval is a suspension, not a failed
+                            # attempt: do not consume retry budget or undo
+                            # completed nodes. The next run with the same key
+                            # resumes this node from its persisted checkpoint.
+                            attempts[node.node_id] = max(0, attempt - 1)
+                            result = state("paused", node.node_id, payload.get("error", "workflow paused"), payload)
+                            self._write_state(idempotency_key, result)
+                            return result
                         if cancel_event is not None and getattr(cancel_event, "is_set", lambda: False)(): result = state("cancelled", node.node_id, "cancelled during node execution"); self._write_state(idempotency_key, result); return self._compensate(result, nodes, outputs, completed, compensator, idempotency_key)
                         valid_output = not node.output_schema or all(key in payload for key in node.output_schema)
                         if output_validator: valid_output = valid_output and output_validator(node, payload)
@@ -115,7 +125,7 @@ class WorkflowEngine:
                     self._write_state(idempotency_key, state("running", None))
                 result = state("completed"); result.pop("owner", None); result.pop("lease_until", None); self._write_state(idempotency_key, result); return result
             finally:
-                if self.lease_store and distributed_lease and (self._runs.get(idempotency_key, {}).get("status") in self.TERMINAL or self._runs.get(idempotency_key, {}).get("status") == "completed"): self.lease_store.release(distributed_lease)
+                if self.lease_store and distributed_lease and (self._runs.get(idempotency_key, {}).get("status") in self.TERMINAL or self._runs.get(idempotency_key, {}).get("status") in {"completed", "paused"}): self.lease_store.release(distributed_lease)
     def _compensate(self, result: dict, nodes: dict[str, WorkflowNode], outputs: dict, completed: set[str], compensator: Callable | None, key: str) -> dict:
         if compensator and completed:
             result = dict(result); result["status"] = "compensating"; self._write_state(key, result)

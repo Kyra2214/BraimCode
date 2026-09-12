@@ -164,7 +164,8 @@ class BrainPipeline:
         if workflow and self.workflow_engine:
             results = workflow["results"]
             def resume_step(node):
-                result = self._execute(task, run_id, session_id, pending["actor"], node.capability, self.router.select(node.capability), node.node_id, authorized=True, decision_id=approval.decision_id)
+                approved = node.node_id == pending["step_id"]
+                result = self._execute(task, run_id, session_id, pending["actor"], node.capability, self.router.select(node.capability), node.node_id, authorized=approved, decision_id=approval.decision_id if approved else "approved")
                 results[node.node_id] = result
                 return {"success": result.success, "request_id": result.request_id, "status": result.status, "output": result.output, "error": result.error}
             state = self.workflow_engine.run(workflow["manifest"], run_id, run_id, resume_step)

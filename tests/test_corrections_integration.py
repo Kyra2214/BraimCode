@@ -125,6 +125,41 @@ class IntegrationTests(unittest.TestCase):
         self.assertTrue(resumed.success)
         self.assertEqual(workflow._runs[next(iter(workflow._runs))]["status"], "completed")
 
+    def test_resume_authorizes_only_the_approved_workflow_step(self):
+        events = EventStore(); store = ApprovalStore(); workflow = WorkflowEngine()
+        pipeline = BrainPipeline(
+            KeywordSecretary({"research": ("pesquise",), "analysis": ("analise",)}),
+            StaticRouter({"research": "local", "analysis": "local"}), DefaultPromptBuilder(),
+            PolicyBroker(["research", "analysis"], {"brain": ["research", "analysis"]}), events,
+            type("SuccessDispatcher", (), {"dispatch": lambda self, request: ExecutionResult(request.request_id, True)})(),
+            approval_store=store, max_retries=0, workflow_engine=workflow,
+        )
+        original = pipeline.policy.authorize
+        calls = []
+        def selective_policy(actor, capability, provider, context):
+            calls.append(capability)
+            decision = original(actor, capability, provider, context)
+            if capability == "research" and calls.count("research") == 1:
+                from brain_runtime.models import PolicyDecision, Decision
+                return PolicyDecision(decision.decision_id, decision.run_id, decision.task_id, decision.actor, decision.capability,
+                    decision.risk_class, Decision.ASK, ApprovalRequired.USER, decision.sandbox_required, decision.network_allowed,
+                    decision.filesystem_roots, decision.budget, decision.expires_at, "approval required", decision.resource)
+            if capability == "analysis":
+                from brain_runtime.models import PolicyDecision, Decision
+                return PolicyDecision(decision.decision_id, decision.run_id, decision.task_id, decision.actor, decision.capability,
+                    decision.risk_class, Decision.DENY, decision.approval_required, decision.sandbox_required, decision.network_allowed,
+                    decision.filesystem_roots, decision.budget, decision.expires_at, "analysis denied", decision.resource)
+            return decision
+        pipeline.policy.authorize = selective_policy
+
+        paused = pipeline.run_internal_for_tests("Pesquise e analise dados", "s")[0]
+        approval_id = paused.output["approval_id"]
+        resumed = pipeline.resume_internal_for_tests(approval_id, "user", True)[0]
+        self.assertIn("analysis", calls)
+        analysis_checks = [event.payload for event in events.all() if event.type == EventType.POLICY_CHECKED.value and event.payload.get("decision") == "DENY"]
+        self.assertTrue(analysis_checks)
+        self.assertEqual(workflow._runs[next(iter(workflow._runs))]["status"], "failed")
+
     def test_approval_pauses_and_resumes_same_run(self):
         events = EventStore(); store = ApprovalStore(); pipeline = self.make_pipeline(events, FailingOnce(), store)
         # Force approval through the broker/context used by a dedicated policy instance.

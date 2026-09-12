@@ -1,0 +1,11 @@
+{
+  "catalog_version": "1.0.0",
+  "capabilities": [
+    "code_analysis", "code_generation", "security_analysis", "test_analysis", "test_execution",
+    "web_research", "document_analysis", "summarization", "translation", "vision",
+    "speech_to_text", "text_to_speech", "reasoning", "planning", "prompt_generation",
+    "routing", "api_discovery", "data_extraction", "structured_output", "data_validation",
+    "workflow_execution", "skill_management", "memory_write", "learning", "cost_optimization",
+    "recovery", "integration", "file_operations", "network_access", "artifact_management"
+  ]
+}

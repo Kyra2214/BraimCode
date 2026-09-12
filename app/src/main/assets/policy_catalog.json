@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0",
+  "risk_classes": ["READ_ONLY","LOW_RISK","MODERATE_RISK","HIGH_RISK","CRITICAL"],
+  "defaults": {"network_allowed": false,"filesystem_allowed": false,"sandbox_required": true,"approval_required": false},
+  "rules": ["PolicyBroker is the final authorization authority.","Catalog entries do not grant permission."]
+}

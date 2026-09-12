@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "strategy": "metadata_first",
+  "search_order":["braim.local","anthropic.skills","gitskills.huggingface"],
+  "selection":{"max_candidates":20,"require_capability_match":true,"prefer_validated":true,"prefer_higher_trust":true,"prefer_compatible_license":true,"preserve_provenance":true},
+  "load_policy":{"fetch_full_content_after_selection":true,"activate_only_after_policy_check":true,"sandbox_required_for_execution":true}
+}

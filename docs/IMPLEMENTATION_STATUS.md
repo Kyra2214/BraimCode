@@ -109,3 +109,11 @@ O pipeline passou a criar um `ExecutionBinding` imutável após a decisão de Po
 O QA gate pode ser conectado diretamente ao pipeline antes do correction loop, de modo que resultados sem evidência ou sem output requerido não sejam entregues como sucesso. O importador de skills externas aceita uma `SignatureVerifier` Ed25519 opcional e, quando configurada, exige uma autoridade de chave confiável em vez de confiar apenas no manifesto.
 
 Foram adicionados testes de digest anti-tampering, binding persistido e QA gate integrado. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 68 testes aprovados.
+
+## Atualização de execução E2E e recovery — 2026-09-12
+
+Foi adicionada a fachada `RuntimeCoordinator`, que encadeia pipeline, QA/delivery, eventos, observabilidade e replay de estado. Ela persiste `JobCompleted`, `JobFailed` e `JobCancelled`, suporta cancelamento cooperativo e timeout entre etapas e oferece `recover()` e `replay()` para reconstrução após falhas.
+
+O runtime também aceita fault injection por estágio, permitindo testar crash antes e depois de pipeline/delivery sem ocultar a transição no EventStore. O `StateReconstructor` passou a reconhecer estados finais de job, além de approval, validation e delivery.
+
+Foram adicionados testes E2E para o fluxo completo, crash injetado recuperável por replay e cancelamento persistido. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 71 testes aprovados.

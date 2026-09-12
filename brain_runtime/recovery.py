@@ -24,6 +24,8 @@ class StateReconstructor:
             if event.type in {EventType.AGENT_COMPLETED.value, EventType.JOB_FAILED.value, EventType.VALIDATION_FAILED.value} and payload.get("success") is False and step: failed.append(str(step))
             if event.type == EventType.DELIVERED.value: delivered = True; status = "DELIVERED"
             elif event.type == EventType.JOB_CANCELLED.value: status = "CANCELLED"
+            elif event.type == EventType.JOB_FAILED.value: status = "FAILED"
+            elif event.type == EventType.JOB_COMPLETED.value: status = "COMPLETED" if payload.get("success", True) else "FAILED"
             elif event.type == EventType.VALIDATION_FAILED.value: status = "NEEDS_CORRECTION"
         if not delivered and not failed and events[-1].type in {EventType.AGENT_COMPLETED.value, EventType.VALIDATION_PASSED.value}: status = "COMPLETED"
         return RunState(run_id, events[0].task_id, status, tuple(dict.fromkeys(completed)), tuple(dict.fromkeys(failed)), delivered)

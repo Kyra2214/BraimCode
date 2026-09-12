@@ -8,6 +8,8 @@ from brain_runtime.models import ApprovalRequired, EventType, ExecutionResult
 from brain_runtime.pipeline import BrainPipeline, DefaultPromptBuilder, KeywordSecretary, StaticRouter
 from brain_runtime.policy import PolicyBroker
 from brain_runtime.sandbox import SandboxExecutor, SandboxJob
+from brain_runtime.workflows import WorkflowEngine
+from brain_runtime.evidence import EvidenceEngine
 
 class FailingOnce:
     def __init__(self): self.calls = 0
@@ -16,10 +18,10 @@ class FailingOnce:
         return ExecutionResult(request.request_id, self.calls > 1, error=None if self.calls > 1 else "bad output")
 
 class IntegrationTests(unittest.TestCase):
-    def make_pipeline(self, events, dispatcher, approval_store=None, approval=False):
+    def make_pipeline(self, events, dispatcher, approval_store=None, approval=False, evidence_engine=None):
         return BrainPipeline(KeywordSecretary({"research": ("pesquise",)}), StaticRouter({"research": "local"}),
             DefaultPromptBuilder(), PolicyBroker(["research"], {"brain": ["research"]}), events, dispatcher,
-            approval_store=approval_store, max_retries=1)
+            approval_store=approval_store, max_retries=1, evidence_engine=evidence_engine)
 
     def test_failed_validation_is_corrected_and_retried(self):
         events = EventStore(); pipeline = self.make_pipeline(events, FailingOnce())
@@ -49,6 +51,40 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotEqual(dispatcher.prompts[0], dispatcher.prompts[1])
         self.assertIn("Correction diagnostics", dispatcher.prompts[1])
         self.assertIn("bad output", dispatcher.prompts[1])
+
+    def test_plan_steps_run_through_persistent_workflow(self):
+        with tempfile.TemporaryDirectory() as directory:
+            events = EventStore()
+            workflow = WorkflowEngine(Path(directory) / "workflow.json")
+            class SuccessDispatcher:
+                def dispatch(self, request):
+                    return ExecutionResult(request.request_id, True)
+
+            pipeline = BrainPipeline(
+                KeywordSecretary({"research": ("pesquise",), "analysis": ("analise",)}),
+                StaticRouter({"research": "local", "analysis": "local"}),
+                DefaultPromptBuilder(),
+                PolicyBroker(["research", "analysis"], {"brain": ["research", "analysis"]}),
+                events,
+                SuccessDispatcher(),
+                max_retries=0,
+                workflow_engine=workflow,
+            )
+
+            results = pipeline.run_internal_for_tests("Pesquise e analise dados", "s")
+            state = workflow._runs[next(iter(workflow._runs))]
+            self.assertEqual(state["status"], "completed")
+            self.assertEqual(len(state["completed"]), 2)
+            self.assertEqual(len(results), 2)
+
+    def test_evidence_critic_is_used_when_configured(self):
+        class EvidenceDispatcher:
+            def dispatch(self, request):
+                return ExecutionResult(request.request_id, True, evidence=("verified execution receipt",), provenance=("sandbox:job",))
+
+        pipeline = self.make_pipeline(EventStore(), EvidenceDispatcher(), evidence_engine=EvidenceEngine())
+        result = pipeline.run_internal_for_tests("Pesquise dados", "s")[0]
+        self.assertTrue(result.success)
 
     def test_approval_pauses_and_resumes_same_run(self):
         events = EventStore(); store = ApprovalStore(); pipeline = self.make_pipeline(events, FailingOnce(), store)

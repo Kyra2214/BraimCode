@@ -8,7 +8,7 @@
 
 ## Serviços
 
-A camada complementa `ServiceManager`, que mantém o lifecycle de processos e logs. A integração completa deverá associar cada `SandboxService` a um conjunto de regras e exigir uma decisão do `NetworkPolicyBroker` antes de expor portas ou habilitar egress.
+A camada agora integra o `ServiceManager`: serviços com porta exigem um `NetworkAccessRequest` correspondente e uma regra autorizadora antes de iniciar ou reiniciar. Serviços sem porta continuam sem necessidade de request. `SandboxPlatform` injeta o `NetworkPolicy` configurado no broker.
 
 ## Limitações atuais
 

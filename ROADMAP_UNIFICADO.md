@@ -69,7 +69,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 **Status: ❌ não implementado**
 
 - **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e planos allowlisted cobrem detecção e preparação segura para Java, Python, Node, C/C++, Rust e Go; execução autorizada, SDK/NDK Android e lifecycle persistente ainda pendentes.
-- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default para serviço/protocolo/porta/host e rejeitam destinos locais; firewall, namespaces, egress real e integração final com `ServiceManager` ainda pendentes.
+- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default e o `ServiceManager` agora exige request/regra para serviços com porta; firewall, namespaces, egress real e cgroups de rede ainda pendentes.
 
 ---
 
@@ -139,6 +139,10 @@ Implementados `SecurityProjectScanner`, `ScanRule`, `ProjectScanFinding` e `Proj
 ### Sessão 2026-09-12 — Avaliação integrada do Security Test Lab
 
 Implementado `SecurityAssessmentEngine`, que combina achados estáticos do `SecurityProjectScanner` com resultados do `SecurityTestLab`, gera evidências rastreáveis e bloqueia readiness para riscos HIGH/CRITICAL de qualquer origem. Foram adicionados testes de combinação e de gate limpo. A avaliação não executa correções ou probes; executor adversarial, fix/verify/learn e delivery continuam pendentes.
+
+### Sessão 2026-09-12 — Integração de política de rede ao ServiceManager
+
+O `ServiceManager` agora exige `NetworkAccessRequest` e regra correspondente para iniciar ou reiniciar serviços que expõem porta; serviços sem porta permanecem compatíveis. `SandboxPlatform` injeta a política de rede no broker. Foram adicionados testes de ausência de autorização e início autorizado, e `docs/NETWORK_SERVICES.md` foi atualizado.
 
 ## Critério de sucesso do projeto
 

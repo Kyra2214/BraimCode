@@ -9,7 +9,8 @@ class SandboxPlatform(
     workspaceRoot: File,
     componentStateFile: File,
     serviceStateDir: File,
-    policy: SandboxSecurityPolicy = SandboxSecurityPolicy()
+    policy: SandboxSecurityPolicy = SandboxSecurityPolicy(),
+    networkPolicy: NetworkPolicy = NetworkPolicy()
 ) {
     private val securedExecutor = SecureCommandExecutor(ManagedRuntimeExecutor(runtime), policy)
     // Fase 1 Expandida: persistência em JSON (mais robusta que TSV) com
@@ -21,7 +22,7 @@ class SandboxPlatform(
         JsonComponentRepository(componentJsonFile, legacyTsvFile = componentStateFile)
     )
     val workspace = WorkspaceManager(workspaceRoot)
-    val services = ServiceManager(securedExecutor, serviceStateDir)
+    val services = ServiceManager(securedExecutor, serviceStateDir, NetworkPolicyBroker(networkPolicy))
     val git = GitManager(securedExecutor)
     val diagnostics = SandboxDiagnostics(securedExecutor)
     val testLab = TestLab(securedExecutor)

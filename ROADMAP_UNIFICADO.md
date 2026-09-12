@@ -68,7 +68,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 ## Fase 5 — Toolchains, Rede e Serviços
 **Status: ❌ não implementado**
 
-- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e planos allowlisted cobrem detecção e preparação segura para Java, Python, Node, C/C++, Rust e Go; execução autorizada, SDK/NDK Android e lifecycle persistente ainda pendentes.
+- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e `ToolchainManager` cobrem detecção, instalação explícita, validação, persistência e remoção allowlisted para Java, Python, Node, C/C++, Rust e Go; SDK/NDK Android, rollback transacional e cache ainda pendentes.
 - **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default e o `ServiceManager` agora exige request/regra para serviços com porta; firewall, namespaces, egress real e cgroups de rede ainda pendentes.
 
 ---
@@ -143,6 +143,10 @@ Implementado `SecurityAssessmentEngine`, que combina achados estáticos do `Secu
 ### Sessão 2026-09-12 — Integração de política de rede ao ServiceManager
 
 O `ServiceManager` agora exige `NetworkAccessRequest` e regra correspondente para iniciar ou reiniciar serviços que expõem porta; serviços sem porta permanecem compatíveis. `SandboxPlatform` injeta a política de rede no broker. Foram adicionados testes de ausência de autorização e início autorizado, e `docs/NETWORK_SERVICES.md` foi atualizado.
+
+### Sessão 2026-09-12 — Lifecycle persistente de toolchains
+
+`ToolchainManager` passou a executar explicitamente planos allowlisted, persistir estados, validar a toolchain após instalação e remover somente os pacotes declarados. Foram adicionados testes de persistência e remoção, e `docs/TOOLCHAINS.md` foi atualizado. SDK/NDK Android, rollback transacional e cache permanecem pendentes.
 
 ## Critério de sucesso do projeto
 

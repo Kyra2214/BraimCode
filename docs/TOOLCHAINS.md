@@ -6,6 +6,8 @@
 
 `ToolchainDetector.planInstall` gera um plano explícito com `bash -c`, `apt-get update` e instalação dos pacotes allowlisted. O plano ainda não é executado automaticamente e não substitui a autorização da Policy nem os limites do Sandbox.
 
+`ToolchainManager` executa esse plano somente por chamada explícita, persiste estados `INSTALLING`, `INSTALLED`, `FAILED`, `REMOVING` e `NOT_INSTALLED`, valida o executável após a instalação e remove apenas os pacotes declarados pelo perfil. Falhas ficam persistidas com diagnóstico para retry ou intervenção da Policy.
+
 ## Perfis incluídos
 
 A base inicial cobre Java, Python, Node.js, C/C++, Rust e Go. Android permanece como tipo suportado pelo modelo, mas exige um perfil específico com SDK/NDK e licenças declaradas antes de ser habilitado no catálogo padrão.

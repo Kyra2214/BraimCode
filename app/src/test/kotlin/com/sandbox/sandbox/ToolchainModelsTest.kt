@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 
 class ToolchainModelsTest {
     private class Executor(private val success: Boolean) : SandboxCommandExecutor {
@@ -58,5 +59,16 @@ class ToolchainModelsTest {
     @Test(expected = IllegalArgumentException::class)
     fun `nao aceita pacote com metacaracter de shell`() {
         ToolchainProfile("unsafe", ToolchainKind.JAVA, "Unsafe", "java", listOf("--version"), listOf("java; rm -rf /"))
+    }
+
+    @Test
+    fun `manager persiste instalacao e permite remocao`() {
+        val executor = Executor(true)
+        val profile = BuiltInToolchains.all.first { it.id == "java" }
+        val manager = ToolchainManager(executor, Files.createTempDirectory("toolchains").toFile(), listOf(profile))
+
+        assertEquals(ToolchainState.INSTALLED, manager.install("java").state)
+        assertEquals(ToolchainState.INSTALLED, manager.status("java").state)
+        assertEquals(ToolchainState.NOT_INSTALLED, manager.remove("java").state)
     }
 }

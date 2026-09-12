@@ -1,5 +1,34 @@
 # 10 — cporter202/job-data-apis-and-scrapers
 
+## Pente fino adicional
+
+O ponto mais valioso é o catálogo vivo: API não é um registro permanente. Preço, endpoint, limite, cobertura e disponibilidade mudam. O Brain precisa tratar o catálogo como dado versionado e verificável.
+
+### Pipeline de atualização
+
+```text
+Discovery
+→ metadata
+→ normalize
+→ terms/license
+→ live test
+→ quality score
+→ diff catalog
+→ publish new version
+```
+
+### Normalização antes do ranking
+
+Diferentes providers retornam formatos diferentes. O `ApiEvaluator` deve converter respostas para um schema interno antes de comparar qualidade.
+
+### Dados de cobertura
+
+Registrar país, idioma, frescor, paginação, campos disponíveis, deduplicação e formato é tão importante quanto preço.
+
+### Automação
+
+A sincronização diária demonstra que o catálogo pode ser atualizado automaticamente. No Braim isso deve ser um job do próprio sistema, com histórico e rollback do catálogo.
+
 ## Objetivo
 
 Estudar descoberta de fontes, sincronização automática de catálogo, seleção de provider e normalização de dados.
@@ -12,32 +41,15 @@ O repositório mantém catálogos de APIs/actors para dados de vagas e hiring si
 
 O catálogo de APIs do Braim não deve ser um arquivo congelado. Recursos mudam preço, disponibilidade, limite, endpoint e qualidade.
 
-Precisamos de um processo:
+Precisamos de:
 
 ```text
-Discovery
-→ Fetch metadata
-→ Validate
-→ Test
-→ Compare
-→ Update catalog
+Discovery → Fetch metadata → Validate → Test → Compare → Update catalog
 ```
 
 ## Provider selection checklist
 
-O repositório recomenda comparar:
-
-- cobertura;
-- país/idioma;
-- frescor;
-- paginação;
-- qualidade dos campos;
-- deduplicação;
-- formato estruturado;
-- API/MCP;
-- rate limits;
-- preço;
-- termos.
+Comparar cobertura, país/idioma, frescor, paginação, qualidade dos campos, deduplicação, formato estruturado, API/MCP, rate limits, preço e termos.
 
 Essa checklist deve virar parte do `ApiEvaluator` do Braim.
 
@@ -59,20 +71,13 @@ A ideia de normalizar dados de múltiplas fontes é fundamental. O Brain deve tr
 - deduplicação;
 - normalização;
 - classificação por caso de uso;
-- automação de atualização.
+- automação de atualização;
+- versionamento/diff do catálogo;
+- testes reais antes de recomendar provider.
 
 ## Aplicação além de APIs de emprego
 
-O mesmo mecanismo serve para:
-
-- APIs de IA;
-- APIs de imagem;
-- APIs de vídeo;
-- APIs de música;
-- APIs de voz;
-- APIs de pesquisa;
-- scrapers;
-- ferramentas locais.
+O mesmo mecanismo serve para APIs de IA, imagem, vídeo, música, voz, pesquisa, scrapers e ferramentas locais.
 
 ## Cuidado
 
@@ -88,4 +93,4 @@ https://github.com/cporter202/job-data-apis-and-scrapers
 
 ## Conclusão
 
-A principal absorção é o conceito de **catálogo vivo + avaliação objetiva + sincronização automática**. Isso é mais importante para o Braim que a lista específica de APIs de emprego.
+A principal absorção é o conceito de **catálogo vivo + avaliação objetiva + sincronização automática**. O pente fino acrescenta normalização, testes live, versionamento e comparação de alterações como partes do catálogo.

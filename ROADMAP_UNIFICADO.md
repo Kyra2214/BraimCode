@@ -77,7 +77,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 **Status: 🟡 domínio de avaliação implementado · ❌ executor adversarial completo**
 
 - **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` (31 linhas) já roda um pipeline básico de dependências → build → testes → lint, mas isso é um test runner, não um "Test Lab" completo.
-- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários e probes controlados, gera findings/evidências SHA-256 e bloqueia readiness em falhas HIGH/CRITICAL; `ProjectScanner`, executor adversarial, corpus persistente e integração de delivery ainda pendentes.
+- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários e probes controlados, e `SecurityProjectScanner` faz análise lexical read-only com redaction; executor adversarial, análise estrutural, corpus persistente e integração de delivery ainda pendentes.
 
 ---
 
@@ -131,6 +131,10 @@ Implementados `NetworkPolicy`, `NetworkRule`, `NetworkAccessRequest` e `NetworkP
 ### Sessão 2026-09-12 — Base do Security Test Lab Kotlin
 
 Implementados `SecurityTestLab`, `SecurityScenario`, `SecurityProbeResult`, `SecurityFinding`, `SecurityEvidence` e `SecurityReadiness`. O domínio avalia resultados fornecidos por probes controlados, registra evidência truncada com SHA-256 e bloqueia o gate quando há cenário duplicado, probe incompleto, resultado inesperado ou severidade HIGH/CRITICAL. Foram adicionados testes para readiness, blockers, warnings e integridade da evidência. A documentação existente em `docs/SECURITY_TEST_LAB.md` foi complementada; executor adversarial OS-level, ProjectScanner, corpus persistente e integração com delivery continuam pendentes.
+
+### Sessão 2026-09-12 — Scanner estático inicial do Security Test Lab
+
+Implementados `SecurityProjectScanner`, `ScanRule`, `ProjectScanFinding` e `ProjectScanReport`. O scanner percorre o workspace sem executar conteúdo, ignora diretórios gerados e arquivos grandes, identifica chaves privadas, credenciais em texto, interpolação potencial em shell e TLS desabilitado, preservando caminho/linha e redigindo evidências. Foram adicionados testes de detecção, exclusão, limite de arquivo, caminho relativo e redaction. A análise estrutural profunda, executor OS-level e integração com o gate permanecem pendentes.
 
 ## Critério de sucesso do projeto
 

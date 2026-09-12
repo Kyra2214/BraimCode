@@ -190,4 +190,10 @@ O módulo Android agora contém `SecurityTestLab`, `SecurityScenario`, `Security
 
 O readiness gate local bloqueia quando existe cenário duplicado, probe ausente ou incompleto, resultado inesperado ou finding de severidade `HIGH`/`CRITICAL`. Cada evidência mantém apenas um trecho de até 4096 caracteres e seu digest SHA-256. Resultados de probes desconhecidos são preservados como warning `MEDIUM` para não desaparecerem silenciosamente.
 
-A entrega ainda não inclui `ProjectScanner`, executor OS-level de probes, corpus de regressão persistente nem integração com o `ReadinessGate` de delivery. Esses itens permanecem pendentes no roadmap e não são simulados como concluídos.
+A entrega ainda não inclui executor OS-level de probes, corpus de regressão persistente nem integração com o `ReadinessGate` de delivery. Esses itens permanecem pendentes no roadmap e não são simulados como concluídos.
+
+## Scanner estático Kotlin
+
+`SecurityProjectScanner` cobre a primeira parte do `ProjectScanner` como análise lexical read-only. Ele percorre o workspace, ignora `.git`, `build`, `node_modules`, `.gradle` e arquivos acima do limite configurado, e procura chaves privadas, atribuições diretas de credenciais, interpolação potencial em shell e desativação explícita de TLS. Cada achado preserva caminho relativo, linha, regra e evidência limitada; valores de credenciais são redigidos antes de sair do scanner.
+
+O scanner não importa módulos, executa scripts, resolve dependências nem tenta validar se um segredo encontrado é real. Portanto seus achados são sinais para Policy/QA e não prova de exploração. O executor OS-level, análise estrutural mais profunda e integração com o gate continuam pendentes.

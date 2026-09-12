@@ -27,7 +27,7 @@ def _validate_event(data: dict[str, Any]) -> None:
 class EventStore:
     """Append-only JSONL store with hash chain, streams, rotation, retention and crash recovery."""
     def __init__(self, path: str | Path | None = None, *, max_bytes: int | None = None, retention_events: int | None = None):
-        self.path = Path(path) if path else None; self.max_bytes = max_bytes; self.retention_events = retention_events; self._lock = threading.RLock(); self._events = []; self._idempotency = {}; self._stream_sequences = {}
+        self.path = Path(path) if path else None; self.max_bytes = max_bytes; self.retention_events = retention_events; self._lock = threading.RLock(); self._events = []; self._idempotency = {}; self._stream_sequences = {}; self._subscribers = []
         if self.path and self.path.exists(): self._load(recover_partial=True)
     def _load(self, recover_partial: bool = False) -> None:
         self._events, self._idempotency, self._stream_sequences = [], {}, {}
@@ -65,6 +65,8 @@ class EventStore:
                 lock_stream.seek(0, os.SEEK_END); lock_stream.write(json.dumps(event.__dict__, ensure_ascii=False, sort_keys=True) + "\n"); lock_stream.flush(); os.fsync(lock_stream.fileno()); fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN); lock_stream.close()
             self._events.append(event); self._stream_sequences[(run_id, task_id)] = self._stream_sequences.get((run_id, task_id), 0) + 1
             if idempotency_key: self._idempotency[idempotency_key] = event
+            for subscriber in tuple(self._subscribers):
+                subscriber(event)
             self._rotate_if_needed()
             if self.retention_events is not None and len(self._events) > self.retention_events: self.compact(self.retention_events)
             return event
@@ -92,6 +94,16 @@ class EventStore:
     def all(self) -> tuple[Event, ...]:
         with self._lock: return tuple(self._events)
     def replay(self, run_id: str | None = None, task_id: str | None = None) -> tuple[Event, ...]: return tuple(e for e in self.all() if (run_id is None or e.run_id == run_id) and (task_id is None or e.task_id == task_id))
+    def subscribe(self, callback: Callable[[Event], None], *, after_sequence: int = -1) -> Callable[[], None]:
+        """Subscribe to future events and replay events after a global cursor."""
+        if after_sequence >= 0:
+            for event in self.all():
+                if event.sequence > after_sequence: callback(event)
+        with self._lock: self._subscribers.append(callback)
+        def unsubscribe() -> None:
+            with self._lock:
+                if callback in self._subscribers: self._subscribers.remove(callback)
+        return unsubscribe
     def stream_sequence(self, run_id: str, task_id: str) -> int: return self._stream_sequences.get((run_id, task_id), 0)
     def reconstruct(self, run_id: str) -> dict[str, Any]:
         state = {"run_id": run_id, "status": "created", "approvals": {}, "steps": {}}

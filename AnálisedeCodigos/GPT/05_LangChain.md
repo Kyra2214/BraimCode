@@ -1,5 +1,34 @@
 # 05 — langchain-ai/langchain
 
+## Pente fino adicional
+
+O maior valor do LangChain não é uma API específica: é o conjunto de contratos entre modelo, ferramenta, retriever e workflow. Para o Braim, isso deve virar interfaces pequenas e próprias.
+
+### Core mínimo recomendado
+
+```text
+ModelAdapter
+ToolDefinition
+ToolExecutor
+Retriever
+WorkflowState
+Evaluator
+```
+
+Cada implementação pode ser substituída sem alterar o Brain.
+
+### Tool como contrato executável
+
+Além de nome/descrição/schema, registrar efeitos colaterais, permissões, timeout, retry e idempotência. Ferramentas sem efeito colateral podem ser reexecutadas com mais liberdade; ferramentas destrutivas exigem política diferente.
+
+### Agent versus workflow
+
+O pente fino reforça que passos determinísticos devem ser código. O LLM deve decidir quando necessário, mas não ser usado para “orquestrar” uma sequência que já possui regras objetivas.
+
+### Estado
+
+Fluxos complexos precisam de estado persistente e transições claras. Isso combina com o Brain como máquina de estados, inclusive nos loops de correção.
+
 ## Objetivo
 
 Estudar abstrações de agentes, ferramentas, modelos, retrievers, integração e workflows sem transformar LangChain em dependência obrigatória do Braim.
@@ -83,7 +112,8 @@ A camada mais alta do ecossistema demonstra padrões como planning, subagents e 
 - separação agent/workflow;
 - state machine para fluxos complexos;
 - observabilidade/evaluation como conceito;
-- composição modular.
+- composição modular;
+- idempotência e efeitos colaterais como metadados de Tool.
 
 ## O que não absorver
 
@@ -124,4 +154,4 @@ LangChain Core e o projeto LangChain usam MIT. A licença deve ser preservada se
 
 ## Conclusão
 
-O aprendizado principal é: **interfaces estáveis permitem que o Brain troque modelos, ferramentas e fontes de conhecimento sem reescrever o orquestrador**. Isso é exatamente o que o sistema gratuito e multi-provider precisa.
+O aprendizado principal é: **interfaces estáveis permitem que o Brain troque modelos, ferramentas e fontes de conhecimento sem reescrever o orquestrador**. O pente fino acrescenta efeitos colaterais, idempotência e state machine como contratos explícitos.

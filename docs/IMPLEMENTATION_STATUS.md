@@ -13,3 +13,7 @@ Foram implementados reforços adicionais no runtime Python: validação de contr
 ## Atualização de execução segura — 2026-09-12
 
 O Sandbox agora suporta cancelamento cooperativo, timeout com encerramento do grupo de processos, limites de recursos e retorno explícito de estados `CANCELLED` e `TIMEOUT`. Workflows podem receber um `PolicyBroker` e são bloqueados quando qualquer capability do grafo não é autorizada. Foram adicionados testes E2E para cancelamento, policy de workflow e preservação de quota.
+
+## Atualização de discovery e extensibilidade — 2026-09-12
+
+Foi adicionada uma camada de pesquisa com fontes HTTPS, evidências com hash, confiança e validação de suficiência. Os adapters GitSkills e Anthropic agora exigem metadados de licença, persistem hash do corpo e mantêm skills não verificadas em quarentena. A descoberta dinâmica de APIs valida licença, custo, probe e provenance antes de registrar candidatos no catálogo.

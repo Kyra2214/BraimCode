@@ -1,9 +1,13 @@
 # Brain (nome provisório) — esqueleto do cérebro novo
 
 Esqueleto inicial da estrutura que substitui o IaBrain como projeto
-mantido. Nada aqui está implementado de verdade — são interfaces, data
-classes e pontos de extensão (`TODO`) organizados segundo o plano de
-ação e a ordem de fases A–H definida.
+mantido. Os módulos são implementados seguindo o `ROADMAP_BRAIM_CONSOLIDADO.md`, um por vez, com validação e commit ao final de cada módulo.
+
+## Módulo concluído: Fase A — contrato Brain ↔ Sandbox
+
+`app/src/main/kotlin/com/brain/execution/SandboxContract.kt` define o contrato agnóstico de implementação para `Job`, `JobResult`, requisitos, contexto, orçamento, cancelamento, referências de secrets, manifesto de artefatos e eventos de execução. O `SandboxExecutor` continua congelado conforme o roadmap; nenhum executor real foi liberado.
+
+Os contratos textuais correspondentes estão em `contracts/sandbox_job.md` e `contracts/sandbox_job_result.md`.
 
 ## Assets reaproveitados do IaBrain (dado real, não placeholder)
 
@@ -27,26 +31,6 @@ FASE F — Workflows/Tarefas: ClawFlows, n8n
 FASE G — APIs: catálogo, quotas dinâmicas, fallback, avaliação
 FASE H — Integração: descongelar Sandbox, implementar o contrato, E2E completo
 ```
-
-## Três decisões de arquitetura que já estão refletidas no código
-
-1. **Contrato agnóstico de implementação** (`execution/SandboxContract.kt`):
-   o Brain descreve `Job` (objetivo + requisitos de capacidade + contexto),
-   nunca um comando de shell específico. O Sandbox decide como executar e
-   devolve `JobResult` padronizado. Se o Sandbox mudar de proot para outra
-   coisa amanhã, nada no Brain muda.
-
-2. **Catálogo de APIs dinâmico, não números fixos** (`router/ApiCatalog.kt`):
-   granularidade por `ProviderModel` (provider + modelo), com `LiveStats`
-   observado em tempo real (quota restante estimada, último erro, latência,
-   taxa de sucesso recente) — é isso que o `AIRouter` consulta para decidir,
-   não a janela estática declarada pelo provedor.
-
-3. **Memória desde a Fase D**, não como reforma tardia
-   (`memory/ExperienceMemory.kt`): toda execução do fluxo de 8 partes gera
-   uma `Experiencia`, sucesso ou falha. Pensado para SQLite/Room + JSON
-   como primeira implementação; LEANN entra depois como busca semântica
-   sobre esse mesmo histórico, sem substituir o registro básico.
 
 ## Mapa: pacote → parte do fluxo original de 8 partes
 

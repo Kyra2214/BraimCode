@@ -139,3 +139,11 @@ A `ResearchLayer` agora possui `HTTPSResearchFetcher` com HTTPS obrigatório, bl
 O `RoutedDispatcher` reserva quota antes do dispatch, reconcilia no retorno, atualiza confiabilidade/latência do provider e inclui custo estimado, duração e provider nas métricas do `ExecutionResult`. Falhas liberam a reserva e não fazem fallback fora da capability roteada.
 
 Foram adicionados testes de SSRF, esquema inseguro, limite de excerpt, provenance, quarentena de conteúdo externo e reserva/reconciliação com custo. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 82 testes aprovados.
+
+## Atualização de retomada e fallback autorizado — 2026-09-12
+
+O `ApprovalStore` agora pode reidratar requests a partir de eventos persistidos, e o pipeline reconstrói o contexto mínimo da task quando um processo novo chama `resume`. Eventos `ApprovalGranted` e `ApprovalDenied` bloqueiam qualquer segunda retomada, preservando anti-replay após restart.
+
+Foi adicionado `AuthorizedFallback`, que reautoriza cada provider candidato com a mesma capability, actor, run e task, registra cada tentativa e usa idempotency keys por provider. Providers negados pela Policy não são chamados, e apenas resultados de providers explicitamente autorizados podem ser retornados.
+
+Foram adicionados testes de restore append-safe, anti-replay, reautorização por provider e idempotência. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 84 testes aprovados.

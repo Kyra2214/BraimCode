@@ -38,6 +38,20 @@ class ApprovalStore:
             self._db.commit()
         return item
 
+    def restore(self, payload: dict) -> ApprovalRequest:
+        """Rehydrates a pending request from an append-only approval event after restart."""
+        required = ("approval_id", "decision_id", "run_id", "task_id", "actor", "capability", "resource", "created_at", "expires_at")
+        if any(key not in payload for key in required): raise ValueError("approval event is not rehydratable")
+        item = ApprovalRequest(payload["approval_id"], payload["decision_id"], payload["run_id"], payload["task_id"], payload["actor"], payload["capability"], ApprovalRequired(payload.get("required", "USER")), payload.get("resource", ""), payload["created_at"], payload["expires_at"], payload.get("status", "PENDING"), payload.get("approver", ""))
+        with self._lock:
+            existing = self._db.execute("SELECT payload FROM approvals WHERE id=?", (item.approval_id,)).fetchone()
+            if existing: return self.get(item.approval_id)
+            self._db.execute("INSERT INTO approvals VALUES (?, ?)", (item.approval_id, json.dumps(item.__dict__))); self._db.commit()
+        return item
+
+    def pending(self) -> tuple[ApprovalRequest, ...]:
+        rows = self._db.execute("SELECT payload FROM approvals").fetchall(); return tuple(ApprovalRequest(**json.loads(row[0])) for row in rows if json.loads(row[0]).get("status") == "PENDING")
+
     def get(self, approval_id: str) -> ApprovalRequest:
         row = self._db.execute("SELECT payload FROM approvals WHERE id=?", (approval_id,)).fetchone()
         if not row:

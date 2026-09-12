@@ -9,6 +9,7 @@ from .models import Decision, EventType, ExecutionRequest, ExecutionResult, Poli
 from .policy import PolicyBroker
 from .planner import Planner
 from .research import ResearchLayer, ResearchSource
+from .observability import Observability, TraceContext
 
 class Secretary(Protocol):
     def normalize(self, objective: str, session_id: str) -> TaskSpec: ...
@@ -56,11 +57,11 @@ class BrainPipeline:
     def __init__(self, secretary: Secretary, router: Router, prompt_builder: PromptBuilder, policy: PolicyBroker,
                  events: EventStore, dispatcher: Dispatcher, planner: Planner | None = None,
                  approval_store: ApprovalStore | None = None, critic: Critic | None = None, max_retries: int = 1,
-                 research: ResearchLayer | None = None, research_sources: Iterable[ResearchSource] = (), learning_bridge=None):
+                 research: ResearchLayer | None = None, research_sources: Iterable[ResearchSource] = (), learning_bridge=None, observability: Observability | None = None):
         self.secretary, self.router, self.prompt_builder = secretary, router, prompt_builder
         self.policy, self.events, self.dispatcher, self.planner = policy, events, dispatcher, planner or Planner()
         self.approvals, self.critic, self.max_retries = approval_store or ApprovalStore(), critic or DefaultCritic(), max(0, max_retries)
-        self.research, self.research_sources, self.learning_bridge = research, tuple(research_sources), learning_bridge; self._pending: dict[str, dict] = {}
+        self.research, self.research_sources, self.learning_bridge, self.observability = research, tuple(research_sources), learning_bridge, observability; self._pending: dict[str, dict] = {}
 
     def _record_learning(self, task, run_id: str, capability: str, provider: str, result: ExecutionResult) -> None:
         if not self.learning_bridge: return
@@ -72,7 +73,7 @@ class BrainPipeline:
         except ValueError as error:
             self.events.append(run_id, task.session_id, task.task_id, "LearningRejected", {"reason": str(error)})
 
-    def _execute(self, task, run_id, session_id, actor, capability, provider, step_id, attempt=0, authorized=False, decision_id="approved"):
+    def _execute_core(self, task, run_id, session_id, actor, capability, provider, step_id, attempt=0, authorized=False, decision_id="approved"):
         context = PolicyContext(run_id, task.task_id, actor, risk_class="LOW")
         decision = self.policy.authorize(actor, capability, provider, context) if not authorized else None
         if authorized: decision = SimpleNamespace(decision=Decision.ALLOW, reason="approval granted", decision_id=decision_id)
@@ -81,7 +82,9 @@ class BrainPipeline:
             approval = self.approvals.request(decision); self._pending[approval.approval_id] = {"task": task, "run_id": run_id, "session_id": session_id, "actor": actor, "capability": capability, "provider": provider, "step_id": step_id}
             self.events.append(run_id, session_id, task.task_id, EventType.APPROVAL_REQUESTED, {"approval_id": approval.approval_id, "capability": capability})
             return ExecutionResult(new_id("request"), False, status="PAUSED", error="approval required", output={"approval_id": approval.approval_id})
-        if decision.decision is not Decision.ALLOW: return ExecutionResult(new_id("request"), False, status="DENIED", error=decision.reason)
+        if decision.decision is not Decision.ALLOW:
+            if self.observability: self.observability.alert("policy_denied", decision.reason, TraceContext(run_id, run_id, session_id, task.task_id))
+            return ExecutionResult(new_id("request"), False, status="DENIED", error=decision.reason)
         prompt = self.prompt_builder.build(task, capability); request = ExecutionRequest(new_id("request"), run_id, task.task_id, step_id, capability, prompt, {"provider": provider}, decision.decision_id)
         self.events.append(run_id, session_id, task.task_id, EventType.AGENT_DISPATCHED, {"request_id": request.request_id, "capability": capability, "policy_decision_id": decision.decision_id})
         self.events.append(run_id, session_id, task.task_id, EventType.VALIDATION_STARTED, {"request_id": request.request_id, "attempt": attempt})
@@ -96,6 +99,17 @@ class BrainPipeline:
         if result.success: self.events.append(run_id, session_id, task.task_id, EventType.DELIVERED, {"request_id": request.request_id})
         self._record_learning(task, run_id, capability, provider, result)
         return result
+
+    def _execute(self, task, run_id, session_id, actor, capability, provider, step_id, attempt=0, authorized=False, decision_id="approved"):
+        if not self.observability: return self._execute_core(task, run_id, session_id, actor, capability, provider, step_id, attempt, authorized, decision_id)
+        context = TraceContext(run_id, run_id, session_id, task.task_id)
+        span = self.observability.start("pipeline.execute", context, {"capability": capability, "provider": provider, "attempt": attempt})
+        try:
+            result = self._execute_core(task, run_id, session_id, actor, capability, provider, step_id, attempt, authorized, decision_id)
+            self.observability.increment(f"execution_status:{result.status}")
+            return result
+        finally:
+            self.observability.finish(span, "OK")
 
     def run(self, objective: str, session_id: str, actor: str = "brain") -> list[ExecutionResult]:
         task = self.secretary.normalize(objective, session_id); run_id = new_id("run")

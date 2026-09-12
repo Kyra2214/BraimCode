@@ -77,3 +77,9 @@ O `ContractRegistry` passou a fornecer schemas formais para `TaskSpec`, `Plan`, 
 Foi adicionado o `ConfigurationManager`, que carrega seções JSON ou TOML da pasta de configuração, valida deny-by-default, timeout e ausência de secrets, e só substitui o snapshot depois que a nova configuração está totalmente validada. O reload é seguro e atômico em relação aos leitores.
 
 Eventos agora possuem `correlation_id` persistido, com fallback para `run_id` em logs legados. Foram adicionados contract tests, testes de reload e teste de persistência de correlação. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 54 testes aprovados.
+
+## Atualização de observabilidade operacional — 2026-09-12
+
+A camada de observabilidade passou a suportar gauges, alertas correlacionados e exportação JSON estruturada contendo spans, counters, gauges e alerts. O pipeline aceita `Observability`, gera spans por execução e retry, mede o status dos resultados e emite alerta específico para decisões de Policy negadas.
+
+O `DeliveryPipeline` aceita telemetria e `TraceContext`, registra spans do QA gate e counters separados para validação recusada e entrega concluída. A correlação entre trace, run, sessão e task é preservada nos spans exportados. Foram adicionados testes de exportação, alertas de Policy, spans do pipeline e métricas de delivery. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 57 testes aprovados.

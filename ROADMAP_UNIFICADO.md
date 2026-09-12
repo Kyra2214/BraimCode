@@ -41,7 +41,7 @@ RootFS Ubuntu 24.04, download/extração, `proot`, runtime de execução de coma
 
 Do outro roadmap, entram aqui também:
 - **Sandbox Fase 1 — Plugins e ferramentas**: 🟡 parcial — `PluginModels.kt`, `PluginsScreen.kt` existem com testes, mas é instalação/gerenciamento básico.
-- **Sandbox Fase 2 — Sistema completo de plugins**: ❌ catálogo remoto, segurança de instalação e persistência avançada não encontrados em código.
+- **Sandbox Fase 2 — Sistema completo de plugins**: 🟡 `RemotePluginCatalog` implementa catálogo remoto fornecido pelo chamador, allowlist de fontes HTTPS, SHA-256, deduplicação e rejeição fail-closed; transporte remoto e integração final com o `PluginManager` ainda dependem de implantação e autorização local.
 
 ---
 
@@ -115,6 +115,10 @@ O `BrainExecutionCoordinator` passou a aceitar `ExperienceMemory` e registrar um
 ### Sessão 2026-09-12 — Discovery avançado de APIs no Kotlin
 
 Implementados `ApiDiscoveryCandidate`, `ApiDiscoverySource`, `ApiDiscoveryEngine` e `ApiDiscoveryReport`. A camada recebe candidatos fornecidos por fontes externas sem executar rede implicitamente, rejeita modelos inativos ou já catalogados, exige HTTPS seguro, mantém proveniência e separa aceitação de revisão manual por fonte oficial e nível de confiança. Foram adicionados testes de ordenação por prioridade, deduplicação, revisão, inatividade e URL insegura. Validação: `export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && ./gradlew :brain:test --no-daemon` concluído com `BUILD SUCCESSFUL`.
+
+### Sessão 2026-09-12 — Catálogo remoto seguro de plugins
+
+Implementados `RemotePluginCatalog`, `RemoteCatalogSnapshot` e `RemoteComponentManifest`. A camada valida allowlist de fontes, HTTPS seguro, fonte oficial, IDs duplicados e SHA-256 antes de expor componentes; não realiza download, instalação nem execução automática. Foram adicionados testes para aceitação, fonte não confiável, hash divergente, duplicidade e HTTP. A documentação está em `docs/PLUGIN_CATALOG.md`. Validação do `:app:test` ficou bloqueada neste ambiente pela ausência de Android SDK (`ANDROID_HOME`/`local.properties`); portanto a etapa permanece parcial até validação em ambiente Android configurado.
 
 ## Critério de sucesso do projeto
 

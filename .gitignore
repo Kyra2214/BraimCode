@@ -1,0 +1,12 @@
+# IDE
+.idea/
+*.iml
+# Build outputs
+.gradle/
+build/
+app/build/
+# Local configuration
+local.properties
+.env
+*.key
+*.pem

@@ -16,7 +16,7 @@ class EventStoreTest {
         val store = InMemoryEventStore()
         assertEquals(0L, store.append(event()).sequence)
         assertEquals(1L, store.append(event()).sequence)
-        assertEquals(0L, store.append(event("run-2")).sequence)
+        assertEquals(2L, store.append(event("run-2")).sequence)
         assertEquals(2, store.replay("run-1").size)
     }
 

@@ -201,3 +201,9 @@ Foi adicionado teste E2E cobrindo scan, persistência de contexto, avaliação d
 O controle de readiness passou a ser definido pelo modo de execução. `development` preserva o comportamento compatível, enquanto `offline`, `sandboxed`, `strict` e `production` exigem `ReadinessGate` e não permitem desabilitar `enforce_readiness`. A mesma regra é aplicada na validação da configuração em `execution.mode` e `execution.enforce_readiness`.
 
 O probe de auditoria confirmou que uma chamada direta a `BrainPipeline.run()` conseguia executar o dispatcher sem passar pelo `RuntimeCoordinator`. Para fechar esse caminho, foi introduzida `ExecutionAuthorization`, uma capability vinculada à instância e emitida somente pelo `RuntimeCoordinator`; `run()` e `resume()` agora rejeitam chamadas sem autorização. As APIs `run_internal_for_tests()` e `resume_internal_for_tests()` preservam testes e desenvolvimento, mas são bloqueadas fora de `development`. Foram adicionados testes de regressão, elevando a suíte para 116 testes aprovados.
+
+## Atualização Kotlin contínua — 2026-09-12
+
+O núcleo Kotlin avançou em cinco frentes: o `EventStore` passou a manter hash chain, idempotency keys, payload redigido e recovery de última linha parcial; o `BrainExecutionCoordinator` passou a coordenar Policy, aprovação persistente, eventos, dispatch, retry e correction loop; o catálogo ganhou quota estimada, cooldown e waterfall; e o planner, provider dispatcher e memória persistente permanecem integráveis por contratos substituíveis.
+
+A compilação do módulo `:brain` e a suíte Python de referência foram executadas com sucesso. A validação dos módulos Android continua dependente de um ambiente com Android SDK configurado e não é simulada neste ambiente.

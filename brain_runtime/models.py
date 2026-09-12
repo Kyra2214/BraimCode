@@ -22,6 +22,7 @@ class ApprovalRequired(str, Enum):
 class EventType(str, Enum):
     TASK_CREATED="TaskCreated"; TASK_CLASSIFIED="TaskClassified"; PLAN_CREATED="PlanCreated"
     CAPABILITY_SELECTED="CapabilitySelected"; POLICY_CHECKED="PolicyChecked"; APPROVAL_REQUESTED="ApprovalRequested"
+    APPROVAL_GRANTED="ApprovalGranted"; APPROVAL_DENIED="ApprovalDenied"
     AGENT_DISPATCHED="AgentDispatched"; AGENT_COMPLETED="AgentCompleted"; VALIDATION_STARTED="ValidationStarted"
     VALIDATION_FAILED="ValidationFailed"; CORRECTION_REQUESTED="CorrectionRequested"; RETRY="Retry"
     VALIDATION_PASSED="ValidationPassed"; DELIVERED="Delivered"; JOB_STARTED="JobStarted"

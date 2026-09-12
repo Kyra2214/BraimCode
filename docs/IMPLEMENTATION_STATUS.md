@@ -29,3 +29,13 @@ Foram adicionados correlation IDs, spans e métricas; `LearningStore` e `Feedbac
 ## Atualização de hardening — 2026-09-12
 
 Foi adicionado um registry versionado de contratos com campos deprecated, lease expirável para workflows concorrentes e guards adversariais contra traversal, secrets em texto e marcadores de prompt injection. A suíte agora totaliza 35 testes.
+
+## Atualização de integração crítica — 2026-09-12
+
+O pipeline passou a integrar o `ApprovalStore` ponta a ponta: decisões `ASK` geram solicitações persistidas, pausam a execução e permitem retomada com o mesmo `run_id`, `task_id` e `step_id`, com validação de TTL, capability, resource e uso único. Também foram integrados os eventos `ApprovalGranted` e `ApprovalDenied`.
+
+Foi implementado o ciclo de validação com `Critic`, diagnóstico estruturado, `CorrectionRequested`, `Retry`, limite de tentativas e eventos `ValidationPassed`/`Delivered`. O `EventStore` agora valida o schema dos eventos, recupera uma última linha JSONL parcialmente escrita e reconstrói estado de aprovação e entrega por replay. Contratos receberam payload formal, campos obrigatórios, migração inicial e registry de contratos principais.
+
+O sandbox recebeu limites de processos, descritores, tamanho de arquivo/disco, extensões e detecção de argumentos com metacaracteres. Essas medidas são hardening defensivo, não substituem namespace de rede/processo, jail de filesystem ou container OS-level; esses itens continuam pendentes para uma implantação com privilégios e runtime apropriados.
+
+Esta rodada adicionou testes de integração para approval, correction loop, anti-replay, recuperação de eventos e argumentos inseguros. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 39 testes, todos aprovados.

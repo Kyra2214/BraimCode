@@ -30,7 +30,7 @@ object PromptLibraryLoader {
                 versao = 1,
                 finalidade = item.optString("objetivo", item.optString("titulo", "")),
                 contextoDeUso = contextoDeUso(item),
-                skillRelacionada = null, // TODO (Fase E): ligar por categoria/subcaso quando o Catálogo de Skills existir
+                skillRelacionada = skillRelacionada(item),
                 agenteRelacionado = agentesRelacionados(item.optJSONArray("melhor_para")),
                 textoTemplate = item.getString("template"),
                 taxaSucesso = TAXA_SUCESSO_INICIAL,
@@ -53,6 +53,23 @@ object PromptLibraryLoader {
     private fun agentesRelacionados(melhorPara: JSONArray?): String? {
         val lista = jsonArrayToList(melhorPara)
         return lista.ifEmpty { null }?.joinToString(", ")
+    }
+
+    /** Resolve a Skill declarativa por categoria e tags do seed, sem conceder autorização. */
+    private fun skillRelacionada(item: JSONObject): String? {
+        val texto = listOf(
+            item.optString("categoria"), item.optString("subcaso"),
+            item.optString("objetivo"), item.optString("titulo"),
+            jsonArrayToList(item.optJSONArray("tags")).joinToString(" ")
+        ).joinToString(" ").lowercase()
+        return when {
+            listOf("código", "codigo", "program", "software", "desenvolv").any(texto::contains) -> "code.generation"
+            listOf("pesquis", "web", "fonte", "investig").any(texto::contains) -> "research.web"
+            listOf("segurança", "seguranca", "vulnerab").any(texto::contains) -> "security.audit"
+            listOf("planej", "arquitet", "decompos").any(texto::contains) -> "planning.decomposition"
+            listOf("resum", "document", "texto").any(texto::contains) -> "document.summarization"
+            else -> null
+        }
     }
 
     private fun jsonArrayToList(array: JSONArray?): List<String> {

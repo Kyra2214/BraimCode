@@ -39,3 +39,9 @@ Foi implementado o ciclo de validação com `Critic`, diagnóstico estruturado, 
 O sandbox recebeu limites de processos, descritores, tamanho de arquivo/disco, extensões e detecção de argumentos com metacaracteres. Essas medidas são hardening defensivo, não substituem namespace de rede/processo, jail de filesystem ou container OS-level; esses itens continuam pendentes para uma implantação com privilégios e runtime apropriados.
 
 Esta rodada adicionou testes de integração para approval, correction loop, anti-replay, recuperação de eventos e argumentos inseguros. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 39 testes, todos aprovados.
+
+## Atualização de isolamento OS-level — 2026-09-12
+
+O `SandboxExecutor` passou a iniciar jobs, quando suportado pelo host, em namespaces de usuário, montagem e PID via `unshare`, com diagnóstico explícito no resultado. A solicitação de namespace de rede agora é tratada de forma fail-closed quando `isolation_required=True`: neste ambiente a operação é recusada porque o kernel não permite `unshare --net`; não há indicação falsa de que o tráfego esteja isolado. Quando o isolamento estrito não é solicitado, o executor mantém fallback compatível com limites de recursos e informa a degradação.
+
+Foram adicionados testes para confirmar a execução em namespace e a não degradação silenciosa da política de rede. A suíte passou a totalizar 41 testes aprovados. Filesystem jail/chroot e cgroup de processos continuam sendo responsabilidade da implantação/container host; o runtime não simula essas garantias apenas com validação de paths.

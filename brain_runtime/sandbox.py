@@ -1,8 +1,7 @@
 from __future__ import annotations
-import hashlib, os, resource, signal, subprocess, time
+import hashlib, os, resource, signal, shutil, subprocess, time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 @dataclass(frozen=True)
 class SandboxJob:
@@ -12,6 +11,7 @@ class SandboxJob:
     max_artifacts: int = 100; max_artifact_bytes: int = 10 * 1024 * 1024; memory_mb: int = 512
     max_processes: int = 32; max_open_files: int = 64; max_disk_bytes: int = 100 * 1024 * 1024
     allowed_extensions: tuple[str, ...] = (); cancel_event: object | None = None
+    isolation_required: bool = False; network_namespace: bool = False
 
 @dataclass(frozen=True)
 class SandboxJobResult:
@@ -19,9 +19,9 @@ class SandboxJobResult:
     artifacts: tuple[dict, ...] = (); diagnostics: tuple[str, ...] = ()
     run_id: str = ""; session_id: str = ""; duration_ms: int = 0
 
-def _limit_process(memory_mb: int, max_processes: int, max_open_files: int, max_disk_bytes: int) -> None:
+def _limit_process(memory_mb: int, max_processes: int | None, max_open_files: int, max_disk_bytes: int) -> None:
     limits = ((resource.RLIMIT_CPU, (60, 60)), (resource.RLIMIT_AS, (memory_mb * 1024 * 1024,) * 2),
-              (resource.RLIMIT_CORE, (0, 0)), (resource.RLIMIT_NPROC, (max_processes,) * 2),
+              (resource.RLIMIT_CORE, (0, 0)), *((((resource.RLIMIT_NPROC, (max_processes,) * 2),) if max_processes else ())),
               (resource.RLIMIT_NOFILE, (max_open_files,) * 2), (resource.RLIMIT_FSIZE, (max_disk_bytes,) * 2))
     for kind, value in limits:
         try: resource.setrlimit(kind, value)
@@ -31,6 +31,21 @@ def _clip(value: str | bytes | None, limit: int) -> str:
     if value is None: return ""
     if isinstance(value, bytes): value = value.decode(errors="replace")
     return value[:limit]
+
+def _namespace_command(argv: tuple[str, ...], job: SandboxJob) -> tuple[list[str], tuple[str, ...]]:
+    unshare = shutil.which("unshare")
+    if not unshare:
+        return ([], ("unshare is unavailable",)) if job.isolation_required else (list(argv), ("isolation:namespace unavailable; resource limits only",))
+    command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork", "--mount-proc"]
+    diagnostics = ("isolation:user namespace enabled", "isolation:mount namespace enabled", "isolation:PID namespace enabled")
+    if job.network_namespace:
+        probe = subprocess.run([unshare, "--net", "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if probe.returncode != 0:
+            if job.isolation_required:
+                return [], ("network namespace unavailable; strict isolation refused",)
+            return list(argv), diagnostics + ("isolation:network namespace unavailable; network isolation not guaranteed",)
+        command.append("--net"); diagnostics += ("isolation:network namespace enabled",)
+    return command + ["--"] + list(argv), diagnostics
 
 class SandboxExecutor:
     def execute(self, job: SandboxJob) -> SandboxJobResult:
@@ -51,12 +66,15 @@ class SandboxExecutor:
             return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=("cwd outside filesystem policy",), run_id=job.run_id, session_id=job.session_id)
         if job.cancel_event is not None and getattr(job.cancel_event, "is_set", lambda: False)():
             return SandboxJobResult(job.job_id, "CANCELLED", None, "", "", diagnostics=("cancelled by caller",), run_id=job.run_id, session_id=job.session_id)
+        command, isolation_diagnostics = _namespace_command(job.argv, job)
+        if not command:
+            return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=isolation_diagnostics, run_id=job.run_id, session_id=job.session_id)
         before = {p: p.stat().st_size for p in root.rglob("*") if p.is_file() and not p.is_symlink()}
-        started = time.monotonic(); process = None
+        started = time.monotonic()
         try:
-            process = subprocess.Popen(list(job.argv), cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            process = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 env={"PATH": "/usr/bin:/bin", "PYTHONNOUSERSITE": "1", "HOME": str(root), "PYTHONHASHSEED": "random"},
-                start_new_session=True, preexec_fn=lambda: _limit_process(job.memory_mb, job.max_processes, job.max_open_files, job.max_disk_bytes))
+                start_new_session=True, preexec_fn=lambda: _limit_process(job.memory_mb, None if command[0].endswith("unshare") else job.max_processes, job.max_open_files, job.max_disk_bytes))
             deadline = started + job.timeout_seconds
             while True:
                 if job.cancel_event is not None and getattr(job.cancel_event, "is_set", lambda: False)():
@@ -68,7 +86,7 @@ class SandboxExecutor:
                 try: stdout, stderr = process.communicate(timeout=min(.1, max(.01, deadline - time.monotonic()))); break
                 except subprocess.TimeoutExpired: continue
             stdout_text, stderr_text = _clip(stdout, job.max_stdout_bytes), _clip(stderr, job.max_stderr_bytes)
-            diagnostics = []
+            diagnostics = list(isolation_diagnostics)
             if len(stdout or b"") > job.max_stdout_bytes: diagnostics.append("stdout limit exceeded")
             if len(stderr or b"") > job.max_stderr_bytes: diagnostics.append("stderr limit exceeded")
             artifacts = []; total = 0
@@ -81,7 +99,8 @@ class SandboxExecutor:
                 if size > job.max_artifact_bytes: diagnostics.append(f"artifact limit exceeded: {path.name}"); continue
                 if len(artifacts) >= job.max_artifacts: diagnostics.append("artifact count limit exceeded"); break
                 artifacts.append({"path": str(path.relative_to(root)), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "size": size, "modified": path not in before or path.stat().st_size != before[path]})
-            status = "SUCCEEDED" if process.returncode == 0 and not diagnostics else ("FAILED" if process.returncode != 0 else "REJECTED")
+            failures = [item for item in diagnostics if not item.startswith("isolation:")]
+            status = "SUCCEEDED" if process.returncode == 0 and not failures else ("FAILED" if process.returncode != 0 else "REJECTED")
             duration = int((time.monotonic() - started) * 1000); diagnostics.append(f"duration_ms={duration}")
             return SandboxJobResult(job.job_id, status, process.returncode, stdout_text, stderr_text, tuple(artifacts), tuple(diagnostics), job.run_id, job.session_id, duration)
         except OSError as error:
@@ -89,7 +108,7 @@ class SandboxExecutor:
 
 class QAGate:
     def validate(self, result: SandboxJobResult, required_output: str | None = None) -> tuple[bool, tuple[str, ...]]:
-        diagnostics = [item for item in result.diagnostics if not item.startswith("duration_ms=")]
+        diagnostics = [item for item in result.diagnostics if not item.startswith(("duration_ms=", "isolation:"))]
         if result.status != "SUCCEEDED": diagnostics.append(f"sandbox status is {result.status}")
         if required_output and required_output not in result.stdout: diagnostics.append("required output not found")
         return not diagnostics, tuple(diagnostics)

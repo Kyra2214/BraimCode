@@ -61,3 +61,11 @@ A camada de research passou a ranquear evidências por confiança e frescor, pre
 O catálogo de APIs passou a oferecer seleção por qualidade, confiabilidade, latência, custo e disponibilidade; reserva e reconciliação de quota antes e depois do dispatch; timestamp de probes; e fallback somente entre entradas que declaram a capability equivalente. Credential references continuam sendo referências, sem exposição de secrets.
 
 Foram adicionados testes de quarentena de research, provenance, reserva de quota, seleção de provider equivalente e integração da evidência ao pipeline. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 48 testes aprovados.
+
+## Atualização de memória e learning — 2026-09-12
+
+A memória SQLite passou a deduplicar experiências por hash de conteúdo, preservar provenance, suportar `expires_at` e remoção de registros expirados, além de manter WAL e locks para concorrência local. Conteúdo com secrets ou marcadores de prompt injection é rejeitado antes da persistência.
+
+O `LearningStore` agora mantém hash de conteúdo, versão, provider, agent e skill, com deduplicação append-only e validação de métricas e evidências. O `ExecutionLearningBridge` conecta resultados de execução à memória e ao learning record, incluindo custo, latência, evidências e política de retenção. O pipeline aceita esse bridge opcional e emite `LearningRecorded` ou `LearningRejected`.
+
+Foram adicionados testes de deduplicação, retenção, provenance, rejeição de injection/secrets e persistência integrada. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 51 testes aprovados.

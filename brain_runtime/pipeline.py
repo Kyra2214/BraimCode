@@ -56,11 +56,21 @@ class BrainPipeline:
     def __init__(self, secretary: Secretary, router: Router, prompt_builder: PromptBuilder, policy: PolicyBroker,
                  events: EventStore, dispatcher: Dispatcher, planner: Planner | None = None,
                  approval_store: ApprovalStore | None = None, critic: Critic | None = None, max_retries: int = 1,
-                 research: ResearchLayer | None = None, research_sources: Iterable[ResearchSource] = ()):
+                 research: ResearchLayer | None = None, research_sources: Iterable[ResearchSource] = (), learning_bridge=None):
         self.secretary, self.router, self.prompt_builder = secretary, router, prompt_builder
         self.policy, self.events, self.dispatcher, self.planner = policy, events, dispatcher, planner or Planner()
         self.approvals, self.critic, self.max_retries = approval_store or ApprovalStore(), critic or DefaultCritic(), max(0, max_retries)
-        self.research, self.research_sources = research, tuple(research_sources); self._pending: dict[str, dict] = {}
+        self.research, self.research_sources, self.learning_bridge = research, tuple(research_sources), learning_bridge; self._pending: dict[str, dict] = {}
+
+    def _record_learning(self, task, run_id: str, capability: str, provider: str, result: ExecutionResult) -> None:
+        if not self.learning_bridge: return
+        try:
+            self.learning_bridge.record(run_id=run_id, task_id=task.task_id, problem=task.objective, strategy=capability,
+                                        result=result, provider=provider, evidence=result.evidence or (f"run:{run_id}",),
+                                        duration_ms=int(result.metrics.get("duration_ms", 0)) if isinstance(result.metrics, dict) else 0)
+            self.events.append(run_id, task.session_id, task.task_id, "LearningRecorded", {"capability": capability, "success": result.success})
+        except ValueError as error:
+            self.events.append(run_id, task.session_id, task.task_id, "LearningRejected", {"reason": str(error)})
 
     def _execute(self, task, run_id, session_id, actor, capability, provider, step_id, attempt=0, authorized=False, decision_id="approved"):
         context = PolicyContext(run_id, task.task_id, actor, risk_class="LOW")
@@ -81,9 +91,10 @@ class BrainPipeline:
             if attempt < self.max_retries:
                 self.events.append(run_id, session_id, task.task_id, EventType.CORRECTION_REQUESTED, {"step_id": step_id, "diagnostic": diagnosis}); self.events.append(run_id, session_id, task.task_id, EventType.RETRY, {"step_id": step_id, "attempt": attempt + 1})
                 return self._execute(task, run_id, session_id, actor, capability, provider, step_id, attempt + 1, authorized=authorized, decision_id=decision_id)
-            self.events.append(run_id, session_id, task.task_id, EventType.AGENT_COMPLETED, {"success": False, "diagnostic": diagnosis}); return result
+            self.events.append(run_id, session_id, task.task_id, EventType.AGENT_COMPLETED, {"success": False, "diagnostic": diagnosis}); self._record_learning(task, run_id, capability, provider, result); return result
         self.events.append(run_id, session_id, task.task_id, EventType.VALIDATION_PASSED, {"request_id": request.request_id}); self.events.append(run_id, session_id, task.task_id, EventType.AGENT_COMPLETED, {"success": result.success})
         if result.success: self.events.append(run_id, session_id, task.task_id, EventType.DELIVERED, {"request_id": request.request_id})
+        self._record_learning(task, run_id, capability, provider, result)
         return result
 
     def run(self, objective: str, session_id: str, actor: str = "brain") -> list[ExecutionResult]:

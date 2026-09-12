@@ -45,3 +45,15 @@ class ConfigurationManager:
             if self._config is None: return self.load()
             return dict(self._config)
     def reload(self) -> dict[str, Any]: return self.load()
+
+def validate_cross_component(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Rejects configurations whose declared execution guarantees contradict Policy."""
+    validated = validate_configuration(config); policy, execution, providers, routing = validated["policy"], validated["execution"], validated["providers"], validated["routing"]
+    if execution.get("network_required") and not policy.get("allow_network", False): raise ContractError("execution requires network but policy disallows it")
+    roots = set(execution.get("filesystem_roots", ())); policy_roots = set(policy.get("filesystem_roots", ()))
+    if roots and not roots.issubset(policy_roots): raise ContractError("sandbox filesystem roots exceed policy roots")
+    declared = set(routing.get("capabilities", ())) if isinstance(routing, Mapping) else set()
+    if declared and not declared.issubset(set(policy.get("allowed_capabilities", ()))): raise ContractError("routing declares capability outside policy allowlist")
+    for name, provider in providers.items():
+        if isinstance(provider, Mapping) and provider.get("credential") and "credential_refs" in validated and provider["credential"] not in validated["credential_refs"]: raise ContractError(f"provider '{name}' references unknown credential")
+    return validated

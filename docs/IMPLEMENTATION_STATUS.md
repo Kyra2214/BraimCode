@@ -125,3 +125,9 @@ Foi adicionada a validação `golden_events`, que verifica o contrato completo, 
 As fronteiras de confiança agora possuem auditoria recursiva para secrets por chave e prompt injection em objetivo, contexto, skill e memória. O objetivo é rejeitado antes da classificação, contexto é rejeitado antes da construção do prompt e eventos permanecem redacted antes da persistência.
 
 Foram adicionados testes de golden events, crash recovery, concorrência multiprocesso, vazamento de credentials e injection. A suíte executada com `python3 -W error::ResourceWarning -m unittest discover -s tests -q` totaliza 74 testes aprovados.
+
+## Atualização de integração operacional — 2026-09-12
+
+Foram adicionados wrappers de telemetria para Policy, Approval, Planner, Router, API Catalog e Learning, com spans, counters e gauges por decisão, request, seleção, latência e registro. O `SandboxDispatcher` valida o digest do `ExecutionBinding`, correlação de run/session e só então cria o `SandboxJob`, convertendo o resultado para `ExecutionResult` com evidência e provenance.
+
+A configuração agora possui `validate_cross_component`, que rejeita conflitos entre network/filesystem do Sandbox e Policy, capabilities roteadas fora da allowlist e references de credenciais não declaradas. Foram adicionados testes de boundary tamperado, execução válida no Sandbox, Approval telemetry e métricas transversais. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 78 testes aprovados.

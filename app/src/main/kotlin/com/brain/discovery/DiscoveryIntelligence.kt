@@ -18,6 +18,18 @@ package com.brain.discovery
 
 import java.net.URI
 
+private fun isSafeHttps(value: String): Boolean = runCatching {
+    val uri = URI(value.trim())
+    uri.scheme.equals("https", true) &&
+        !uri.host.isNullOrBlank() &&
+        uri.userInfo == null &&
+        uri.fragment == null &&
+        !uri.host.equals("localhost", true) &&
+        !uri.host.startsWith("127.") &&
+        !uri.host.startsWith("10.") &&
+        !uri.host.startsWith("192.168.")
+}.getOrDefault(false)
+
 /**
  * Explorer Intelligence v2.0.
  *

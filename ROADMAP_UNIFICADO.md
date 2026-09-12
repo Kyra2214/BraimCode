@@ -74,10 +74,10 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 ---
 
 ## Fase 6 — Security Test Lab (validação adversarial)
-**Status: 🟡 esqueleto básico · ❌ camada adversarial**
+**Status: 🟡 domínio de avaliação implementado · ❌ executor adversarial completo**
 
 - **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` (31 linhas) já roda um pipeline básico de dependências → build → testes → lint, mas isso é um test runner, não um "Test Lab" completo.
-- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): ❌ só existe como design (`SECURITY_TEST_LAB.md`, `ROADMAP_SECURITY_TEST_LAB.md`); nenhuma classe `AttackSimulation` ou `SecurityTestLab` no código.
+- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários e probes controlados, gera findings/evidências SHA-256 e bloqueia readiness em falhas HIGH/CRITICAL; `ProjectScanner`, executor adversarial, corpus persistente e integração de delivery ainda pendentes.
 
 ---
 
@@ -127,6 +127,10 @@ Implementados `ToolchainProfile`, `ToolchainDetector`, `ToolchainInstallPlan` e 
 ### Sessão 2026-09-12 — Política declarativa de rede e serviços
 
 Implementados `NetworkPolicy`, `NetworkRule`, `NetworkAccessRequest` e `NetworkPolicyBroker`. A decisão é deny-by-default, exige serviço/protocolo/porta declarados, permite restringir hosts e rejeita loopback, link-local, site-local e destinos reservados. A camada não abre sockets nem configura firewall; a documentação está em `docs/NETWORK_SERVICES.md`. Foram adicionados testes de autorização, escopo e rejeições de segurança. A integração efetiva com `ServiceManager` e controles OS-level permanece pendente.
+
+### Sessão 2026-09-12 — Base do Security Test Lab Kotlin
+
+Implementados `SecurityTestLab`, `SecurityScenario`, `SecurityProbeResult`, `SecurityFinding`, `SecurityEvidence` e `SecurityReadiness`. O domínio avalia resultados fornecidos por probes controlados, registra evidência truncada com SHA-256 e bloqueia o gate quando há cenário duplicado, probe incompleto, resultado inesperado ou severidade HIGH/CRITICAL. Foram adicionados testes para readiness, blockers, warnings e integridade da evidência. A documentação existente em `docs/SECURITY_TEST_LAB.md` foi complementada; executor adversarial OS-level, ProjectScanner, corpus persistente e integração com delivery continuam pendentes.
 
 ## Critério de sucesso do projeto
 

@@ -183,3 +183,11 @@ O corpus deve crescer com o uso do Braim e funcionar como memória operacional d
 6. Falha de defesa é falha de produto, não sucesso do ataque.
 7. Correções devem gerar regressão automatizada.
 8. O Lab nunca vira autoridade paralela ao PolicyBroker.
+
+## Implementação Kotlin atual
+
+O módulo Android agora contém `SecurityTestLab`, `SecurityScenario`, `SecurityProbeResult`, `SecurityFinding`, `SecurityEvidence` e `SecurityReadiness`. Esta camada avalia resultados de probes fornecidos por um executor controlado; ela não gera payloads, não abre rede e não executa comandos adversariais automaticamente.
+
+O readiness gate local bloqueia quando existe cenário duplicado, probe ausente ou incompleto, resultado inesperado ou finding de severidade `HIGH`/`CRITICAL`. Cada evidência mantém apenas um trecho de até 4096 caracteres e seu digest SHA-256. Resultados de probes desconhecidos são preservados como warning `MEDIUM` para não desaparecerem silenciosamente.
+
+A entrega ainda não inclui `ProjectScanner`, executor OS-level de probes, corpus de regressão persistente nem integração com o `ReadinessGate` de delivery. Esses itens permanecem pendentes no roadmap e não são simulados como concluídos.

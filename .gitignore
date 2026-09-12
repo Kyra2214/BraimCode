@@ -10,3 +10,8 @@ local.properties
 .env
 *.key
 *.pem
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.sqlite3

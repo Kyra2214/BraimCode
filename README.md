@@ -1,60 +1,71 @@
-# Brain (nome provisório) — esqueleto do cérebro novo
+# Braim — runtime de referência
 
-Esqueleto inicial da estrutura que substitui o IaBrain como projeto
-mantido. Os módulos são implementados seguindo o `ROADMAP_BRAIM_CONSOLIDADO.md`, um por vez, com validação e commit ao final de cada módulo.
+O Braim é um runtime experimental para execução de tarefas com Policy, approval, eventos auditáveis, Sandbox, workflows, memória, routing de providers e gates de QA. A implementação executável atual está em `brain_runtime/` e usa Python 3 com a biblioteca padrão.
 
-## Módulo concluído: Fase A — contrato Brain ↔ Sandbox
+> **Estado de segurança:** o projeto possui hardening significativo e 112 testes aprovados, mas ainda depende de infraestrutura do host para isolamento OS-level completo. Não deve ser interpretado como container ou ambiente de produção isolado sem uma implantação adequada.
 
-`app/src/main/kotlin/com/brain/execution/SandboxContract.kt` define o contrato agnóstico de implementação para `Job`, `JobResult`, requisitos, contexto, orçamento, cancelamento, referências de secrets, manifesto de artefatos e eventos de execução. O `SandboxExecutor` continua congelado conforme o roadmap; nenhum executor real foi liberado.
-
-Os contratos textuais correspondentes estão em `contracts/sandbox_job.md` e `contracts/sandbox_job_result.md`.
-
-## Assets reaproveitados do IaBrain (dado real, não placeholder)
-
-| Arquivo | Origem no IaBrain | Alimenta |
-|---|---|---|
-| `assets/ai_api_catalog.json` | `assets/ai_api_catalog.json` | `router/ApiCatalog` — 11 provedores de API gratuita já catalogados |
-| `assets/explorer_china_seed.json` | `assets/explorer_china_seed.json` | `discovery/DiscoveryIntelligence` — seed do radar de descoberta |
-| `assets/prompts_biblioteca.json` | `assets/prompts_biblioteca.json` | `prompt/PromptLibrary` — prompts reutilizáveis já existentes |
-| `assets/comandos_catalogo.json` | `assets/comandos_catalogo.json` | Futuro Catálogo de Capacidades/Skills (Fase E) — 344 comandos com metadados (IA recomendada, modo de execução, nível) |
-| `kotlin/.../discovery/DiscoveryIntelligence.kt` | `brain/ExplorerIntelligence.kt` | Pipeline de descoberta/validação/licença/ranking — reaproveitado quase integralmente, só o pacote mudou |
-
-## Ordem de fases adotada
-
-```
-FASE A — Contrato Brain ↔ Sandbox (agnóstico de implementação)
-FASE B — Estudo: Codex, OpenCode, Anthropic Skills, ECC, LangChain
-FASE C — Cérebro mínimo: Secretário → Intent Parser → API Router → Roadmap → Prompt Generator
-FASE D — Memória: experiências, histórico, resultados, erros, scores (SQLite/JSON; LEANN depois)
-FASE E — Agentes: Skills, agentes especialistas, seleção por capacidade, fallback
-FASE F — Workflows/Tarefas: ClawFlows, n8n
-FASE G — APIs: catálogo, quotas dinâmicas, fallback, avaliação
-FASE H — Integração: descongelar Sandbox, implementar o contrato, E2E completo
-```
-
-## Mapa: pacote → parte do fluxo original de 8 partes
-
-| Pacote | Parte do fluxo | Fase |
-|---|---|---|
-| `core` | Parte 1 (secretário) e 2 (interpretar pedido) | C |
-| `router` | Parte 3 e 5 (escolher API) | C (mínimo) / G (completo) |
-| `prompt` | Parte 4 (gerar prompts) | C |
-| `execution` | Parte 5/6 (contrato com o Sandbox) | A / H |
-| `memory` | Aprendizado contínuo | D |
-| `qa` | Parte 7 (ainda não criado neste esqueleto) | E |
-| `delivery` | Parte 8 (ainda não criado neste esqueleto) | E/H |
-| `orchestrator` | Visão geral, ainda não criado | H |
-
-`qa`, `delivery` e `orchestrator` ficaram como pastas vazias por enquanto —
-fazem mais sentido depois da Fase C (cérebro mínimo) estar de pé, porque
-dependem do contrato do Sandbox (Fase A/H) para ter o que testar/entregar.
-
-## Runtime executável do roadmap
-
-A implementação funcional das fases C–H está em `brain_runtime/`, usando Python 3 e biblioteca padrão. Ela inclui `PolicyBroker`, `EventStore`, pipeline substituível, memória SQLite, registro de Skills, engine de workflows, catálogo dinâmico de APIs, executor Sandbox, QA gate e orquestração E2E. A suíte pode ser executada com:
+## Executar testes
 
 ```bash
-python3 -m unittest discover -s tests
+python3 -m unittest discover -s tests -q
 ```
 
-O estado detalhado de cada fase está em `docs/ROADMAP_IMPLEMENTADO.md`.
+A validação atual inclui contratos formais, policy/approval, hash chain e recovery, sandbox, workflows, APIs, skills, memória, observabilidade, delivery, Project Intelligence, Readiness Gate e integração E2E.
+
+## Runtime e módulos
+
+| Módulo | Responsabilidade |
+|---|---|
+| `brain_runtime/pipeline.py` | Secretary, research, planner, policy, router, dispatch, critic, correction, retry e learning |
+| `brain_runtime/events.py` | EventStore append-only com hash chain, redaction, replay, rotação e retenção |
+| `brain_runtime/sandbox.py` | Execução allowlisted, limites, timeout, cancelamento e artefatos |
+| `brain_runtime/workflows.py` | Workflows persistentes com retry, leases, cancelamento e compensação |
+| `brain_runtime/apis.py` | Catálogo e seleção de providers com quota, cooldown e fallback equivalente |
+| `brain_runtime/skills.py` | Registry de skills com licença, provenance, assinatura e revogação |
+| `brain_runtime/memory.py` e `learning.py` | Memória local, learning records e bridge de execução |
+| `brain_runtime/project_intelligence.py` | Scan arquitetural e contexto `.projectbrain/` |
+| `brain_runtime/readiness.py` | Gate de implementação, testes, QA, segurança, arquitetura, regressão e release |
+| `brain_runtime/release_intelligence.py` | Comparação de commits/releases e heurísticas de regressão |
+| `brain_runtime/evidence.py` | Claims, evidências, estado externo, confiança e decisão |
+| `brain_runtime/context_pack.py` | Contexto estruturado para Planner/agentes |
+| `brain_runtime/fix_verify_learn.py` | Ciclo scan → task → fix → verify → learn |
+| `brain_runtime/runtime.py` | Orquestração E2E, delivery, readiness e replay |
+
+## Integração de Project Intelligence
+
+O scanner e o readiness gate são opcionais no `RuntimeCoordinator`:
+
+```python
+from brain_runtime.project_intelligence import ProjectScanner
+from brain_runtime.readiness import ReadinessGate
+from brain_runtime.runtime import RuntimeCoordinator
+
+runtime = RuntimeCoordinator(
+    pipeline=pipeline,
+    delivery=delivery,
+    events=events,
+    project_scanner=ProjectScanner("/path/to/project"),
+    readiness_gate=ReadinessGate(),
+    enforce_readiness=True,
+)
+```
+
+Quando configurado, o runtime atualiza `.projectbrain/`, emite `ProjectScanned` e `ReadinessEvaluated`, e bloqueia a conclusão quando `enforce_readiness=True` e existem blockers.
+
+## Kotlin e Android
+
+O diretório `app/` contém contratos e componentes Kotlin de referência. O aplicativo Android não está implementado nesta fase. Ainda não há Gradle, `AndroidManifest.xml`, UI, Keystore, foreground service ou APK.
+
+A decisão é deliberada: o runtime e seus contratos devem ser estabilizados antes de criar o cliente móvel.
+
+## Documentação técnica
+
+- [Auditoria técnica atual](AUDITORIA_PESADA.md)
+- [Roadmap implementado](docs/ROADMAP_IMPLEMENTADO.md)
+- [Status detalhado de implementação](docs/IMPLEMENTATION_STATUS.md)
+- [Contratos](contracts/)
+- [Testes](tests/)
+
+## Limites de implantação
+
+Para isolamento forte, a implantação deve fornecer container rootless ou sandbox OS-level, cgroups graváveis, política de rede, filesystem jail e, quando aplicável, autoridade de assinatura. O runtime rejeita controles estritos ausentes e não simula capacidades que o host não fornece.

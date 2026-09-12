@@ -68,7 +68,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 ## Fase 5 — Toolchains, Rede e Serviços
 **Status: ❌ não implementado**
 
-- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): não há gerenciamento dedicado — o que existe hoje depende do que já vem no rootfs ou é instalado manualmente via plugins.
+- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e planos allowlisted cobrem detecção e preparação segura para Java, Python, Node, C/C++, Rust e Go; execução autorizada, SDK/NDK Android e lifecycle persistente ainda pendentes.
 - **Sandbox Fase 6 — Rede e serviços**: nenhum código de gerenciamento de rede/serviços encontrado.
 
 ---
@@ -119,6 +119,10 @@ Implementados `ApiDiscoveryCandidate`, `ApiDiscoverySource`, `ApiDiscoveryEngine
 ### Sessão 2026-09-12 — Catálogo remoto seguro de plugins
 
 Implementados `RemotePluginCatalog`, `RemoteCatalogSnapshot` e `RemoteComponentManifest`. A camada valida allowlist de fontes, HTTPS seguro, fonte oficial, IDs duplicados e SHA-256 antes de expor componentes; não realiza download, instalação nem execução automática. Foram adicionados testes para aceitação, fonte não confiável, hash divergente, duplicidade e HTTP. A documentação está em `docs/PLUGIN_CATALOG.md`. Validação do `:app:test` ficou bloqueada neste ambiente pela ausência de Android SDK (`ANDROID_HOME`/`local.properties`); portanto a etapa permanece parcial até validação em ambiente Android configurado.
+
+### Sessão 2026-09-12 — Base declarativa de toolchains
+
+Implementados `ToolchainProfile`, `ToolchainDetector`, `ToolchainInstallPlan` e perfis iniciais para Java, Python, Node.js, C/C++, Rust e Go. A detecção usa somente comandos declarados; o plano de instalação aceita apenas nomes de pacotes allowlisted e não executa automaticamente. Foram adicionados testes de detecção, diagnóstico, geração de plano e rejeição de metacaracteres. A documentação está em `docs/TOOLCHAINS.md`. A validação do módulo `:app` depende de Android SDK configurado.
 
 ## Critério de sucesso do projeto
 

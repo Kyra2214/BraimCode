@@ -207,3 +207,11 @@ O probe de auditoria confirmou que uma chamada direta a `BrainPipeline.run()` co
 O núcleo Kotlin avançou em cinco frentes: o `EventStore` passou a manter hash chain, idempotency keys, payload redigido e recovery de última linha parcial; o `BrainExecutionCoordinator` passou a coordenar Policy, aprovação persistente, eventos, dispatch, retry e correction loop; o catálogo ganhou quota estimada, cooldown e waterfall; e o planner, provider dispatcher e memória persistente permanecem integráveis por contratos substituíveis.
 
 A compilação do módulo `:brain` e a suíte Python de referência foram executadas com sucesso. A validação dos módulos Android continua dependente de um ambiente com Android SDK configurado e não é simulada neste ambiente.
+
+## Validação Android concluída — 2026-09-12
+
+O ambiente foi configurado com JDK 17, Android SDK 34, Build Tools 34.0.0, Platform Tools e NDK 26.3.11579264. A suíte Python executou 124 testes aprovados. Os testes Kotlin/JVM de `brain`, `android-module` e `app` passaram, e `:app:assembleDebug` terminou com `BUILD SUCCESSFUL` após 117 tarefas Gradle.
+
+O APK está em `app/build/outputs/apk/debug/app-debug.apk`, com SHA-256 `da680d451f1ee4157c38de5c076dd896c2e24f0d2ffc9f53956b042c1659d62d`. Durante a validação foram corrigidas a verificação de symlink do delivery Kotlin e a função `isSafeHttps` ausente no módulo `app`; as correções foram publicadas no commit `4b409f5`.
+
+O relatório reproduzível está em [`docs/VALIDACAO_2026-09-12.md`](VALIDACAO_2026-09-12.md). A validação em device/emulador, RootFS/proot real e assinatura de release continuam pendentes.

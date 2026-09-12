@@ -2,13 +2,24 @@
 
 ## Estado atual
 
-A implementação executável de referência está em `brain_runtime/` e utiliza a biblioteca padrão do Python 3. O código Kotlin em `app/` permanece como referência de contratos e extensões; o aplicativo Android ainda não foi iniciado.
+A implementação executável de referência está em `brain_runtime/`, e os módulos Kotlin/Android `brain/`, `android-module/` e `app/` possuem build validado. O APK Debug foi gerado após a instalação do JDK 17 e Android SDK 34.
 
-A suíte atual possui **112 testes aprovados** e é executada com:
+A suíte atual possui **124 testes Python aprovados**, além dos testes Kotlin/JVM e Android executados pelo Gradle. A suíte Python é executada com:
 
 ```bash
 python3 -m unittest discover -s tests -q
 ```
+
+Validação Android reproduzível:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export ANDROID_HOME=$HOME/Android/Sdk
+export ANDROID_SDK_ROOT=$ANDROID_HOME
+./gradlew :brain:test :android-module:test :app:test :app:assembleDebug --no-daemon
+```
+
+Resultado validado em 2026-09-12: `BUILD SUCCESSFUL`, 117 tarefas Gradle, APK em `app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `da680d451f1ee4157c38de5c076dd896c2e24f0d2ffc9f53956b042c1659d62d`.
 
 ## Componentes implementados
 
@@ -32,6 +43,7 @@ python3 -m unittest discover -s tests -q
 | Context | `context_pack.py` | Context pack para Planner e agentes |
 | Fix/Verify/Learn | `fix_verify_learn.py` | Ciclo scan, task, fix, verify e learn |
 | Runtime | `runtime.py` | Integração opcional de scanner/readiness com pipeline, delivery e replay |
+| Android | `brain/`, `android-module/`, `app/` | Ciclo Android, bridge Brain/Sandbox, testes e APK Debug validados |
 
 ## Linha de commits atual
 
@@ -42,6 +54,7 @@ python3 -m unittest discover -s tests -q
 | `619189c` | Workflows, Sandbox e telemetria operacional |
 | `bf24bf8` | Project Intelligence, Readiness, Evidence, Context e Fix/Verify/Learn |
 | `32e805a` | Integração de scanner e readiness ao RuntimeCoordinator |
+| `4b409f5` | Correções Kotlin de validação HTTPS e delivery; build Android validado |
 
 Todos os commits estão publicados em `origin/main`.
 
@@ -51,7 +64,7 @@ O runtime não afirma possuir isolamento OS-level quando o host não fornece ess
 
 O catálogo de APIs e o Evidence Engine não comprovam que um provider externo esteja operacional. Eles registram provenance, estado desconhecido e evidência verificável separadamente.
 
-O Android Mobile não está implementado como aplicativo. Não há Gradle, `AndroidManifest.xml`, UI, Keystore, Service ou APK. Essa etapa permanece planejada para depois da estabilização do runtime.
+O APK Debug está validado em build e testes automatizados. Ainda não foi realizada validação em dispositivo/emulador físico nesta sessão; instalação no device, comportamento de `proot`, RootFS real, serviços Android e assinatura de release continuam dependências de implantação.
 
 ## Critério de conclusão
 

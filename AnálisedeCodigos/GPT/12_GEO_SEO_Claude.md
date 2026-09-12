@@ -1,5 +1,25 @@
 # 12 — zubair-trabzada/geo-seo-claude
 
+## Pente fino adicional
+
+Este é um dos melhores exemplos para o Braim de **especialização hierárquica**: uma Skill principal coordena sub-Skills, subagentes, scripts, scoring e síntese sem transformar tudo em um único prompt.
+
+### Especialista estreito
+
+Cada subagente deve receber apenas o contexto necessário para sua área. O Brain pode paralelizar especialistas e depois passar resultados para um sintetizador.
+
+### Quality gates de pesquisa
+
+Limites de páginas, concorrência, timeout, deduplicação e robots/terms devem estar em uma política compartilhada. Isso evita que cada Skill invente sua própria regra de pesquisa.
+
+### Scoring explicável
+
+O score deve guardar componentes individuais e evidências, não apenas um número final. Isso permite aprender depois quais critérios realmente predizem sucesso.
+
+### Atualização segura
+
+O mecanismo de update inspira um `SkillUpdater`: baixar nova versão, verificar origem/hash/licença, comparar diff, testar e somente então ativar.
+
 ## Objetivo
 
 Estudar um exemplo completo de Skill especializada com sub-Skills, subagentes, comandos, scoring, relatórios, atualização e controle de qualidade.
@@ -26,15 +46,7 @@ O Braim precisa exatamente desse conceito para projetos complexos.
 
 ## Subagentes
 
-O projeto separa:
-
-- AI visibility;
-- platform analysis;
-- technical;
-- content;
-- schema.
-
-Isso mostra que especialista deve ter **escopo estreito**, não prompt gigante.
+O projeto separa AI visibility, platform analysis, technical, content e schema. Isso mostra que especialista deve ter escopo estreito, não prompt gigante.
 
 ## Scoring
 
@@ -44,25 +56,17 @@ A auditoria calcula score composto com pesos por categoria. O Braim deve aplicar
 score = quality + reliability + latency + cost + historical_success
 ```
 
+Guardar também cada componente e evidência.
+
 ## Comandos
 
-O conjunto `/geo audit`, `/geo quick`, `/geo technical`, `/geo content`, `/geo schema`, `/geo report` etc. mostra como uma Skill pode oferecer uma superfície simples para vários procedimentos.
-
-No Braim, esses comandos seriam capabilities registradas, não hardcoded no parser.
+O conjunto `/geo audit`, `/geo quick`, `/geo technical`, `/geo content`, `/geo schema`, `/geo report` mostra como uma Skill pode oferecer uma superfície simples para vários procedimentos. No Braim, esses comandos seriam capabilities registradas, não hardcoded no parser.
 
 ## Quality gates
 
 O projeto define limites de crawl, timeout, rate limiting, robots.txt e deduplicação. Isso é valioso para qualquer agente que pesquisa a web.
 
-O Braim deve ter um `ResearchPolicy` com:
-
-- timeout;
-- concorrência;
-- limite de páginas;
-- robots/terms;
-- deduplicação;
-- tamanho máximo de resposta;
-- origem da informação.
+O Braim deve ter um `ResearchPolicy` com timeout, concorrência, limite de páginas, robots/terms, deduplicação, tamanho máximo de resposta e origem da informação.
 
 ## Update skill
 
@@ -77,14 +81,15 @@ O projeto gera Markdown e PDF estruturados. O Braim pode separar `raw_result` de
 - Skill principal + sub-Skills;
 - agentes especialistas;
 - pipeline discovery → parallel → synthesis;
-- scoring;
+- scoring explicável;
 - quality gates;
 - comandos como capabilities;
 - atualização/versionamento;
 - outputs estruturados;
 - relatórios;
 - armazenamento persistente;
-- limites de pesquisa.
+- limites de pesquisa;
+- update seguro com diff/test antes de ativação.
 
 ## O que não absorver
 
@@ -111,4 +116,4 @@ O repositório usa MIT. Ainda assim, dependências e recursos individuais devem 
 
 ## Conclusão
 
-O aprendizado mais importante é a estrutura **um problema grande → descoberta → especialistas paralelos → síntese → score → plano de ação**. Isso deve ser um padrão nativo do Brain para tarefas complexas.
+O aprendizado mais importante é a estrutura **um problema grande → descoberta → especialistas paralelos → síntese → score → plano de ação**. O pente fino acrescenta score explicável e atualização segura de Skills como padrões nativos do Brain.

@@ -169,3 +169,8 @@ Foi criado `LocalLLMSecretario` com fallback seguro, adicionado o perfil Android
 ### 2026-09-12 — Validação Android local
 
 Ambiente preparado com JDK 17, Android SDK API 34, Build Tools 34.0.0 e platform-tools. `:app:testDebugUnitTest` e `:app:assembleDebug` passaram. A rodada corrigiu compatibilidade de leitura de arquivos no `SecurityProjectScanner`, detecção case-insensitive de chave privada, contrato de exceção do `ServiceManager` e o relatório do script de ambiente. APK debug gerado com SHA-256 `d4bcfbc1a961218e0115f70e2080ea0c8d5ec6a77add147aa6888e5f34eb0247`. Instalação em emulador/dispositivo físico, RootFS/proot e assinatura release continuam pendentes.
+
+
+### 2026-09-12 — Download da mini-LLM local
+
+A interface de validação agora oferece o download opcional da SmolLM2 135M Instruct GGUF Q4_K_M. O manifesto `app/src/main/res/raw/local_model_manifest.json` declara URL HTTPS, licença Apache-2.0, tamanho e SHA-256; `SandboxResourceManager` foi generalizado para recursos verificáveis e `AndroidSandboxFactory` mantém os modelos em `filesDir/sandbox/models`. O download possui retomada, arquivo parcial e verificação de hash. A execução do GGUF ainda depende da integração futura de `llama.cpp`/runtime nativo autorizado e não é iniciada automaticamente.

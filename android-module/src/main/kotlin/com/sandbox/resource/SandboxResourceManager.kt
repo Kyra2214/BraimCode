@@ -35,12 +35,12 @@ class SandboxResourceManager(
     }
 
     /**
-     * Garante que o rootfs descrito pelo manifesto está disponível e válido
+     * Garante que o recurso descrito pelo manifesto está disponível e válido
      * em [targetFile]. Se já existir e o hash conferir, não baixa de novo.
      * Se existir parcialmente, tenta retomar via header Range.
      */
     fun ensureAvailable(
-        manifest: RootfsManifest,
+        manifest: DownloadManifest,
         progressListener: ProgressListener? = null
     ): DownloadResult {
         if (targetFile.exists() && verifySha256(targetFile, manifest.sha256)) {
@@ -62,7 +62,7 @@ class SandboxResourceManager(
     }
 
     private fun downloadWithResume(
-        manifest: RootfsManifest,
+        manifest: DownloadManifest,
         progressListener: ProgressListener?
     ) {
         val partialFile = File(targetFile.parentFile, "${targetFile.name}.part")

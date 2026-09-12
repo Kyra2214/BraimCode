@@ -94,10 +94,38 @@ fun SandboxValidationScreen(viewModel: SandboxViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         StatusSection(viewModel)
+        LocalModelSection(viewModel)
         val phase = viewModel.phase
         if (phase is SandboxPhase.Ready || phase is SandboxPhase.Running) CommandSection(viewModel)
         viewModel.lastResult?.let { ResultSection(it, viewModel.lastExecution) }
         viewModel.diagnosticsReport?.let { DiagnosticsSection(it) }
+    }
+}
+
+@Composable
+private fun LocalModelSection(viewModel: SandboxViewModel) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Mini-LLM local", style = MaterialTheme.typography.titleMedium)
+            Text("SmolLM2 135M Instruct (GGUF, quantização Q4_K_M, Apache-2.0)")
+            when {
+                viewModel.localModelReady -> Text("Modelo baixado e verificado por SHA-256.", color = MaterialTheme.colorScheme.primary)
+                viewModel.localModelProgress != null -> {
+                    val (downloaded, total) = viewModel.localModelProgress!!
+                    Text("Baixando modelo: ${downloaded / (1024 * 1024)} MiB / ${total / (1024 * 1024)} MiB")
+                    if (total > 0) {
+                        LinearProgressIndicator(
+                            progress = { (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                else -> Button(onClick = { viewModel.downloadLocalModel() }) { Text("Baixar mini-LLM (~101 MiB)") }
+            }
+            viewModel.localModelError?.let {
+                Text("Falha: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 

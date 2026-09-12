@@ -23,6 +23,7 @@ class AndroidSandboxFactory(private val context: Context) {
 
     private val sandboxBaseDir = File(context.filesDir, "sandbox")
     private val downloadedArchive = File(sandboxBaseDir, "rootfs.tar.gz")
+    private val modelDir = File(sandboxBaseDir, "models")
     private val extractedRootfsDir = File(sandboxBaseDir, "rootfs")
     private val extractionMarker = File(sandboxBaseDir, ".extractor-version")
     private val prootTmpDir = File(context.cacheDir, "sandbox-tmp")
@@ -54,6 +55,15 @@ class AndroidSandboxFactory(private val context: Context) {
         sandboxBaseDir.mkdirs()
         return SandboxResourceManager(downloadedArchive)
     }
+
+    /** Gerenciador de artefatos de modelo; mantém a mini-LLM fora do RootFS. */
+    fun modelResourceManager(modelId: String): SandboxResourceManager {
+        require(modelId.matches(Regex("[a-z0-9][a-z0-9._-]*"))) { "ID de modelo inválido" }
+        modelDir.mkdirs()
+        return SandboxResourceManager(File(modelDir, "$modelId.gguf"))
+    }
+
+    fun modelFile(modelId: String): File = File(modelDir, "$modelId.gguf")
 
     fun prepareRuntime(forceReExtract: Boolean = false): SandboxRuntime {
         require(downloadedArchive.exists()) { "Rootfs ainda não foi baixado. Chame resourceManager().ensureAvailable() primeiro." }

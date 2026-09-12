@@ -57,6 +57,13 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var phase by mutableStateOf<SandboxPhase>(SandboxPhase.NotReady)
         private set
 
+    var localModelProgress by mutableStateOf<Pair<Long, Long>?>(null)
+        private set
+    var localModelReady by mutableStateOf(false)
+        private set
+    var localModelError by mutableStateOf<String?>(null)
+        private set
+
     // --- Plugins / Ferramentas (Expansão Fase 1) ---
 
     /** IDs com instalação/remoção em andamento — usado para status visual em tempo real. */
@@ -170,6 +177,28 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun downloadLocalModel() {
+        if (localModelProgress != null || localModelReady) return
+        viewModelScope.launch {
+            localModelError = null
+            val manifest = runCatching { LocalModelManifestLoader.load(getApplication()) }
+                .getOrElse {
+                    localModelError = it.message ?: "Manifesto da mini-LLM inválido"
+                    return@launch
+                }
+            val result = withContext(Dispatchers.IO) {
+                factory.modelResourceManager(manifest.id).ensureAvailable(manifest) { downloaded, total ->
+                    localModelProgress = downloaded to total
+                }
+            }
+            localModelProgress = null
+            when (result) {
+                is SandboxResourceManager.DownloadResult.Success -> localModelReady = true
+                is SandboxResourceManager.DownloadResult.Failure -> localModelError = result.reason
+            }
+        }
+    }
+
     fun cancelCommand() {
         viewModelScope.launch(Dispatchers.IO) {
             runtime?.cancel()
@@ -190,6 +219,9 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lastResult = null
             lastExecution = null
             diagnosticsReport = null
+            localModelProgress = null
+            localModelReady = false
+            localModelError = null
             phase = SandboxPhase.NotReady
         }
     }

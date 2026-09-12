@@ -1,0 +1,11 @@
+{
+  "id": "smollm2-135m-instruct-q4km",
+  "version": "1.0",
+  "format": "GGUF",
+  "architecture": "arm64-v8a",
+  "url": "https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf",
+  "sizeBytes": 105454432,
+  "sha256": "2e8040ceae7815abe0dcb3540b9995eaa1fa0d2ca9e797d0a635ae4433c68c2d",
+  "license": "Apache-2.0",
+  "minAppVersion": "0.5.0"
+}

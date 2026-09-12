@@ -30,6 +30,26 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn(EventType.RETRY.value, types)
         self.assertIn(EventType.DELIVERED.value, types)
 
+    def test_retry_prompt_contains_previous_diagnostic(self):
+        class CapturingFailingOnce:
+            def __init__(self):
+                self.prompts = []
+                self.calls = 0
+
+            def dispatch(self, request):
+                self.prompts.append(request.objective)
+                self.calls += 1
+                return ExecutionResult(request.request_id, self.calls > 1, error=None if self.calls > 1 else "bad output")
+
+        dispatcher = CapturingFailingOnce()
+        pipeline = self.make_pipeline(EventStore(), dispatcher)
+
+        self.assertTrue(pipeline.run_internal_for_tests("Pesquise dados", "s")[0].success)
+        self.assertEqual(len(dispatcher.prompts), 2)
+        self.assertNotEqual(dispatcher.prompts[0], dispatcher.prompts[1])
+        self.assertIn("Correction diagnostics", dispatcher.prompts[1])
+        self.assertIn("bad output", dispatcher.prompts[1])
+
     def test_approval_pauses_and_resumes_same_run(self):
         events = EventStore(); store = ApprovalStore(); pipeline = self.make_pipeline(events, FailingOnce(), store)
         # Force approval through the broker/context used by a dedicated policy instance.

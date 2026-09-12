@@ -45,3 +45,11 @@ Esta rodada adicionou testes de integração para approval, correction loop, ant
 O `SandboxExecutor` passou a iniciar jobs, quando suportado pelo host, em namespaces de usuário, montagem e PID via `unshare`, com diagnóstico explícito no resultado. A solicitação de namespace de rede agora é tratada de forma fail-closed quando `isolation_required=True`: neste ambiente a operação é recusada porque o kernel não permite `unshare --net`; não há indicação falsa de que o tráfego esteja isolado. Quando o isolamento estrito não é solicitado, o executor mantém fallback compatível com limites de recursos e informa a degradação.
 
 Foram adicionados testes para confirmar a execução em namespace e a não degradação silenciosa da política de rede. A suíte passou a totalizar 41 testes aprovados. Filesystem jail/chroot e cgroup de processos continuam sendo responsabilidade da implantação/container host; o runtime não simula essas garantias apenas com validação de paths.
+
+## Atualização do engine de workflows — 2026-09-12
+
+O engine de workflows passou a persistir estados explícitos de execução, incluindo `running`, `blocked`, `failed`, `paused`, `cancelled`, `timed_out` e `compensating` quando aplicáveis. O cancelamento pode ser propagado por `cancel_event` durante a execução de um node, e o timeout global é verificado antes de cada transição.
+
+Retry agora registra tentativas, aceita backoff exponencial limitado e valida o output de cada node por schema declarativo ou callback. Inputs também podem ser validados antes do dispatch. Workflows que configurarem nodes compensáveis podem executar uma compensação reversa após cancelamento ou falha, com persistência atômica do estado intermediário. A compatibilidade com handlers booleanos e idempotência existentes foi preservada.
+
+Foram adicionados testes para cancelamento com compensação, validação de input/output e retry por falha de contrato. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 44 testes aprovados.

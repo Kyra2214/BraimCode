@@ -163,3 +163,11 @@ Continuam dependentes de infraestrutura externa a troca do SQLite por Postgres/R
 O sandbox passou a solicitar isolamento de rede por padrão sempre que `network_allowed=False`, mantendo comportamento fail-closed quando o host não consegue criar o namespace em modo estrito e diagnosticando explicitamente a degradação em modo compatível. Antes, a execução padrão podia permanecer apenas com limites de recursos sem sequer solicitar o namespace de rede.
 
 O fluxo de approval passou a persistir o `step_id` no evento `ApprovalRequested`, incluí-lo no evento `AgentDispatched` e exigir esse identificador durante a reidratação após restart. Assim, a retomada conserva o mesmo `run_id`, `task_id` e `step_id`, sem criar um novo passo silenciosamente. Foram adicionados testes de restart do approval e de isolamento de rede padrão; a suíte executada com `python3 -m unittest discover -s tests -q` totaliza 90 testes aprovados.
+
+## Contratos, APIs e credenciais — 2026-09-12
+
+Os contratos receberam validação formal de tipos aninhados, incluindo dataclasses, listas, mapas, enums e distinção estrita entre `bool` e `int`. O registry agora suporta round-trip entre payloads e modelos, schemas versionados, migrações por versão e validação dos modelos principais do runtime. Foram adicionados contract tests para `Plan`, `PlanStep`, `TaskSpec`, `ExecutionResult`, `PolicyDecision` e `Event`.
+
+O catálogo de APIs recebeu persistência atômica de estado, quota por janela, cooldown com recuperação, reserva e reconciliação duráveis, probes e waterfall limitado a capabilities equivalentes. Skills externas passaram a reforçar licença, assinatura, provenance e revogação persistente por versão; credenciais continuam sendo injetadas apenas na fronteira de execução e nunca persistidas em requests ou eventos. A revogação é verificada antes de qualquer outra validação do manifesto. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 103 testes aprovados.
+
+As frentes adicionais de sandbox e workflows desta rodada não foram declaradas concluídas sem validação completa. Elas continuam dependentes dos controles já existentes e, em parte, de garantias do host como cgroups, Bubblewrap e coordenação distribuída.

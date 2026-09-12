@@ -47,7 +47,11 @@ def _namespace_command(argv: tuple[str, ...], job: SandboxJob) -> tuple[list[str
         if job.isolation_required: return [], ("bubblewrap unavailable; strict filesystem jail refused",)
     command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork", "--mount-proc"]
     diagnostics = ("isolation:user namespace enabled", "isolation:mount namespace enabled", "isolation:PID namespace enabled")
-    if job.network_namespace:
+    # Deny-by-default must request network isolation unless the policy
+    # explicitly authorizes network access. The explicit flag can still force
+    # isolation for an authorized network job on a dedicated host.
+    network_isolation_requested = job.network_namespace or not job.network_allowed
+    if network_isolation_requested:
         probe = subprocess.run([unshare, "--net", "true"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if probe.returncode != 0:
             if job.isolation_required:

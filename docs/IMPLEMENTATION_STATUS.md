@@ -157,3 +157,9 @@ O sistema de leases recebeu `assert_current` para validar fencing tokens em cada
 Foram adicionados testes de modo fail-closed, retenção do EventStore, heartbeat/fencing e revogação de skill após restart. A suíte executada com `python3 -m unittest discover -s tests -q` totaliza 88 testes aprovados.
 
 Continuam dependentes de infraestrutura externa a troca do SQLite por Postgres/Redis/etcd, cgroups graváveis, Bubblewrap efetivo, autoridade de chaves remota e testes multi-host. Os adapters agora falham explicitamente quando essas garantias são exigidas, sem alegar isolamento que o host não fornece.
+
+## Correções de boundary e retomada — 2026-09-12
+
+O sandbox passou a solicitar isolamento de rede por padrão sempre que `network_allowed=False`, mantendo comportamento fail-closed quando o host não consegue criar o namespace em modo estrito e diagnosticando explicitamente a degradação em modo compatível. Antes, a execução padrão podia permanecer apenas com limites de recursos sem sequer solicitar o namespace de rede.
+
+O fluxo de approval passou a persistir o `step_id` no evento `ApprovalRequested`, incluí-lo no evento `AgentDispatched` e exigir esse identificador durante a reidratação após restart. Assim, a retomada conserva o mesmo `run_id`, `task_id` e `step_id`, sem criar um novo passo silenciosamente. Foram adicionados testes de restart do approval e de isolamento de rede padrão; a suíte executada com `python3 -m unittest discover -s tests -q` totaliza 90 testes aprovados.

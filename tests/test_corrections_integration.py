@@ -51,6 +51,39 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn(EventType.APPROVAL_GRANTED.value, [e.type for e in events.all()])
         with self.assertRaises(KeyError): pipeline.resume(approval_id, "user", True)
 
+    def test_approval_restart_preserves_same_step(self):
+        class CapturingDispatcher:
+            def __init__(self): self.step_ids = []
+            def dispatch(self, request):
+                self.step_ids.append(request.step_id)
+                return ExecutionResult(request.request_id, True)
+
+        with tempfile.TemporaryDirectory() as directory:
+            events_path = Path(directory) / "events.jsonl"
+            approval_path = Path(directory) / "approvals.db"
+            first_events = EventStore(events_path)
+            first_store = ApprovalStore(approval_path)
+            first = self.make_pipeline(first_events, CapturingDispatcher(), first_store)
+            original = first.policy.authorize
+            def ask(*args, **kwargs):
+                decision = original(*args, **kwargs)
+                from brain_runtime.models import PolicyDecision, Decision
+                return PolicyDecision(decision.decision_id, decision.run_id, decision.task_id, decision.actor, decision.capability,
+                    decision.risk_class, Decision.ASK, ApprovalRequired.USER, decision.sandbox_required, decision.network_allowed,
+                    decision.filesystem_roots, decision.budget, decision.expires_at, "approval required", decision.resource)
+            first.policy.authorize = ask
+            paused = first.run("Pesquise dados", "s")[0]
+            approval_id = paused.output["approval_id"]
+            requested = next(event for event in first_events.all() if event.type == EventType.APPROVAL_REQUESTED.value)
+            step_id = requested.payload["step_id"]
+
+            restarted_events = EventStore(events_path)
+            restarted = self.make_pipeline(restarted_events, CapturingDispatcher(), ApprovalStore(approval_path))
+            resumed = restarted.resume(approval_id, "user", True)[0]
+            dispatched = next(event for event in restarted_events.all() if event.type == EventType.AGENT_DISPATCHED.value)
+            self.assertTrue(resumed.success)
+            self.assertEqual(step_id, dispatched.payload["step_id"])
+
     def test_event_store_recovers_trailing_partial_line(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "events.jsonl"; store = EventStore(path)

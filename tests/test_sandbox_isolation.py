@@ -9,6 +9,12 @@ class SandboxIsolationTests(unittest.TestCase):
             self.assertEqual(result.status, "SUCCEEDED")
             self.assertTrue(any(item.startswith("isolation:") for item in result.diagnostics))
 
+    def test_network_isolation_is_requested_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = SandboxExecutor().execute(SandboxJob("j", "r", "s", ("python3", "-c", "print('ok')"), directory))
+            diagnostics = " ".join(result.diagnostics)
+            self.assertTrue("network namespace" in diagnostics or "network isolation" in diagnostics)
+
     def test_strict_network_isolation_does_not_degrade(self):
         with tempfile.TemporaryDirectory() as directory:
             result = SandboxExecutor().execute(SandboxJob("j", "r", "s", ("python3", "-c", "print('ok')"), directory,

@@ -197,3 +197,9 @@ A entrega ainda não inclui executor OS-level de probes, corpus de regressão pe
 `SecurityProjectScanner` cobre a primeira parte do `ProjectScanner` como análise lexical read-only. Ele percorre o workspace, ignora `.git`, `build`, `node_modules`, `.gradle` e arquivos acima do limite configurado, e procura chaves privadas, atribuições diretas de credenciais, interpolação potencial em shell e desativação explícita de TLS. Cada achado preserva caminho relativo, linha, regra e evidência limitada; valores de credenciais são redigidos antes de sair do scanner.
 
 O scanner não importa módulos, executa scripts, resolve dependências nem tenta validar se um segredo encontrado é real. Portanto seus achados são sinais para Policy/QA e não prova de exploração. O executor OS-level, análise estrutural mais profunda e integração com o gate continuam pendentes.
+
+## Avaliação integrada
+
+`SecurityAssessmentEngine` combina um `ProjectScanReport` com o resultado do `SecurityTestLab`. Achados estáticos recebem IDs de cenário derivados do caminho e da linha, evidência própria com SHA-256 e participam do mesmo readiness gate dos probes. Assim, uma credencial detectada ou uma chave privada no workspace não pode ser ignorada apenas porque os probes dinâmicos passaram.
+
+O engine continua sendo uma camada de decisão local: ele não corrige arquivos, não executa probes e não substitui PolicyBroker. A correção e o ciclo fix/verify/learn devem consumir o relatório e produzir uma nova avaliação.

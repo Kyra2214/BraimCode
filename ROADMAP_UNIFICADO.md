@@ -77,7 +77,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 **Status: 🟡 domínio de avaliação implementado · ❌ executor adversarial completo**
 
 - **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` (31 linhas) já roda um pipeline básico de dependências → build → testes → lint, mas isso é um test runner, não um "Test Lab" completo.
-- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários e probes controlados, e `SecurityProjectScanner` faz análise lexical read-only com redaction; executor adversarial, análise estrutural, corpus persistente e integração de delivery ainda pendentes.
+- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários/probes, `SecurityProjectScanner` faz análise lexical read-only com redaction e `SecurityAssessmentEngine` combina ambos no readiness gate; executor adversarial, análise estrutural, corpus persistente e integração de delivery ainda pendentes.
 
 ---
 
@@ -135,6 +135,10 @@ Implementados `SecurityTestLab`, `SecurityScenario`, `SecurityProbeResult`, `Sec
 ### Sessão 2026-09-12 — Scanner estático inicial do Security Test Lab
 
 Implementados `SecurityProjectScanner`, `ScanRule`, `ProjectScanFinding` e `ProjectScanReport`. O scanner percorre o workspace sem executar conteúdo, ignora diretórios gerados e arquivos grandes, identifica chaves privadas, credenciais em texto, interpolação potencial em shell e TLS desabilitado, preservando caminho/linha e redigindo evidências. Foram adicionados testes de detecção, exclusão, limite de arquivo, caminho relativo e redaction. A análise estrutural profunda, executor OS-level e integração com o gate permanecem pendentes.
+
+### Sessão 2026-09-12 — Avaliação integrada do Security Test Lab
+
+Implementado `SecurityAssessmentEngine`, que combina achados estáticos do `SecurityProjectScanner` com resultados do `SecurityTestLab`, gera evidências rastreáveis e bloqueia readiness para riscos HIGH/CRITICAL de qualquer origem. Foram adicionados testes de combinação e de gate limpo. A avaliação não executa correções ou probes; executor adversarial, fix/verify/learn e delivery continuam pendentes.
 
 ## Critério de sucesso do projeto
 

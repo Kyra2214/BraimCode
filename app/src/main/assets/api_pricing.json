@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "pricing": [],
+  "rules": ["Record provider/model pricing metadata only when sourced and current.","Never store API keys or tokens."]
+}

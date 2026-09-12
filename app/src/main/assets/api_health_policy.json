@@ -1,0 +1,4 @@
+{
+  "schema_version": "1.0",
+  "health_policy": {"unhealthy_after_failures": 3,"cooldown_seconds": 60,"probe_before_reenable": true}
+}

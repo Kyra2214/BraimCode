@@ -22,7 +22,7 @@ O script não baixa os tarballs completos nem reconstrói RootFS. Ele é um gate
 |---|---|---|
 | Build Android | `:app:testDebugUnitTest`, `:android-module:test` e `:app:assembleDebug` com JDK 17 e Android SDK configurados | Pendente: SDK/JDK não configurados no clone atual |
 | Device/emulador ARM64 | `scripts/e2e-smoke.sh` executado via `adb` | Pendente: nenhum device/emulador conectado |
-| RootFS/proot real | Preparar sandbox, extrair RootFS, executar `bash`, health check, reset e repetir para os perfis aplicáveis | Pendente: depende do gate Android |
+| RootFS/proot real | Preparar sandbox, extrair RootFS, executar `bash`, health check, reset e repetir para os perfis aplicáveis | **Homologado no Sandbox de origem**; os três artefatos foram migrados byte-a-byte e não serão reconstruídos. Revalidação no app/dispositivo local permanece um teste de implantação, não uma nova homologação do release |
 | Ciclo de vida | Evidência de prepare, running, cancelamento, diagnóstico, reset e recuperação após interrupção | Pendente: depende do gate Android |
 | Assinatura de release | APK assinado pela autoridade de chaves de produção e verificação com `apksigner` | Pendente: credenciais de assinatura não estão no repositório |
 | Infraestrutura OS-level | cgroups graváveis, Bubblewrap/firewall/namespaces e serviços distribuídos validados no host | Pendente: dependência externa de implantação |

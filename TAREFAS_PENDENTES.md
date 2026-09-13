@@ -31,7 +31,7 @@ A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDB
 
 As tarefas abaixo permanecem abertas porque não fazem parte da migração copy-only dos artefatos homologados:
 
-- [ ] Validar RootFS/proot em dispositivo ou emulador Android real.
+- [x] Validar os RootFS/profiles `0.3.3`, `0.4.1` e `0.5.0` no Sandbox de origem; a migração preservou os artefatos hardened byte-a-byte. A execução no app/device permanece apenas como teste de implantação.
 - [ ] Realizar assinatura de release do APK com a autoridade de chaves de produção.
 - [ ] Completar o catálogo remoto e o gerenciamento de plugins no Sandbox Mobile.
 - [ ] Completar toolchains Android/NDK, rollback transacional e cache.

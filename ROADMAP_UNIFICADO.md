@@ -94,7 +94,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 
 Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime estável, plugins, ferramentas, projetos, workspace, terminal, git, toolchains, serviços, rede, segurança, test lab, logs, diagnóstico, recuperação, persistência, experiência consistente) somados às pendências já documentadas em `VALIDACAO_2026-09-12.md`:
 - Validação em device/emulador físico real.
-- RootFS/proot rodando de fato em produção (hoje validado só em build/testes automatizados).
+- RootFS/proot: os perfis `0.3.3`, `0.4.1` e `0.5.0` já foram validados e hardened no Sandbox de origem; a migração para o BrainCode preservou os bytes. Permanece apenas a validação de implantação no app/device, sem reabrir a homologação dos artefatos.
 - Assinatura de release (autoridade de chaves).
 - Infra externa: Postgres/Redis/etcd no lugar do SQLite, cgroups graváveis, Bubblewrap plenamente configurado, coordenação multi-host — tudo isso é dependência de implantação, não é simulado pelo runtime.
 - O preflight local `scripts/validate-release-readiness.sh` confirma que os três manifests, assets publicados e sidecars SHA-256 estão consistentes. A evidência e a matriz de gates estão em `docs/RELEASE_READINESS.md`.

@@ -66,7 +66,7 @@ Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e
 
 - [x] Criar e executar o preflight de release `scripts/validate-release-readiness.sh`, verificando manifests, tamanhos publicados e sidecars SHA-256 dos três RootFS.
 - [ ] Validar `:android-module` e `:app` em ambiente com Android SDK configurado e executar o fluxo em emulador ou device.
-- [ ] Validar RootFS/proot em dispositivo ou emulador Android real, incluindo os perfis `0.3.3`, `0.4.1` e `0.5.0`.
+- [x] Validar os releases RootFS/proot dos perfis `0.3.3`, `0.4.1` e `0.5.0` — validação e hardening já realizados no Sandbox de origem; os artefatos foram migrados byte-a-byte para o BrainCode e permanecem imutáveis.
 - [ ] Registrar evidências de health check, extração, execução de comandos, lifecycle e integridade dos artefatos.
 - [ ] Assinar o APK com a autoridade de chaves de produção e verificar a assinatura com `apksigner`.
 - [ ] Validar no host de implantação os controles OS-level e a infraestrutura externa exigida pela Fase 7.

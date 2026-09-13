@@ -177,10 +177,10 @@ class ManagedSandboxRuntime(
 
     private fun stopProcess(process: Process): Boolean {
         val pid = processPid(process)
-        if (launcher.processGroupManaged && pid != null) ProcessTreeTerminator.signalGroup(pid, "TERM")
+        if (pid != null) ProcessTreeTerminator.terminateTree(pid, "TERM", launcher.processGroupManaged)
         process.destroy()
         if (runCatching { process.waitFor(250, TimeUnit.MILLISECONDS) }.getOrDefault(false)) return false
-        if (launcher.processGroupManaged && pid != null) ProcessTreeTerminator.signalGroup(pid, "KILL")
+        if (pid != null) ProcessTreeTerminator.terminateTree(pid, "KILL", launcher.processGroupManaged)
         process.destroyForcibly()
         runCatching { process.waitFor(1, TimeUnit.SECONDS) }
         return true
@@ -233,9 +233,44 @@ class ManagedSandboxRuntime(
 }
 
 private object ProcessTreeTerminator {
-    fun signalGroup(pid: Long, signal: String) {
+    fun terminateTree(pid: Long, signal: String, processGroupManaged: Boolean) {
         if (pid <= 0) return
         val kill = listOf("/system/bin/kill", "/usr/bin/kill", "/bin/kill").firstOrNull { java.io.File(it).canExecute() } ?: return
-        runCatching { ProcessBuilder(kill, "-$signal", "--", "-$pid").start().waitFor(1, TimeUnit.SECONDS) }
+        if (processGroupManaged) {
+            runCatching { ProcessBuilder(kill, "-$signal", "--", "-$pid").start().waitFor(1, TimeUnit.SECONDS) }
+        } else {
+            // Android não expõe uma API portátil para enumerar descendentes.
+            // O fallback usa apenas /proc, disponível no Android, e mata os
+            // filhos antes do processo-pai para não deixar órfãos.
+            descendantPids(pid).asReversed().forEach { child ->
+                runCatching { ProcessBuilder(kill, "-$signal", child.toString()).start().waitFor(1, TimeUnit.SECONDS) }
+            }
+            runCatching { ProcessBuilder(kill, "-$signal", pid.toString()).start().waitFor(1, TimeUnit.SECONDS) }
+        }
     }
+
+    private fun descendantPids(root: Long): List<Long> {
+        val parents = mutableMapOf<Long, Long>()
+        val proc = File("/proc")
+        proc.listFiles()?.forEach { entry ->
+            val pid = entry.name.toLongOrNull() ?: return@forEach
+            val stat = File(entry, "stat").readTextOrNull() ?: return@forEach
+            val close = stat.lastIndexOf(')')
+            if (close < 0) return@forEach
+            val fields = stat.substring(close + 2).trim().split(Regex("\\s+"))
+            val parent = fields.getOrNull(1)?.toLongOrNull() ?: return@forEach
+            parents[pid] = parent
+        }
+        val found = mutableSetOf<Long>()
+        var frontier = setOf(root)
+        while (frontier.isNotEmpty()) {
+            val next = parents.filterValues { it in frontier }.keys - found - root
+            if (next.isEmpty()) break
+            found += next
+            frontier = next
+        }
+        return found.toList()
+    }
+
+    private fun File.readTextOrNull(): String? = runCatching { readText() }.getOrNull()
 }

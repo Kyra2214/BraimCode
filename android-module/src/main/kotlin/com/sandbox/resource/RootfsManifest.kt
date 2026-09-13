@@ -12,5 +12,10 @@ data class RootfsManifest(
     override val url: String,
     override val sizeBytes: Long,
     override val sha256: String,
-    val minAppVersion: String
+    val minAppVersion: String,
+    val signature: String = "",
+    val signatureUrl: String = "",
+    val signatureKeyId: String = "",
+    val signatureAlgorithm: String = "",
+    val signatureRequired: Boolean = false
 ) : DownloadManifest

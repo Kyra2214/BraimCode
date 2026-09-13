@@ -35,7 +35,12 @@ object ManifestLoader {
             url = obj.getString("url"),
             sizeBytes = obj.getLong("sizeBytes"),
             sha256 = obj.getString("sha256"),
-            minAppVersion = obj.getString("minAppVersion")
+            minAppVersion = obj.getString("minAppVersion"),
+            signature = obj.optString("signature", ""),
+            signatureUrl = obj.optString("signatureUrl", ""),
+            signatureKeyId = obj.optString("signatureKeyId", ""),
+            signatureAlgorithm = obj.optString("signatureAlgorithm", ""),
+            signatureRequired = obj.optBoolean("signatureRequired", false)
         )
 
         check(!manifest.url.contains(PLACEHOLDER_MARKER)) {

@@ -31,6 +31,12 @@ sha256sum "$OUTPUT_DIR/$OUTPUT_FILE" > "$OUTPUT_DIR/$OUTPUT_FILE.sha256"
 SHA256_HASH="$(cut -d' ' -f1 "$OUTPUT_DIR/$OUTPUT_FILE.sha256")"
 SIZE_BYTES="$(stat -c%s "$OUTPUT_DIR/$OUTPUT_FILE" 2>/dev/null || stat -f%z "$OUTPUT_DIR/$OUTPUT_FILE")"
 
+echo "==> Assinando RootFS..."
+SIGNATURE_FILE="$OUTPUT_DIR/$OUTPUT_FILE.sig"
+./sign-rootfs.sh "$OUTPUT_DIR/$OUTPUT_FILE" "$SIGNATURE_FILE"
+SIGNATURE_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/${OUTPUT_FILE}.sig"
+SIGNATURE_ALGORITHM="${ROOTFS_SIGNING_TOOL}"
+
 DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/${OUTPUT_FILE}"
 
 echo "==> Gerando manifest.json..."
@@ -42,7 +48,10 @@ cat > "$OUTPUT_DIR/rootfs_manifest.json" << EOF
   "url": "${DOWNLOAD_URL}",
   "sizeBytes": ${SIZE_BYTES},
   "sha256": "${SHA256_HASH}",
-  "minAppVersion": "1.0.0"
+  "minAppVersion": "1.0.0",
+  "signatureUrl": "${SIGNATURE_URL}",
+  "signatureAlgorithm": "${SIGNATURE_ALGORITHM}",
+  "signatureRequired": true
 }
 EOF
 
@@ -54,7 +63,7 @@ echo "==> Manifesto gerado: $OUTPUT_DIR/rootfs_manifest.json"
 echo ""
 echo "Para publicar uma NOVA build, use:"
 echo "  gh release create ${RELEASE_TAG} \\"
-echo "    \"$OUTPUT_DIR/$OUTPUT_FILE\" \"$OUTPUT_DIR/$OUTPUT_FILE.sha256\" \\"
+echo "    \"$OUTPUT_DIR/$OUTPUT_FILE\" \"$OUTPUT_DIR/$OUTPUT_FILE.sha256\" \"$SIGNATURE_FILE\" \\"
 echo "    --repo ${GITHUB_REPO} \\"
 echo "    --title \"Rootfs ${VERSION} (Ubuntu 24.04)\""
 echo ""

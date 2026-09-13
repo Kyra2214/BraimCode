@@ -15,6 +15,8 @@ trap - EXIT
 sha256sum "$OUTPUT_DIR/$OUTPUT_FILE" > "$OUTPUT_DIR/$OUTPUT_FILE.sha256"
 HASH=$(cut -d' ' -f1 "$OUTPUT_DIR/$OUTPUT_FILE.sha256")
 SIZE=$(stat -c%s "$OUTPUT_DIR/$OUTPUT_FILE" 2>/dev/null || stat -f%z "$OUTPUT_DIR/$OUTPUT_FILE")
+SIGNATURE_FILE="$OUTPUT_DIR/$OUTPUT_FILE.sig"
+./sign-rootfs.sh "$OUTPUT_DIR/$OUTPUT_FILE" "$SIGNATURE_FILE"
 cat > "$OUTPUT_DIR/agent_android_manifest.json" <<EOF
 {
   "version": "${VERSION}",
@@ -25,7 +27,10 @@ cat > "$OUTPUT_DIR/agent_android_manifest.json" <<EOF
   "sizeBytes": ${SIZE},
   "sha256": "${HASH}",
   "minAppVersion": "1.0.0",
-  "ollamaIncluded": false
+  "ollamaIncluded": false,
+  "signatureUrl": "https://github.com/Kyra2214/SandBox/releases/download/rootfs-agent-android-v${VERSION}/${OUTPUT_FILE}.sig",
+  "signatureAlgorithm": "${ROOTFS_SIGNING_TOOL}",
+  "signatureRequired": true
 }
 EOF
-ls -lh "$OUTPUT_DIR/$OUTPUT_FILE" "$OUTPUT_DIR/$OUTPUT_FILE.sha256" "$OUTPUT_DIR/agent_android_manifest.json"
+ls -lh "$OUTPUT_DIR/$OUTPUT_FILE" "$OUTPUT_DIR/$OUTPUT_FILE.sha256" "$SIGNATURE_FILE" "$OUTPUT_DIR/agent_android_manifest.json"

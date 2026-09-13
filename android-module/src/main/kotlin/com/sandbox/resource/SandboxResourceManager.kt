@@ -19,7 +19,8 @@ import java.security.MessageDigest
  * privado do app (equivalente a filesDir/sandbox/rootfs/).
  */
 class SandboxResourceManager(
-    private val targetFile: File
+    private val targetFile: File,
+    private val rootfsSignatureVerifier: RootfsSignatureVerifier? = null
 ) {
 
     sealed class DownloadResult {
@@ -43,16 +44,16 @@ class SandboxResourceManager(
         manifest: DownloadManifest,
         progressListener: ProgressListener? = null
     ): DownloadResult {
-        if (targetFile.exists() && verifySha256(targetFile, manifest.sha256)) {
+        if (targetFile.exists() && verifyArtifact(targetFile, manifest)) {
             return DownloadResult.Success(targetFile)
         }
 
         return try {
             downloadWithResume(manifest, progressListener)
-            if (!verifySha256(targetFile, manifest.sha256)) {
+            if (!verifyArtifact(targetFile, manifest)) {
                 targetFile.delete()
                 return DownloadResult.Failure(
-                    "Hash SHA-256 não confere após download. Arquivo removido."
+                    "Hash SHA-256 ou assinatura não confere após download. Arquivo removido."
                 )
             }
             DownloadResult.Success(targetFile)
@@ -121,6 +122,13 @@ class SandboxResourceManager(
         }
         val actualHash = digest.digest().joinToString("") { "%02x".format(it) }
         return actualHash.equals(expectedHash, ignoreCase = true)
+    }
+
+    private fun verifyArtifact(file: File, manifest: DownloadManifest): Boolean {
+        if (!verifySha256(file, manifest.sha256)) return false
+        val rootfs = manifest as? RootfsManifest ?: return true
+        if (!rootfs.signatureRequired) return true
+        return rootfsSignatureVerifier?.verify(file, rootfs) == true
     }
 
     /**

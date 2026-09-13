@@ -22,6 +22,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -85,9 +87,30 @@ fun SandboxMobileApp(viewModel: SandboxViewModel) {
         when (selectedTab) {
             0 -> SandboxValidationScreen(viewModel)
             1 -> PluginsScreen(viewModel, ComponentKind.PLUGIN)
-            2 -> PluginsScreen(viewModel, ComponentKind.TOOL)
+            2 -> ToolsAndApiScreen(viewModel)
             else -> OperationsScreen(viewModel)
         }
+    }
+}
+
+/**
+ * Aba "Ferramentas": alterna entre o catálogo de ferramentas do rootfs
+ * (já existia) e a nova sub-aba de chaves de API — cada API só de
+ * camada gratuita (ver ai_api_catalog.json), com link de cadastro, campo
+ * pra colar a chave, salvar e testar com uma chamada real.
+ */
+@Composable
+private fun ToolsAndApiScreen(viewModel: SandboxViewModel) {
+    var showApiKeys by remember { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(selected = !showApiKeys, onClick = { showApiKeys = false }, label = { Text("Ferramentas") })
+            FilterChip(selected = showApiKeys, onClick = { showApiKeys = true }, label = { Text("Chaves de API") })
+        }
+        if (showApiKeys) ApiKeysScreen(viewModel) else PluginsScreen(viewModel, ComponentKind.TOOL)
     }
 }
 
@@ -99,6 +122,7 @@ fun SandboxValidationScreen(viewModel: SandboxViewModel) {
     ) {
         StatusSection(viewModel)
         LocalModelSection(viewModel)
+        ChatboxSection(viewModel)
         val phase = viewModel.phase
         if (phase is SandboxPhase.Ready || phase is SandboxPhase.Running) CommandSection(viewModel)
         viewModel.lastResult?.let { ResultSection(it, viewModel.lastExecution) }
@@ -219,6 +243,74 @@ private fun LocalModelSection(viewModel: SandboxViewModel) {
             viewModel.localModelError?.let {
                 Text("Falha: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
+        }
+    }
+}
+
+/**
+ * Chatbox de TESTE da mini-LLM, separado do terminal (CommandSection):
+ * aqui o comando de inferência é montado internamente, não digitado à
+ * mão. Enquanto não empacotamos um motor de inferência no rootfs, a
+ * resposta normal é um erro explicando isso — já dá pra validar o fluxo
+ * inteiro (UI → runtime → rootfs) mesmo assim.
+ */
+@Composable
+private fun ChatboxSection(viewModel: SandboxViewModel) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Chatbox de teste da mini-LLM", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = { viewModel.clearChat() }, enabled = viewModel.chatMessages.isNotEmpty()) { Text("Limpar") }
+            }
+            Text(
+                "Fora do terminal, só pra testar o início do processo. Sem motor de inferência empacotado ainda, o normal é aparecer um erro explicando o que falta.",
+                style = MaterialTheme.typography.bodySmall
+            )
+            if (viewModel.chatMessages.isEmpty()) {
+                Text("Nenhuma mensagem ainda.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    viewModel.chatMessages.forEach { message -> ChatBubble(message) }
+                }
+            }
+            if (viewModel.chatRunning) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Rodando…", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            OutlinedTextField(
+                value = viewModel.chatInput,
+                onValueChange = { viewModel.chatInput = it },
+                label = { Text("Mensagem para a mini-LLM") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !viewModel.chatRunning,
+                singleLine = false
+            )
+            Button(
+                onClick = { viewModel.sendChatMessage() },
+                enabled = !viewModel.chatRunning && viewModel.chatInput.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (viewModel.chatRunning) "Enviando..." else "Enviar") }
+        }
+    }
+}
+
+@Composable
+private fun ChatBubble(message: ChatMessage) {
+    val (label, color) = when (message.role) {
+        ChatRole.USER -> "Você" to MaterialTheme.colorScheme.onSurface
+        ChatRole.ASSISTANT -> "mini-LLM" to MaterialTheme.colorScheme.primary
+        ChatRole.ERROR -> "Erro" to MaterialTheme.colorScheme.error
+    }
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = color)
+        SelectionContainer {
+            Text(message.content, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         }
     }
 }

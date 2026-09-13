@@ -10,6 +10,7 @@ class ProotProcessLauncher(
     private val disableSeccompAcceleration: Boolean = true,
     private val nativeLibraryDir: String? = null,
     private val prootLoader: String? = null,
+    private val executableFinder: (List<String>) -> String? = { candidates -> candidates.firstOrNull { File(it).canExecute() } },
     // Ver ProotResourceLimits.kt: cgroup v2 delegado não existe no Android
     // sem root, então o teto real de memória/CPU/arquivos vem de
     // setrlimit(2) via `ulimit`, aplicado no /bin/bash que o proot exec'a
@@ -32,27 +33,11 @@ class ProotProcessLauncher(
 
     override fun launch(command: List<String>, workingDir: String, networkAllowed: Boolean): Process {
         val setsid = findSetsid()
-        val unshare = if (networkAllowed) findUnshare() else null
-        if (networkAllowed && unshare == null) {
-            throw UnsupportedOperationException("isolamento de rede exige unshare(CLONE_NEWNET); proot sozinho não isola sockets")
+        val unshare = if (networkAllowed) null else findUnshare()
+        if (!networkAllowed && unshare == null) {
+            throw UnsupportedOperationException("isolamento de rede exigido, mas unshare(CLONE_NEWNET) não está disponível")
         }
-        val args = buildList {
-            setsid?.let { add(it) }
-            unshare?.let { add(it); add("-n"); add("--") }
-            add(prootExecutable)
-            add("-r"); add(rootfsDir.absolutePath)
-            add("-w"); add(workingDir)
-            add("-0")
-            addAll(ProotDeviceBinds.bindArgs())
-            add("--link2symlink")
-            add("--kill-on-exit")
-            add("/bin/bash"); add("-c")
-            // O preâmbulo `ulimit` roda no mesmo processo bash (builtin, sem
-            // fork); `exec` substitui esse processo pelo comando real sem
-            // criar um filho extra — os limites setados valem igualmente
-            // porque setrlimit(2) sobrevive a execve(2) (POSIX).
-            add(resourceLimits.verifiedPreamble() + "exec " + command.joinToString(" ") { shellEscape(it) })
-        }
+        val args = buildArgs(command, workingDir, setsid, unshare)
         return ProcessBuilder(args).redirectErrorStream(false).apply {
             environment().clear()
             environment()["LD_LIBRARY_PATH"] = nativeLibraryDir ?: File(prootExecutable).parentFile?.absolutePath.orEmpty()
@@ -68,11 +53,27 @@ class ProotProcessLauncher(
         }.start()
     }
 
-    private fun findSetsid(): String? = listOf("/system/bin/setsid", "/usr/bin/setsid", "/bin/setsid")
-        .firstOrNull { File(it).canExecute() }
+    internal fun buildArgs(command: List<String>, workingDir: String, setsid: String?, unshare: String?): List<String> = buildList {
+            setsid?.let { add(it) }
+            unshare?.let { add(it); add("-n"); add("--") }
+            add(prootExecutable)
+            add("-r"); add(rootfsDir.absolutePath)
+            add("-w"); add(workingDir)
+            add("-0")
+            addAll(ProotDeviceBinds.bindArgs())
+            add("--link2symlink")
+            add("--kill-on-exit")
+            add("/bin/bash"); add("-c")
+            // O preâmbulo `ulimit` roda no mesmo processo bash (builtin, sem
+            // fork); `exec` substitui esse processo pelo comando real sem
+            // criar um filho extra — os limites setados valem igualmente
+            // porque setrlimit(2) sobrevive a execve(2) (POSIX).
+            add(resourceLimits.verifiedPreamble() + "exec " + command.joinToString(" ") { shellEscape(it) })
+    }
 
-    private fun findUnshare(): String? = listOf("/system/bin/unshare", "/usr/bin/unshare", "/bin/unshare")
-        .firstOrNull { File(it).canExecute() }
+    private fun findSetsid(): String? = executableFinder(listOf("/system/bin/setsid", "/usr/bin/setsid", "/bin/setsid"))
+
+    private fun findUnshare(): String? = executableFinder(listOf("/system/bin/unshare", "/usr/bin/unshare", "/bin/unshare"))
 
     private fun shellEscape(arg: String): String = if (arg.matches(Regex("^[A-Za-z0-9_\\-./=]+$"))) arg
     else "'" + arg.replace("'", "'\\''") + "'"

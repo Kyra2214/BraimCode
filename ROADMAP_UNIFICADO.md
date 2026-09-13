@@ -203,3 +203,7 @@ A distribuição dos três releases homologados foi marcada como concluída. Os 
 ### 2026-09-13 — Investigação do launcher equivalente ao bwrap no Android
 
 O Item 1 foi investigado antes de qualquer implementação. A análise confirmou que o `bubblewrap` depende de user namespaces e que o fallback setuid histórico não é uma opção para um APK Android comum. O Android fornece sandbox por UID/processo e SELinux enforcing, mas a disponibilidade de user, mount, PID e network namespaces varia conforme kernel, política SELinux, vendor e ABI. A decisão é não implementar um launcher bwrap como capacidade garantida: manter `proot` como caminho compatível, criar posteriormente um preflight de capabilities e só considerar um launcher opcional após validação em emulador e dispositivo ARM64. O relatório completo está em `docs/ANDROID_BWRAP_LAUNCHER_VIABILITY.md`.
+
+### 2026-09-13 — Validação completa do projeto
+
+A suíte Python passou com 155 testes. `./gradlew :brain:test --no-daemon` passou com `BUILD SUCCESSFUL`. O preflight `scripts/validate-release-readiness.sh` confirmou os três manifests RootFS, tamanhos publicados e sidecars SHA-256; os scripts de validação passaram em `bash -n`. `./gradlew test`, `./gradlew check` e `./gradlew :app:assembleDebug` foram executados, mas ficaram bloqueados porque o clone não possui Android SDK, `ANDROID_HOME`, `sdk.dir` em `local.properties` ou `sdkmanager`. Nenhum resultado Android foi marcado como aprovado nesta sessão. O relatório completo está em `docs/VALIDACAO_COMPLETA_2026-09-13.md`.

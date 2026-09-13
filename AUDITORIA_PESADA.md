@@ -1,203 +1,197 @@
 # Auditoria Pesada — BrainCode
 
-**Data:** 2026-09-13  
-**Commit auditado:** `b9576e43023d4e613d07c481d90c953bb8b51b7a`  
-**Escopo:** `brain_runtime/`, `brain/`, `android-module/`, `app/`, testes, contratos, RootFS/migração e documentação.  
-**Método:** inspeção do código publicado, rastreamento de instanciação/chamadas fora do próprio arquivo/teste, comparação entre README/roadmap/plano/tarefas e código real.
+**Atualização:** 2026-09-13  
+**Escopo:** `brain_runtime/`, `:brain`, `:android-module`, `:app`, execução, autorização, toolchains, Security Lab, contratos e documentação.
 
-## Veredito executivo
+## Regra da auditoria
 
-O BrainCode está **funcionalmente integrado em parte**, mas **não está totalmente unificado**. A documentação anterior inflava o estado de integração e esta auditoria corrige isso.
+> **Implementação + teste + caller real + evidência observável + documentação coerente.**
 
-Hoje existem três superfícies reais:
+Uma pendência não é considerada resolvida apenas porque foi renomeada, reclassificada ou retirada do backlog.
 
-1. **`brain_runtime/` Python:** runtime de referência, com Policy, approval, pipeline, sandbox, workflows, APIs, skills, memória, observabilidade, Project Intelligence e readiness. A suíte documentada possui 134 testes Python aprovados, mas esta auditoria não reexecutou a suíte no ambiente do GitHub connector.
-2. **Android `:app` + `:android-module`:** caminho real acionado pela UI. RootFS, proot, lifecycle, plugins, Workspace, Git status, Services/SQLite, TestLab, Security assessment, Toolchains e a primeira ponte Brain → Sandbox (`sandbox.health`) têm chamadas reais a partir do app.
-3. **`:brain` Kotlin:** biblioteca funcional e testada, mas ainda com várias ilhas que não são o caminho de execução do usuário. `BrainExecutionCoordinator`, geração de prompts, APIs avançadas e parte do EventStore permanecem fora do fluxo principal Android.
+## Correções reais aplicadas após a auditoria anterior
 
-**Conclusão:** não há base para dizer que "tudo está conectado". Há uma integração vertical real, mas existem caminhos simulados, APIs órfãs e divergências documentais que precisam continuar explícitas.
+### 1. Authorization Python — corrigido
 
-## Matriz de integração real
+`brain_runtime/authorization.py` não usa mais `@dataclass` nem oferece construtor funcional ao consumidor. A emissão normal usa `_issue()` e cria a capability com identidade do `BrainPipeline`, modo e nonce aleatório. Tentativas de construir `ExecutionAuthorization(...)` diretamente agora falham com `TypeError`.
 
-| Componente | Código existe | Teste próprio | Chamado pelo app | Classificação |
-|---|---:|---:|---:|---|
-| RootFS/proot/lifecycle | Sim | Sim | Sim | **Integrado** |
-| Plugin catalog/install/remove/rollback local | Sim | Sim | Sim | **Integrado localmente** |
-| Workspace | Sim | Sim | Sim | **Integrado básico** |
-| Git status | Sim | Sim | Sim | **Integrado básico** |
-| SQLite Service | Sim | Sim | Sim | **Integrado básico** |
-| TestLab | Sim | Sim | Sim | **Integrado básico** |
-| SecurityAssessmentEngine | Sim | Sim | Sim | **Integrado como avaliação** |
-| SecurityRegressionCorpus | Sim | Sim | Indiretamente apenas; o botão atual chama `security.evaluate(..., emptyList())` | **Parcial / ligação incompleta** |
-| ToolchainManager | Sim | Sim | Sim | **Integrado básico** |
-| BrainSandboxController / `sandbox.health` | Sim | Sim | Sim | **Integração vertical real** |
-| Planos + aprovação/retomada | Sim | Sim | Sim, via demo de `sandbox.health` | **Integrado em escopo estreito** |
-| `BrainIntegrationFacade` Skills/Memory/Discovery | Sim | Sim | Sim | **Integrado localmente, fora da Policy/Sandbox** |
-| `BrainIntegrationFacade.runHealthWorkflow()` | Sim | Sim | Sim | **Caminho demonstrativo, não execução Sandbox real** |
-| `BrainExecutionCoordinator` | Sim | Sim | Não | **Órfão do caminho Android** |
-| `DefaultPromptGenerator` | Sim | Sim | Não | **Órfão da UI** |
-| APIs avançadas do `:brain` | Sim | Sim | Não | **Órfãs/parciais** |
-| `FileEventStore` | Sim | Sim | Não no facade Android atual | **Disponível, mas não usado pelo fluxo Android** |
-| `InMemoryEventStore` no `BrainIntegrationFacade` | Sim | Sim | Sim | **Persistência falsa para eventos locais** |
-| `HttpProviderClient` / providers externos | Sim | Sim | Não | **Fora do produto offline atual** |
+**Limite:** Python continua sendo um processo confiável único; código com acesso deliberado ao mesmo processo pode inspecionar/alterar objetos privados. Isso não substitui isolamento de processo.
 
-## Achados críticos
+### 2. Authorization Kotlin — corrigido contra adulteração por `copy()`
 
-### C1 — Comando livre da UI ainda contorna a arquitetura Brain → Policy → Capability
+`PolicyDecision` agora carrega `AuthorizationToken`. O token tem construtor privado e emissão `internal` no módulo `:brain`. `ExecutionAuthorization.fromDecision()` exige `ALLOW`, TTL válido, token presente e correspondência do token com os campos relevantes.
 
-`SandboxViewModel.runCommand()` envia `listOf("/bin/bash", "-c", command)` diretamente ao `ManagedSandboxRuntime`. A tela `CommandSection` também aceita texto livre.
+O token é vinculado a:
 
-Isso é deliberadamente útil para validação manual, mas **não pode ser descrito como caminho protegido pelo PolicyBroker**. O caminho protegido é o `BrainSandboxController`/`CapabilityResolver`, não o terminal livre.
+- decisionId;
+- runId/taskId/actor;
+- capability/resource;
+- risk/approval/sandbox;
+- network policy;
+- filesystem roots;
+- budget;
+- expiry.
 
-**Impacto:** o usuário consegue executar comandos fora do catálogo de capabilities. Isso mantém uma superfície de execução privilegiada paralela à arquitetura de autorização.
+Assim, `decision.copy(capability=..., networkAllowed=..., budget=..., ...)` não transforma a cópia em autorização válida.
 
-**Classificação:** CRÍTICO para o modelo de segurança; não significa que o proot seja inútil, mas significa que a UI não deve ser tratada como execução deny-by-default.
+Foi adicionado teste específico de adulteração em `PolicyBrokerTest`.
 
-### C2 — `BrainIntegrationFacade.runHealthWorkflow()` é um workflow demonstrativo
+### 3. Superfície de comando do agente — corrigida
 
-A fachada cria um `WorkflowEngine`, mas o executor do nó retorna `WorkflowStepResult(success = true)` após uma lambda local. Ele não chama `BrainSandboxController`, `PolicyBroker`, `CapabilityResolver` ou `ManagedSandboxRuntime`.
+`AgentSandboxSession.rodarComando()` deixou de ser API pública entre módulos e passou a `internal rodarComandoInterno()`.
 
-Portanto o botão **Workflow** prova o motor de workflow local, mas **não prova execução Brain → Policy → Sandbox**.
+A API destinada ao agente é `rodarCapacidade()`, que obrigatoriamente passa pelo `CapabilityResolver`.
 
-**Classificação:** ALTO — documentação deve chamá-lo de workflow local/demonstrativo até que exista uma execução autorizada real.
+### 4. Capability genérica `sandbox.run` — removida
 
-### C3 — Security Regression Corpus existe, mas o botão atual não usa a suíte persistente
+O `CapabilityResolver` não oferece mais uma capability que transforma parâmetros do agente em comando arbitrário via `sandbox-run`.
 
-`SandboxPlatform.runSecurityRegression()` conecta scanner → probes determinísticos → `SecurityAssessmentEngine` → corpus persistente. Porém `SandboxViewModel.runSecurityAssessment()` chama diretamente `securityScanner.scan()` e `security.evaluate(..., emptyList())`.
+O catálogo atual é composto pelas capacidades explícitas de build/test/health/info/diagnose/clean.
 
-Como `SecurityTestLab` trata lista vazia como resultados sintéticos determinísticos, o botão atual executa uma avaliação sintética, mas **não percorre o método `runSecurityRegression()` que registra o corpus**.
+Isso elimina a válvula de escape que havia sido mascarada como uma capability válida.
 
-**Classificação:** ALTO — a capacidade está implementada, porém o caminho UI não fecha a integração planejada.
+### 5. Toolchain rollback — corrigido semanticamente
 
-### C4 — EventStore do Android está em memória
+O snapshot anterior registrava simplesmente os pacotes declarados e o rollback podia removê-los mesmo quando já existiam antes.
 
-`BrainIntegrationFacade` instancia `InMemoryEventStore`, apesar de o `:brain` possuir `FileEventStore` testado. Assim, `localEvents()` e `localEventsHealthy()` funcionam durante a vida da instância, mas não constituem persistência local após reinício do app.
+Agora o detector captura, antes da instalação, somente os pacotes do perfil realmente instalados e suas versões. O rollback:
 
-**Classificação:** ALTO para auditoria/observabilidade; a implementação persistente já existe, portanto o problema é de wiring.
+1. identifica pacotes adicionados pela transação;
+2. remove somente esses pacotes;
+3. tenta reinstalar os pacotes previamente existentes com suas versões observadas;
+4. só limpa o snapshot quando a restauração termina com sucesso.
 
-## Achados altos
+Se a versão anterior não estiver disponível no repositório de pacotes, o rollback falha explicitamente em vez de fingir restauração completa.
 
-### H1 — `BrainExecutionCoordinator` não é instanciado pelo caminho Android
+## Problemas que continuam reais — não foram mascarados
 
-Existe uma implementação avançada no `:brain`, com Policy, approval, retry, eventos e memória, mas o app usa `BrainSandboxController` para a fatia atual. O coordenador permanece uma API de biblioteca/teste, não uma etapa do fluxo Operações.
+### P0 — Isolamento de rede
 
-### H2 — `DefaultPromptGenerator` foi exposto na fachada, mas não existe ação correspondente na UI
+`networkAllowed=false` continua sendo uma decisão de Policy, mas `proot` sozinho não cria namespace de rede isolado. Portanto não é correto chamar isso de isolamento de segurança do host.
 
-A fachada possui `generatePrompts()` e `generateCorrectionPrompt()`, porém a UI atual não oferece uma operação que as invoque. É API acessível por código, não feature entregue ao usuário.
+**Próxima implementação correta:** mecanismo OS-level verificável; se indisponível, o caminho protegido deve falhar fechado.
 
-### H3 — Toolchain rollback não é rollback transacional completo do estado do sistema
+### P0 — Jail de filesystem
 
-O snapshot registra os pacotes do perfil e o estado anterior, mas o rollback remove os pacotes declarados. Ele não restaura versões anteriores de pacotes nem um snapshot completo do sistema de pacotes. Portanto o nome "rollback transacional" é forte demais.
+O canonical-path/workspace check protege a API da aplicação, mas não constitui uma fronteira contra acesso a `/proc`, `/sys`, `/dev`, `/data`, `/sdcard`, mounts e equivalentes.
 
-### H4 — Security Test Lab atual é regressão sintética, não ataque adversarial real
+**Próxima implementação correta:** jail OS-level verificável e testes de escape.
 
-Os cenários baseline geram `SecurityProbeResult` sintéticos. Isso é correto para uma suíte offline determinística e segura, mas não deve ser apresentado como execução de payloads de ataque reais dentro do Sandbox.
+### P0 — Árvore de processos
 
-### H5 — Discovery Android é catálogo built-in demonstrativo
+`destroy()` seguido de `destroyForcibly()` atua sobre o `Process`, mas não prova que descendentes tenham sido encerrados.
 
-`BrainIntegrationFacade.discoverBuiltInCandidate()` monta uma única fonte/candidato BrainCode em memória. Isso valida a pipeline de discovery, não um mecanismo de descoberta externa.
+**Próxima implementação correta:** process group/session e kill do grupo quando suportado pela plataforma.
 
-## Achados médios
+### P0 — Recursos OS-level
 
-- `InMemoryExperienceMemory` permanece útil para testes/fallback, mas o app usa `FileExperienceMemory`.
-- `RemotePluginCatalog` não é transporte remoto: no caminho offline ele importa snapshots explícitos. Isso está correto, mas deve continuar nomeado como catálogo remoto por snapshot, não como sincronização remota.
-- `HttpProviderClient` e providers externos continuam fora do escopo Android offline.
-- O RootFS migrado do SandBox deve continuar imutável; não há indicação nesta auditoria de que seja necessário reconstruí-lo.
-- `reference/braincode-python/` é histórico e não participa do build ativo.
+O runtime possui timeout e collector com limite de saída, mas não há evidência de enforcement OS-level completo de CPU, memória, PIDs, FDs, disco e árvore de processos.
 
-## O que está realmente conectado
+### P1 — Trust chain
 
-O caminho vertical mais forte atualmente é:
+Hashes dos RootFS verificam integridade do artefato, mas não constituem autenticação da autoridade que publicou o manifest. Os RootFS migrados do SandBox permanecem copy-only e não devem ser reconstruídos.
+
+### P1 — Skills
+
+Hash/proveniência/licença e checks locais existem, mas metadados fornecidos pelo próprio skill não devem ser tratados como autoridade final de confiança.
+
+### P1 — Planner/executor
+
+A arquitetura correta permanece:
 
 ```text
-UI
+Task
  ↓
-SandboxViewModel.runBrainHealthCheck()
+Planner
  ↓
-BrainSandboxController.healthCheck()
- ↓
-BrainSandboxExecutionBridge
- ↓
-CicloExecucaoPlano
+ExecutionPlan
  ↓
 PolicyBroker
  ↓
-AgentSandboxSession
+AuthorizedPlan
+ ↓
+Agent
  ↓
 CapabilityResolver
  ↓
-ManagedSandboxRuntime / proot
+Sandbox
+```
+
+Ainda é necessário um teste de arquitetura que prove que nenhum executor consegue reconstruir uma execução diretamente do `Task` original, ignorando o plano autorizado.
+
+### P1 — Credenciais
+
+Credential refs precisam continuar vinculados a run/agent/capability/provider/purpose/expiry, com subprocesso tratado como fronteira de exfiltração.
+
+### P1 — SSRF
+
+O caminho de pesquisa/HTTP ainda precisa de proteção contra DNS rebinding: validar o destino não basta se a conexão posterior puder resolver para outro endereço.
+
+### P1 — Persistência/eventos
+
+A fachada já usa `FileEventStore` para eventos locais. Continua pendente provar rotação/compactação sem quebrar a continuidade verificável do hash-chain quando essa operação existir.
+
+### P1 — Leases
+
+Workflow leases ainda precisam de fencing token para impedir que uma execução antiga reassuma o recurso após perda/renovação concorrente.
+
+## UI
+
+A UI operacional ainda está em construção. Portanto o antigo item de “terminal livre da UI” **não é tratado como pendência atual de produto**.
+
+Isso não autoriza shell arbitrário no núcleo: a superfície do agente já foi fechada para `rodarCapacidade()` e `sandbox.run` foi removida do catálogo.
+
+Quando a UI operacional for construída, ela deverá nascer sobre essas APIs e não reintroduzir terminal arbitrário fora da Policy.
+
+## Security Test Lab
+
+O corpus atual é **sintético/determinístico**. Isso é deliberado para regressão offline segura. Ele não deve ser descrito como execução de payloads adversariais reais.
+
+O fluxo persistente implementado é:
+
+```text
+SecurityProjectScanner
  ↓
-ResultadoCiclo / evidência
+SecurityScenarioCatalog
  ↓
-UI
+SecurityRegressionCorpus.runDeterministic()
+ ↓
+SecurityAssessmentEngine
+ ↓
+SecurityRegressionCorpus.record(observedResults)
 ```
 
-O `SandboxPlatform` também possui caminhos reais para:
+Ainda falta uma camada de testes adversariais controlados em ambiente realmente isolado antes de usar o laboratório como evidência de isolamento OS-level.
 
-```text
-UI → SandboxViewModel → SandboxPlatform
-   ├─ Plugins
-   ├─ Workspace
-   ├─ Git status
-   ├─ Services / SQLite
-   ├─ TestLab
-   ├─ Security assessment
-   └─ Toolchains
-```
+## Workflow da fachada
 
-Já o caminho abaixo **não é real ainda**:
+`BrainIntegrationFacade.runHealthWorkflow()` permanece workflow local/demonstrativo. Ele não é contado como execução real Brain → Policy → Sandbox.
 
-```text
-UI → BrainExecutionCoordinator → Policy → Sandbox → resultado
-```
+Isso está documentado como tal e não deve ser usado como evidência de integração vertical.
 
-E o caminho abaixo é apenas demonstrativo:
+## Estado de integração
 
-```text
-UI → BrainIntegrationFacade.runHealthWorkflow()
-   → WorkflowEngine → lambda local → sucesso
-```
+Existe integração vertical real em partes do Android, especialmente no caminho de health/plan/capability/Sandbox. Entretanto, nem toda API do `:brain` participa do fluxo Android atual.
 
-## Verificação de órfãos
+Não há justificativa para forçar `BrainExecutionCoordinator`, prompt generator ou APIs avançadas à UI apenas para marcar “integrado”. Eles permanecem APIs internas até haver caso de uso real.
 
-Foram considerados órfãos os componentes que possuem implementação/teste mas não possuem chamada fora do próprio módulo/teste. Os principais encontrados nesta rodada são:
+## Validação
 
-- `BrainExecutionCoordinator` no app Android;
-- `DefaultPromptGenerator` na UI;
-- APIs avançadas do `:brain`;
-- `FileEventStore` no facade Android;
-- `SecurityRegressionCorpus` no botão de Security;
-- parte do fluxo de prompts/correção;
-- transporte remoto real de plugins, que é propositalmente fora do offline.
+As alterações desta rodada foram publicadas diretamente no repositório `Kyra2214/BrainCode`.
 
-## Estado de segurança
+**Importante:** esta rodada foi realizada por inspeção e escrita no repositório. Não foi executado Gradle, suíte Python ou APK ARM64 através do conector nesta rodada. Portanto não há novo “BUILD PASS” ou “TEST PASS” sendo alegado aqui.
 
-O projeto possui hardening relevante, mas o Android não deve ser chamado de ambiente isolado de produção. O terminal livre, proot e os controles de recurso continuam sujeitos às garantias do host/kernel. O runtime Python também depende de isolamento OS-level fornecido pelo host para garantias fortes.
+A próxima validação obrigatória é executar:
 
-## Validação desta auditoria
+- testes `brain_runtime`;
+- testes `:brain`;
+- testes `:android-module`;
+- testes `:app`;
+- build Debug;
+- validação funcional em ARM64.
 
-Esta rodada foi uma **auditoria estática e de integração no código publicado**. O commit auditado é `b9576e43023d4e613d07c481d90c953bb8b51b7a`. Não houve execução local de Gradle/Python a partir deste conector e não existe evidência de workflow CI para este commit nesta rodada. Portanto, esta auditoria não inventa um novo "PASS" de build/teste.
+## Resultado honesto
 
-As validações funcionais anteriores continuam sendo histórico do projeto, mas precisam ser repetidas após qualquer correção de código.
+Os problemas que eram realmente corrigíveis no código e estavam sendo tratados como resolvidos por documentação foram corrigidos agora: **autorização, adulteração de decisão, superfície de comando do agente, capability genérica e rollback de toolchain**.
 
-## Próximas correções prioritárias
-
-1. Fechar ou restringir o comando livre da UI; se mantido para diagnóstico, marcar explicitamente como modo de manutenção e impedir classificação como caminho autorizado.
-2. Fazer o botão Security usar `runSecurityRegression()` e registrar o corpus.
-3. Trocar `InMemoryEventStore` por `FileEventStore` no facade Android.
-4. Separar claramente `WorkflowEngine` demonstrativo de execução real em Sandbox.
-5. Integrar `BrainExecutionCoordinator` somente quando houver um caso de uso UI real que precise de múltiplas etapas; até lá, mantê-lo como API interna documentada.
-6. Expor geração de prompts na UI ou remover a promessa de feature disponível.
-7. Reclassificar Toolchain rollback como rollback de pacote declarado, ou implementar restauração de versão real.
-8. Reexecutar testes/build e validar em ARM64 device/emulador após as correções.
-
-## Referências
-
-- `README.md`
-- `PLANO_DE_ACAO.md`
-- `ROADMAP_UNIFICADO.md`
-- `TAREFAS_PENDENTES.md`
-- `docs/BACKLOG_OFFLINE_ITEM_5.md`
-- `docs/SECURITY_TEST_LAB.md`
-- `docs/SANDBOX_RELEASE_MIGRATION.md`
+Os problemas que dependem de isolamento OS-level continuam explicitamente abertos. Não foram renomeados para “resolvidos”.

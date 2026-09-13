@@ -160,11 +160,13 @@ private fun OperationsScreen(viewModel: SandboxViewModel) {
                     OutlinedButton(onClick = { viewModel.refreshBrainCatalogs() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Catálogos") }
                     Button(onClick = { viewModel.runBrainWorkflow() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Workflow") }
                     OutlinedButton(onClick = { viewModel.runDiscovery() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Discovery") }
+                    OutlinedButton(onClick = { viewModel.publishLocalDelivery() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Recibo local") }
                 }
                 viewModel.brainSkillSummary.forEach { Text("Skill: $it", style = MaterialTheme.typography.bodySmall) }
                 viewModel.lastWorkflowStatus?.let { Text("Workflow: $it") }
                 viewModel.memorySuccessRate?.let { Text("Memory success rate: ${(it * 100).toInt()}%", style = MaterialTheme.typography.bodySmall) }
                 viewModel.discoverySummary?.let { Text("Discovery: $it", style = MaterialTheme.typography.bodySmall) }
+                viewModel.deliverySummary?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
         Card(modifier = Modifier.fillMaxWidth()) {

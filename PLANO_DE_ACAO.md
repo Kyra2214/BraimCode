@@ -35,14 +35,14 @@ Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app 
 | `SecurityScenarioCatalog` | `app/sandbox` | Conectado à avaliação de segurança como catálogo baseline | Expandir cenários e evidências | — |
 | `RemotePluginCatalog` | `app/sandbox` | Catálogo composto já ligado ao `PluginManager`; importação de snapshot é explícita e sem rede implícita | **Implementação futura:** transporte remoto e autorização local acionada pela UI | — |
 | `GitOperation` (enum) | `GitManager.kt` | Não usado nem pelo próprio arquivo | — | Removido nesta rodada |
-| `ObservableDelivery` | `brain` | Entrega local com hash e recibo, ainda não necessária para o fluxo offline atual | **Pode ser integrado localmente** para emitir recibos de artefatos na aba Operações | — |
+| `ObservableDelivery` | `brain` | Entrega local com hash e recibo, agora acionada pelo botão **Recibo local** na aba Operações | **Integrado localmente**: gera recibo de artefatos do workspace sem rede | — |
 | `InMemoryExperienceMemory` | `brain` | Implementação volátil; o app já usa `FileExperienceMemory` persistente | **Manter como fallback/teste local**, sem substituir a persistência do app | — |
 | `DefaultPromptGenerator` | `brain` | Gerador determinístico local, sem dependência de servidor | **Implementação futura local** quando a UI expuser geração de prompts/planos | — |
 | `HttpProviderClient` | `brain` | Depende de endpoint, credenciais e rede; não pertence ao modo Android offline | — | **Implementação futura condicionada a transporte/servidor** |
 | `reference/braincode-python/` | raiz | Snapshot congelado, nada importa dele | — | Mover pra fora do repo de build ou marcar com `.buildignore`/README já existe, mas deixar isso explícito no `README.md` principal |
 | `__pycache__/*.pyc` no zip | `tests/`, `brain_runtime/` | Contradiz o próprio `.gitignore` | — | Apagar antes do próximo commit/export |
 
-**Decisão de produto para Android offline:** manter no caminho ativo tudo que é local e persistente — Workspace, Git básico, Services, TestLab, Security, Toolchains, Skills, Workflows, Memory, Discovery e catálogo built-in/remoto por snapshot explícito. Marcar como implementação futura o `BrainExecutionCoordinator` avançado, `ObservableDelivery` na UI, `DefaultPromptGenerator` exposto, transporte remoto de plugins e `HttpProviderClient`; os dois últimos dependem de rede/servidor ou credenciais e não devem ser simulados como offline.
+**Decisão de produto para Android offline:** manter no caminho ativo tudo que é local e persistente — Workspace, Git básico, Services, TestLab, Security, Toolchains, Skills, Workflows, Memory, Discovery, `ObservableDelivery` e catálogo built-in/remoto por snapshot explícito. Marcar como implementação futura o `BrainExecutionCoordinator` avançado, `DefaultPromptGenerator` exposto, transporte remoto de plugins e `HttpProviderClient`; os dois últimos dependem de rede/servidor ou credenciais e não devem ser simulados como offline.
 
 ### Primeira fatia implementada — 2026-09-12
 

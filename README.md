@@ -87,10 +87,11 @@ Os testes de `:android-module` exigem Android SDK configurado via `ANDROID_HOME`
 O caminho de produto atual é Android offline e sem servidor. Por isso, o app
 prioriza capacidades locais e persistentes — Sandbox, Skills, Workflows,
 Memory em arquivo, Discovery, Workspace, Git básico, Services, Security,
-Toolchains, TestLab e plugins por catálogo built-in ou snapshot explícito. O
-transporte remoto de plugins, `HttpProviderClient`, providers externos,
-`BrainExecutionCoordinator` avançado, entrega observável exposta na UI e
-geração de prompts como produto ficam como implementações futuras; não são
+Toolchains, TestLab, `ObservableDelivery` e plugins por catálogo built-in ou
+snapshot explícito. `ObservableDelivery` gera recibos com hashes dos artefatos
+do workspace na aba Operações, sem rede. O transporte remoto de plugins,
+`HttpProviderClient`, providers externos, `BrainExecutionCoordinator` avançado
+e geração de prompts como produto ficam como implementações futuras; não são
 tratados como disponíveis no modo offline.
 
 ## Limites de implantação

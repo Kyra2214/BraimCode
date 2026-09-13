@@ -50,6 +50,7 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 - [x] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager` na aba **Operações**; criação/listagem de projetos, `git status` e ciclo básico do SQLite usam o executor protegido compartilhado.
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
 - [x] Ligar `RemotePluginCatalog` ao `PluginManager` real por catálogo composto; snapshots aceitos passam a aparecer na busca e podem ser instalados pelo mesmo fluxo protegido.
+- [x] Integrar `ObservableDelivery` ao app offline; o botão **Recibo local** gera hashes e recibo dos artefatos do workspace sem rede.
 - [ ] Adicionar transporte remoto e autorização local acionada pela UI para coletar/importar snapshots; a API atual permanece explícita e sem rede implícita.
 - [x] Remover o enum `GitOperation` não utilizado do `GitManager`.
 - [x] Verificar e remover `__pycache__/*.pyc` do pacote; nenhuma ocorrência permanece.

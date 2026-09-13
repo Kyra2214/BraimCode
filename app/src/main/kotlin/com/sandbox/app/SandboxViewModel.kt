@@ -132,6 +132,8 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         private set
     var discoverySummary by mutableStateOf<String?>(null)
         private set
+    var deliverySummary by mutableStateOf<String?>(null)
+        private set
 
     fun runDiagnostics() {
         viewModelScope.launch {
@@ -413,6 +415,22 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }.getOrElse { "Discovery falhou: ${it.message}" }
     }
 
+    /** Gera um recibo local com hashes dos artefatos do workspace, sem rede. */
+    fun publishLocalDelivery() {
+        val integration = brainIntegration ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val root = File(getApplication<Application>().filesDir, "sandbox/workspace")
+            val summary = runCatching {
+                val receipt = integration.publishLocalDelivery(root, "delivery-${System.currentTimeMillis()}")
+                "Recibo local: ${receipt.artifacts.size} artefato(s), " +
+                    "${receipt.artifacts.sumOf { it.bytes }} bytes, " +
+                    "${receipt.artifacts.firstOrNull()?.sha256?.take(12) ?: "sem arquivos"}"
+            }.getOrElse { "Falha na entrega local: ${it.message ?: "erro desconhecido"}" }
+            withContext(Dispatchers.Main) { deliverySummary = summary }
+        }
+    }
+
     fun resetSandbox() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -444,6 +462,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lastWorkflowStatus = null
             memorySuccessRate = null
             discoverySummary = null
+            deliverySummary = null
             localModelProgress = null
             localModelReady = false
             localModelError = null

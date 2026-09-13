@@ -7,6 +7,8 @@ import com.brain.discovery.ExplorerRegion
 import com.brain.discovery.ExplorerSource
 import com.brain.discovery.ExplorerLicense
 import com.brain.discovery.OpenSourceStatus
+import com.brain.delivery.DeliveryReceipt
+import com.brain.delivery.ObservableDelivery
 import com.brain.memory.Experiencia
 import com.brain.memory.ExperienceMemory
 import com.brain.memory.FileExperienceMemory
@@ -29,6 +31,7 @@ class BrainIntegrationFacade(stateDir: File) {
     private val workflows = WorkflowEngine(File(stateDir, "workflows.json"))
     private val memory: ExperienceMemory = FileExperienceMemory(File(stateDir, "memory.jsonl"))
     private val discovery = ExplorerIntelligencePipeline()
+    private val delivery = ObservableDelivery()
 
     init {
         skills.register(
@@ -78,6 +81,18 @@ class BrainIntegrationFacade(stateDir: File) {
     }
 
     suspend fun memoryRate(): Double = memory.taxaSucessoPorEstrategia("local-sandbox")
+
+    /** Publica somente um recibo local dos artefatos; não envia dados para rede. */
+    fun publishLocalDelivery(root: File, runId: String): DeliveryReceipt = delivery.publish(
+        root = root,
+        runId = runId,
+        sessionId = "android-local",
+        taskId = "workspace-delivery",
+        stepId = "collect-artifacts",
+        eventId = "delivery:$runId",
+        provider = "local-sandbox",
+        startedAt = Instant.now()
+    )
 
     fun discoverBuiltInCandidate(): com.brain.discovery.ExplorerPipelineResult = discovery.run(
         weekEpochMs = System.currentTimeMillis(),

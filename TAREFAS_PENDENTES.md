@@ -2,7 +2,7 @@
 
 ## Atualização de status
 
-A migração dos releases RootFS homologados foi concluída e não é mais uma pendência operacional.
+A migração dos releases RootFS homologados foi concluída e não é mais uma pendência operacional. O backlog local offline do item 5 também foi fechado em código e documentação.
 
 ### Concluída
 
@@ -15,52 +15,35 @@ A migração dos releases RootFS homologados foi concluída e não é mais uma p
 - [x] Atualizar os três manifests para as URLs do `Kyra2214/BrainCode`.
 - [x] Publicar documentação específica de cada perfil em `docs/`.
 
-A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDBOX_RELEASE_MIGRATION.md), com análises por release em:
+A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDBOX_RELEASE_MIGRATION.md).
 
-- [`docs/SANDBOX_RELEASE_0.3.3.md`](docs/SANDBOX_RELEASE_0.3.3.md)
-- [`docs/SANDBOX_RELEASE_AGENT_EXTRA_0.4.1.md`](docs/SANDBOX_RELEASE_AGENT_EXTRA_0.4.1.md)
-- [`docs/SANDBOX_RELEASE_AGENT_ANDROID_0.5.0.md`](docs/SANDBOX_RELEASE_AGENT_ANDROID_0.5.0.md)
+## Backlog local offline — Item 5
 
-## Pendências remanescentes
+- [x] Expandir Toolchains locais com rollback transacional e cache de metadados; SDK/NDK de implantação ficam fora desta lista.
+- [x] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e integração do readiness gate.
+- [x] Expor `BrainExecutionCoordinator` como API avançada de coordenação de planos multi-etapas no módulo `:brain`, com Policy, aprovação, retry, eventos e memória; a fatia Android usa o controlador autorizado existente.
+- [x] Expor `DefaultPromptGenerator` pela camada Android de integração para geração local de prompts de roadmap e correções com `PromptLibrary`.
+- [x] Integrar APIs/Events locais avançados ao fluxo Brain/Operações sem provider externo, incluindo eventos locais, consulta por run e verificação de integridade.
+- [x] Adicionar regressões determinísticas para corpus de segurança e transações/cache de toolchain.
+- [x] Documentar o fechamento do item em [`docs/BACKLOG_OFFLINE_ITEM_5.md`](docs/BACKLOG_OFFLINE_ITEM_5.md).
 
-### Unificação Brain ↔ Sandbox
+## Unificação Brain ↔ Sandbox
 
 - [x] Ligar uma primeira operação real da UI ao `:brain`: o botão **Verificar pelo Brain** executa `sandbox.health` através de Policy, sessão autorizada, capability resolver e runtime Sandbox.
 - [x] Expandir o controlador para executar planos, exigir aprovação em passos HIGH/CRITICAL, persistir solicitações em `approvals.jsonl` e permitir consumo único via retomada na aba **Operações**.
-- As validações de SDK, device, assinatura e host foram removidas da lista operacional e estão registradas separadamente como gates externos em `docs/RELEASE_READINESS.md`.
+- [x] Validar os RootFS/profiles `0.3.3`, `0.4.1` e `0.5.0` no Sandbox de origem; a migração preservou os artefatos hardened byte-a-byte.
+- [x] Expandir o gerenciamento offline de plugins com snapshots versionados, rollback local do estado persistido e histórico JSONL de instalações/remoções.
 
-- [x] Validar os RootFS/profiles `0.3.3`, `0.4.1` e `0.5.0` no Sandbox de origem; a migração preservou os artefatos hardened byte-a-byte. A execução no app/device permanece apenas como teste de implantação.
-- [x] Expandir o gerenciamento offline de plugins com snapshots versionados, rollback local do estado persistido e histórico JSONL de instalações/remoções; a reversão de pacotes já alterados no RootFS não é simulada.
-- [ ] Expandir Toolchains locais com rollback transacional e cache de metadados; SDK/NDK de implantação ficam fora desta lista.
-- [ ] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e integração do readiness gate.
+As validações de SDK, device, assinatura e host foram removidas da lista operacional e estão registradas separadamente como gates externos em `docs/RELEASE_READINESS.md`.
 
-Essas pendências são acompanhadas em [`ROADMAP_UNIFICADO.md`](ROADMAP_UNIFICADO.md) e não devem ser usadas como justificativa para reconstruir ou substituir os RootFS 0.3.3, 0.4.1 ou 0.5.0 já homologados.
+## Fora do backlog offline
 
-## Pendências de integração (auditoria de 2026-09-12)
+- APK Release;
+- keystore e assinatura de produção;
+- servidor/backend distribuído;
+- Postgres/Redis/etcd;
+- coordenação multi-host;
+- isolamento OS-level de produção dependente do host;
+- transporte remoto de plugins e `HttpProviderClient`.
 
-Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalhamento e critério de decisão (integrar vs. arquivar) em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
-
-- [x] Ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel`; o caminho de health, planos e retomada agora é acionável pela UI. `BrainExecutionCoordinator` permanece como API avançada ainda não exposta.
-- [x] Integrar Skills, Workflows, Memory e Discovery ao app por `BrainIntegrationFacade`, com catálogo, workflow de health, memória local e pipeline Discovery acionáveis na aba **Operações**. APIs, Events e o `BrainExecutionCoordinator` avançado permanecem para a próxima fatia.
-- [x] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager` na aba **Operações**; criação/listagem de projetos, `git status` e ciclo básico do SQLite usam o executor protegido compartilhado.
-- [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
-- [x] Ligar `RemotePluginCatalog` ao `PluginManager` real por catálogo composto; snapshots aceitos passam a aparecer na busca e podem ser instalados pelo mesmo fluxo protegido.
-- [x] Integrar `ObservableDelivery` ao app offline; o botão **Recibo local** gera hashes e recibo dos artefatos do workspace sem rede.
-- Futuro, fora do backlog offline: adicionar transporte remoto e autorização local para coletar/importar snapshots; a API atual permanece explícita e sem rede implícita.
-- [ ] Expor `BrainExecutionCoordinator` para planos offline avançados de múltiplas etapas.
-- [ ] Expor `DefaultPromptGenerator` pela UI para gerar prompts de tarefas e correções usando biblioteca local.
-- [ ] Integrar APIs/Events locais avançados ao fluxo de Operações sem provider externo.
-- [x] Remover o enum `GitOperation` não utilizado do `GitManager`.
-- [x] Verificar e remover `__pycache__/*.pyc` do pacote; nenhuma ocorrência permanece.
-- [x] Deixar explícito no `README.md` que `reference/braincode-python/` é histórico e não faz parte do build ativo.
-
-## Decisão de produto — Android offline sem servidor
-
-O caminho ativo do app deve priorizar componentes locais, persistentes e acionáveis
-sem backend: Skills, Workflows, Memory em arquivo, Discovery, Workspace, Git
-básico, Services, Security, Toolchains, TestLab, `ObservableDelivery` e catálogo
-de plugins por snapshot explícito. O `BrainExecutionCoordinator` avançado,
-`DefaultPromptGenerator` exposto e um fluxo remoto completo de plugins ficam como
-implementações futuras locais ou de integração, conforme o caso de uso.
-`HttpProviderClient` fica explicitamente condicionado a servidor, rede e
-credenciais e não faz parte do modo offline.
+Esses itens não justificam reconstruir ou substituir os RootFS 0.3.3, 0.4.1 ou 0.5.0 já homologados.

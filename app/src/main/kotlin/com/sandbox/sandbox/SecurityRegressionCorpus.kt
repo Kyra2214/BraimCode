@@ -24,14 +24,25 @@ class SecurityRegressionCorpus(private val file: File) {
         SecurityProbeResult(scenario.id, completed = true, blocked = blocked, output = "synthetic:${scenario.id}:blocked=$blocked")
     }
 
-    fun record(report: SecurityTestReport) {
+    /** Registra exatamente o resultado observado pelos probes, sem inferência a partir de findings. */
+    fun record(report: SecurityTestReport, observedResults: List<SecurityProbeResult>) {
+        val observedById = observedResults.associateBy { it.scenarioId }
         val entries = report.scenarios.map { scenario ->
+            val observed = observedById[scenario.id]
             val evidence = report.evidence.firstOrNull { it.scenarioId == scenario.id }
-            val observedBlocked = !report.findings.any { it.scenarioId == scenario.id && it.title == "Resultado inesperado" }
-            Entry(scenario.id, scenario.expectedBlocked, observedBlocked, evidence?.digestSha256 ?: sha256("missing:${scenario.id}"), System.currentTimeMillis())
+            Entry(
+                scenarioId = scenario.id,
+                expectedBlocked = scenario.expectedBlocked,
+                observedBlocked = observed?.blocked ?: false,
+                digest = evidence?.digestSha256 ?: sha256("missing:${scenario.id}"),
+                recordedAt = System.currentTimeMillis()
+            )
         }
         append(entries)
     }
+
+    /** Compatibilidade para relatórios externos sem probe explícito: marca observação como desconhecida/false. */
+    fun record(report: SecurityTestReport) = record(report, emptyList())
 
     fun entries(): List<Entry> = if (!file.isFile) emptyList() else file.readLines(StandardCharsets.UTF_8).mapNotNull { line ->
         val p = line.split('|', limit = 5)

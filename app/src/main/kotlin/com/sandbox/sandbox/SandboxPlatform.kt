@@ -3,7 +3,7 @@ package com.sandbox.sandbox
 import com.sandbox.runtime.ManagedSandboxRuntime
 import java.io.File
 
-/** Fachada das fases 1–8 e do backlog local offline; mantém o runtime como única porta de execução. */
+/** Fachada das fases locais; mantém o runtime como única porta de execução autorizada. */
 class SandboxPlatform(
     val runtime: ManagedSandboxRuntime,
     workspaceRoot: File,
@@ -39,12 +39,12 @@ class SandboxPlatform(
     /** Corpus de regressão persistente, executado somente com resultados sintéticos determinísticos. */
     val securityCorpus = SecurityRegressionCorpus(File(workspaceRoot, "security/security_regression_corpus.jsonl"))
 
-    /** Executa a suíte baseline offline e registra a evidência no corpus persistente. */
+    /** Executa scanner + probes determinísticos + assessment e registra os resultados observados. */
     fun runSecurityRegression(scanRoot: File): SecurityAssessment {
         val scan = securityScanner.scan(scanRoot)
         val results = securityCorpus.runDeterministic(securityScenarios)
         val assessment = security.evaluate(scan, securityScenarios, results)
-        securityCorpus.record(assessment.lab)
+        securityCorpus.record(assessment.lab, results)
         return assessment
     }
 

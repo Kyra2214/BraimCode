@@ -3,7 +3,7 @@ package com.sandbox.sandbox
 import com.sandbox.runtime.ManagedSandboxRuntime
 import java.io.File
 
-/** Fachada das fases 1–8; mantém o runtime da Fase 0 como única porta de execução. */
+/** Fachada das fases 1–8 e do backlog local offline; mantém o runtime como única porta de execução. */
 class SandboxPlatform(
     val runtime: ManagedSandboxRuntime,
     workspaceRoot: File,
@@ -15,9 +15,6 @@ class SandboxPlatform(
 ) {
     private val securedExecutor = SecureCommandExecutor(ManagedRuntimeExecutor(runtime), policy)
     private val remotePluginCatalog = RemotePluginCatalog(trustedRemotePluginSourceIds)
-    // Fase 1 Expandida: persistência em JSON (mais robusta que TSV) com
-    // busca e filtros. `componentStateFile` (legado TSV) é migrado
-    // automaticamente na primeira leitura, se existir.
     private val componentJsonFile = File(componentStateFile.parentFile, "components.json")
     private val pluginSnapshotStore = PluginSnapshotStore(
         File(componentJsonFile.parentFile ?: componentJsonFile.absoluteFile.parentFile, "plugin_snapshots.json"),
@@ -34,16 +31,27 @@ class SandboxPlatform(
     val git = GitManager(securedExecutor)
     val diagnostics = SandboxDiagnostics(securedExecutor)
     val testLab = TestLab(securedExecutor)
-    /** Todos os subsistemas usam o mesmo executor protegido e o mesmo workspace. */
     val toolchains = ToolchainManager(securedExecutor, File(workspaceRoot, "toolchains"))
     val security = SecurityAssessmentEngine()
     val securityScanner = SecurityProjectScanner()
     val securityScenarios = SecurityScenarioCatalog.baseline
     val securityPolicy: SandboxSecurityPolicy = policy
+    /** Corpus de regressão persistente, executado somente com resultados sintéticos determinísticos. */
+    val securityCorpus = SecurityRegressionCorpus(File(workspaceRoot, "security/security_regression_corpus.jsonl"))
+
+    /** Executa a suíte baseline offline e registra a evidência no corpus persistente. */
+    fun runSecurityRegression(scanRoot: File): SecurityAssessment {
+        val scan = securityScanner.scan(scanRoot)
+        val results = securityCorpus.runDeterministic(securityScenarios)
+        val assessment = security.evaluate(scan, securityScenarios, results)
+        securityCorpus.record(assessment.lab)
+        return assessment
+    }
+
+    fun securityCorpusDigest(): String = securityCorpus.digest()
 
     /** Importa um snapshot já coletado; não realiza rede, instalação ou execução. */
-    fun importRemotePluginSnapshot(snapshot: RemoteCatalogSnapshot): RemoteCatalogResult =
-        remotePluginCatalog.importSnapshot(snapshot)
+    fun importRemotePluginSnapshot(snapshot: RemoteCatalogSnapshot): RemoteCatalogResult = remotePluginCatalog.importSnapshot(snapshot)
 
     fun close() = runtime.shutdown()
 }

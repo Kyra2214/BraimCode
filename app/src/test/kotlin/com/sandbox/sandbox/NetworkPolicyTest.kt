@@ -33,6 +33,16 @@ class NetworkPolicyTest {
     }
 
     @Test(expected = IllegalArgumentException::class)
+    fun `nao aceita ipv4 mapeado em ipv6`() {
+        NetworkRule("api", "tcp", 443, setOf("::ffff:127.0.0.1"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `nao aceita link local ipv6`() {
+        NetworkRule("api", "tcp", 443, setOf("fe80::1"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
     fun `nao aceita porta fora do intervalo`() {
         NetworkRule("api", "tcp", 0)
     }

@@ -69,7 +69,7 @@ Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e
 
 - [x] Criar e executar o preflight de release `scripts/validate-release-readiness.sh`, verificando manifests, tamanhos publicados e sidecars SHA-256 dos três RootFS.
 - [x] Validar os releases RootFS/proot dos perfis `0.3.3`, `0.4.1` e `0.5.0` — validação e hardening já realizados no Sandbox de origem; os artefatos foram migrados byte-a-byte para o BrainCode e permanecem imutáveis.
-- [ ] Expandir o gerenciamento offline de plugins com versionamento de snapshots, rollback local e histórico de instalações.
+- [x] Expandir o gerenciamento offline de plugins com snapshots versionados, rollback local do estado persistido e histórico JSONL de instalações/remoções; a reversão de pacotes já alterados no RootFS não é simulada.
 - [ ] Expandir Toolchains locais com rollback transacional e cache de metadados.
 - [ ] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e readiness gate.
 - [ ] Expor o `BrainExecutionCoordinator` para planos offline avançados de múltiplas etapas.

@@ -19,10 +19,16 @@ class SandboxPlatform(
     // busca e filtros. `componentStateFile` (legado TSV) é migrado
     // automaticamente na primeira leitura, se existir.
     private val componentJsonFile = File(componentStateFile.parentFile, "components.json")
+    private val pluginSnapshotStore = PluginSnapshotStore(
+        File(componentJsonFile.parentFile ?: componentJsonFile.absoluteFile.parentFile, "plugin_snapshots.json"),
+        File(componentJsonFile.parentFile ?: componentJsonFile.absoluteFile.parentFile, "plugin_history.jsonl")
+    )
     val plugins = SearchablePluginManager(
         securedExecutor,
-        JsonComponentRepository(componentJsonFile, legacyTsvFile = componentStateFile)
-    ) { (BuiltInCatalog.all + remotePluginCatalog.components()).distinctBy { it.id } }
+        JsonComponentRepository(componentJsonFile, legacyTsvFile = componentStateFile),
+        catalogProvider = { (BuiltInCatalog.all + remotePluginCatalog.components()).distinctBy { it.id } },
+        snapshotStore = pluginSnapshotStore
+    )
     val workspace = WorkspaceManager(workspaceRoot)
     val services = ServiceManager(securedExecutor, serviceStateDir, NetworkPolicyBroker(networkPolicy))
     val git = GitManager(securedExecutor)

@@ -44,6 +44,112 @@ data class InstalledComponent(
     val notes: String? = null
 )
 
+data class PluginSnapshot(
+    val version: Long,
+    val createdAt: Long,
+    val reason: String,
+    val components: List<InstalledComponent>
+)
+
+data class PluginOperationRecord(
+    val timestamp: Long,
+    val operation: String,
+    val componentId: String?,
+    val snapshotVersion: Long?,
+    val success: Boolean,
+    val message: String? = null
+)
+
+/** Persistência local, versionada e atômica do estado anterior às operações. */
+class PluginSnapshotStore(private val file: File, private val historyFile: File) {
+    private val lock = Any()
+
+    init {
+        file.parentFile?.mkdirs()
+        historyFile.parentFile?.mkdirs()
+    }
+
+    @Synchronized
+    fun create(reason: String, components: List<InstalledComponent>): PluginSnapshot {
+        val snapshots = snapshots().toMutableList()
+        val snapshot = PluginSnapshot(
+            version = (snapshots.maxOfOrNull { it.version } ?: 0L) + 1L,
+            createdAt = System.currentTimeMillis(),
+            reason = reason,
+            components = components.toList()
+        )
+        snapshots += snapshot
+        writeSnapshots(snapshots.takeLast(20))
+        return snapshot
+    }
+
+    @Synchronized
+    fun snapshots(): List<PluginSnapshot> {
+        if (!file.isFile || file.readText().isBlank()) return emptyList()
+        val root = runCatching { MiniJson.parse(file.readText()) as? Map<*, *> }.getOrNull() ?: return emptyList()
+        return (root["snapshots"] as? List<*>)?.mapNotNull { parseSnapshot(it) }.orEmpty()
+    }
+
+    @Synchronized
+    fun get(version: Long): PluginSnapshot? = snapshots().firstOrNull { it.version == version }
+
+    @Synchronized
+    fun record(record: PluginOperationRecord) {
+        val line = "{" +
+            "\"timestamp\": ${record.timestamp}, " +
+            "\"operation\": \"${MiniJson.escape(record.operation)}\", " +
+            "\"componentId\": ${record.componentId?.let { "\"${MiniJson.escape(it)}\"" } ?: "null"}, " +
+            "\"snapshotVersion\": ${record.snapshotVersion ?: "null"}, " +
+            "\"success\": ${record.success}, " +
+            "\"message\": ${record.message?.let { "\"${MiniJson.escape(it)}\"" } ?: "null"}" +
+            "}\n"
+        historyFile.appendText(line)
+    }
+
+    @Synchronized
+    fun history(limit: Int = 50): List<PluginOperationRecord> {
+        if (!historyFile.isFile) return emptyList()
+        return historyFile.readLines().takeLast(limit).mapNotNull { line ->
+            runCatching {
+                val value = MiniJson.parse(line) as Map<*, *>
+                PluginOperationRecord(
+                    timestamp = (value["timestamp"] as Number).toLong(),
+                    operation = value["operation"] as String,
+                    componentId = value["componentId"] as String?,
+                    snapshotVersion = (value["snapshotVersion"] as Number?)?.toLong(),
+                    success = value["success"] as Boolean,
+                    message = value["message"] as String?
+                )
+            }.getOrNull()
+        }
+    }
+
+    private fun parseSnapshot(raw: Any?): PluginSnapshot? = runCatching {
+        val value = raw as Map<*, *>
+        PluginSnapshot(
+            version = (value["version"] as Number).toLong(),
+            createdAt = (value["createdAt"] as Number).toLong(),
+            reason = value["reason"] as String,
+            components = (value["components"] as? List<*>)?.mapNotNull { ComponentJson.parseOne(it) }.orEmpty()
+        )
+    }.getOrNull()
+
+    private fun writeSnapshots(snapshots: List<PluginSnapshot>) {
+        val content = "{\n  \"snapshots\": [\n" +
+            snapshots.joinToString(",\n") { snapshot ->
+                "    {\"version\": ${snapshot.version}, \"createdAt\": ${snapshot.createdAt}, " +
+                    "\"reason\": \"${MiniJson.escape(snapshot.reason)}\", \"components\": [" +
+                    snapshot.components.joinToString(", ") { ComponentJson.serialize(it) } + "]}"
+            } + "\n  ]\n}\n"
+        val temporary = File(file.parentFile ?: file.absoluteFile.parentFile, ".${file.name}.tmp")
+        temporary.writeText(content)
+        runCatching {
+            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        }.recoverCatching { Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING) }
+            .getOrElse { temporary.delete(); error("Não foi possível persistir snapshots: ${it.message}") }
+    }
+}
+
 interface SandboxCommandExecutor {
     fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox"): ExecutionLog
 }
@@ -286,7 +392,7 @@ internal object ComponentJson {
         return "{\n  \"components\": [\n$items\n  ]\n}\n"
     }
 
-    private fun serialize(component: InstalledComponent): String {
+    internal fun serialize(component: InstalledComponent): String {
         fun string(value: String?): String = value?.let { "\"${MiniJson.escape(it)}\"" } ?: "null"
         val dependencies = component.dependencies.joinToString(", ") { "\"${MiniJson.escape(it)}\"" }
         return "{" +
@@ -310,28 +416,30 @@ internal object ComponentJson {
     fun parseAll(text: String): List<InstalledComponent> {
         val root = MiniJson.parse(text) as? Map<*, *> ?: return emptyList()
         val list = root["components"] as? List<*> ?: return emptyList()
-        return list.mapNotNull { item ->
-            val objectValue = item as? Map<*, *> ?: return@mapNotNull null
-            runCatching {
-                val installedAt = (objectValue["installedAt"] as Number).toLong()
-                InstalledComponent(
-                    componentId = objectValue["componentId"] as String,
-                    version = objectValue["version"] as String?,
-                    installedAt = installedAt,
-                    dependencies = (objectValue["dependencies"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
-                    state = InstallationState.valueOf(objectValue["state"] as String),
-                    error = objectValue["error"] as String?,
-                    updatedAt = (objectValue["updatedAt"] as? Number)?.toLong() ?: installedAt,
-                    downloadedBytes = (objectValue["downloadedBytes"] as? Number)?.toLong() ?: 0L,
-                    totalBytes = (objectValue["totalBytes"] as? Number)?.toLong() ?: 0L,
-                    installDurationMs = (objectValue["installDurationMs"] as? Number)?.toLong() ?: 0L,
-                    installedByUser = objectValue["installedByUser"] as? String ?: "system",
-                    packageVersion = objectValue["packageVersion"] as? String,
-                    validationStatus = objectValue["validationStatus"] as? Boolean ?: true,
-                    notes = objectValue["notes"] as? String
-                )
-            }.getOrNull()
-        }
+        return list.mapNotNull(::parseOne)
+    }
+
+    internal fun parseOne(item: Any?): InstalledComponent? {
+        val objectValue = item as? Map<*, *> ?: return null
+        return runCatching {
+            val installedAt = (objectValue["installedAt"] as Number).toLong()
+            InstalledComponent(
+                componentId = objectValue["componentId"] as String,
+                version = objectValue["version"] as String?,
+                installedAt = installedAt,
+                dependencies = (objectValue["dependencies"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                state = InstallationState.valueOf(objectValue["state"] as String),
+                error = objectValue["error"] as String?,
+                updatedAt = (objectValue["updatedAt"] as? Number)?.toLong() ?: installedAt,
+                downloadedBytes = (objectValue["downloadedBytes"] as? Number)?.toLong() ?: 0L,
+                totalBytes = (objectValue["totalBytes"] as? Number)?.toLong() ?: 0L,
+                installDurationMs = (objectValue["installDurationMs"] as? Number)?.toLong() ?: 0L,
+                installedByUser = objectValue["installedByUser"] as? String ?: "system",
+                packageVersion = objectValue["packageVersion"] as? String,
+                validationStatus = objectValue["validationStatus"] as? Boolean ?: true,
+                notes = objectValue["notes"] as? String
+            )
+        }.getOrNull()
     }
 }
 
@@ -499,7 +607,8 @@ class PluginManager(
     private val executor: SandboxCommandExecutor,
     private val repository: ComponentRepository,
     private val catalog: List<SandboxComponent> = BuiltInCatalog.all,
-    private val catalogProvider: (() -> List<SandboxComponent>)? = null
+    private val catalogProvider: (() -> List<SandboxComponent>)? = null,
+    private val snapshotStore: PluginSnapshotStore? = null
 ) {
     private val lock = Any()
 
@@ -512,7 +621,28 @@ class PluginManager(
     fun installed(): List<InstalledComponent> = synchronized(lock) { repository.all() }
 
     fun install(id: String): InstalledComponent = synchronized(lock) {
-        installInternal(id, linkedSetOf())
+        val snapshot = snapshotStore?.create("antes da instalação de $id", repository.all())
+        return@synchronized try {
+            installInternal(id, linkedSetOf()).also { result ->
+                snapshotStore?.record(PluginOperationRecord(System.currentTimeMillis(), "install", id, snapshot?.version, result.state == InstallationState.INSTALLED, result.error))
+            }
+        } catch (error: Exception) {
+            snapshotStore?.record(PluginOperationRecord(System.currentTimeMillis(), "install", id, snapshot?.version, false, error.message))
+            throw error
+        }
+    }
+
+    fun snapshots(): List<PluginSnapshot> = synchronized(lock) { snapshotStore?.snapshots().orEmpty() }
+    fun history(limit: Int = 50): List<PluginOperationRecord> = synchronized(lock) { snapshotStore?.history(limit).orEmpty() }
+
+    /** Restaura apenas o estado local persistido; não finge desfazer pacotes já alterados no RootFS. */
+    fun rollback(version: Long): PluginSnapshot = synchronized(lock) {
+        val store = snapshotStore ?: error("Snapshots locais não estão configurados")
+        val snapshot = store.get(version) ?: error("Snapshot local v$version não encontrado")
+        repository.all().map { it.componentId }.forEach { repository.remove(it) }
+        snapshot.components.forEach(repository::save)
+        store.record(PluginOperationRecord(System.currentTimeMillis(), "rollback", null, version, true, "Estado local restaurado"))
+        snapshot
     }
 
     private fun installInternal(id: String, visiting: LinkedHashSet<String>): InstalledComponent {
@@ -614,6 +744,7 @@ class PluginManager(
         val component = currentCatalog().firstOrNull { it.id == id } ?: return@synchronized null
         val existing = repository.get(id) ?: return@synchronized null
         if (existing.state != InstallationState.INSTALLED) return@synchronized existing
+        val snapshot = snapshotStore?.create("antes da remoção de $id", repository.all())
 
         val dependents = repository.all().filter {
             it.state == InstallationState.INSTALLED && id in it.dependencies
@@ -645,6 +776,7 @@ class PluginManager(
             }
             if (result == null || result.succeeded) {
                 repository.remove(id)
+                snapshotStore?.record(PluginOperationRecord(System.currentTimeMillis(), "remove", id, snapshot?.version, true))
                 null
             } else {
                 existing.copy(
@@ -654,7 +786,10 @@ class PluginManager(
                     validationStatus = false,
                     error = result.stderr.ifBlank { "Remoção falhou" },
                     notes = "Os pacotes podem continuar presentes; tente remover novamente."
-                ).also(repository::save)
+                ).also {
+                    repository.save(it)
+                    snapshotStore?.record(PluginOperationRecord(System.currentTimeMillis(), "remove", id, snapshot?.version, false, it.error))
+                }
             }
         } catch (error: Exception) {
             existing.copy(
@@ -664,7 +799,10 @@ class PluginManager(
                 validationStatus = false,
                 error = error.message ?: error.javaClass.simpleName,
                 notes = "Os pacotes podem continuar presentes; tente remover novamente."
-            ).also(repository::save)
+            ).also {
+                repository.save(it)
+                snapshotStore?.record(PluginOperationRecord(System.currentTimeMillis(), "remove", id, snapshot?.version, false, it.error))
+            }
         }
     }
 
@@ -708,15 +846,19 @@ class SearchablePluginManager(
     executor: SandboxCommandExecutor,
     private val repository: ComponentRepository,
     private val catalog: List<SandboxComponent> = BuiltInCatalog.all,
-    catalogProvider: (() -> List<SandboxComponent>)? = null
+    catalogProvider: (() -> List<SandboxComponent>)? = null,
+    snapshotStore: PluginSnapshotStore? = null
 ) {
-    private val delegate = PluginManager(executor, repository, catalog, catalogProvider)
+    private val delegate = PluginManager(executor, repository, catalog, catalogProvider, snapshotStore)
 
     fun components(): List<SandboxComponent> = delegate.components()
     fun status(id: String): InstalledComponent? = delegate.status(id)
     fun installed(): List<InstalledComponent> = delegate.installed()
     fun install(id: String): InstalledComponent = delegate.install(id)
     fun remove(id: String): InstalledComponent? = delegate.remove(id)
+    fun snapshots(): List<PluginSnapshot> = delegate.snapshots()
+    fun history(limit: Int = 50): List<PluginOperationRecord> = delegate.history(limit)
+    fun rollback(version: Long): PluginSnapshot = delegate.rollback(version)
     fun validate(component: SandboxComponent): Boolean = delegate.validate(component)
 
     fun search(query: String, items: List<SandboxComponent>? = null): List<SandboxComponent> {

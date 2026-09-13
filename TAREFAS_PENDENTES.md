@@ -30,7 +30,7 @@ A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDB
 - As validações de SDK, device, assinatura e host foram removidas da lista operacional e estão registradas separadamente como gates externos em `docs/RELEASE_READINESS.md`.
 
 - [x] Validar os RootFS/profiles `0.3.3`, `0.4.1` e `0.5.0` no Sandbox de origem; a migração preservou os artefatos hardened byte-a-byte. A execução no app/device permanece apenas como teste de implantação.
-- [ ] Expandir o gerenciamento offline de plugins com versionamento de snapshots, rollback local e histórico de instalações.
+- [x] Expandir o gerenciamento offline de plugins com snapshots versionados, rollback local do estado persistido e histórico JSONL de instalações/remoções; a reversão de pacotes já alterados no RootFS não é simulada.
 - [ ] Expandir Toolchains locais com rollback transacional e cache de metadados; SDK/NDK de implantação ficam fora desta lista.
 - [ ] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e integração do readiness gate.
 

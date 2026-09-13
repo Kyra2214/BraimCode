@@ -47,7 +47,7 @@ RootFS Ubuntu 24.04, download/extração, `proot`, runtime de execução de coma
 
 Do outro roadmap, entram aqui também:
 - **Sandbox Fase 1 — Plugins e ferramentas**: 🟡 parcial — `PluginModels.kt`, `PluginsScreen.kt` existem com testes e **são de fato usados pela aba Plugins/Ferramentas do app**; é instalação/gerenciamento básico, mas esse é o único bloco desta fase realmente acionado pela UI.
-- **Sandbox Fase 2 — Sistema completo de plugins**: 🟡 `RemotePluginCatalog` implementa catálogo remoto, allowlist de fontes HTTPS, SHA-256, deduplicação e rejeição fail-closed, e agora está ligado ao `PluginManager` usado pela UI por meio de um catálogo composto. O `SandboxPlatform` expõe importação explícita de snapshots já coletados, sem rede ou instalação implícita; transporte remoto, autorização local acionada pela UI e validação Android ainda permanecem pendentes.
+- **Sandbox Fase 2 — Sistema completo de plugins**: ✅ o caminho offline possui catálogo composto, instalação/remoção persistentes, snapshots versionados, rollback local do estado e histórico JSONL expostos pela UI. `RemotePluginCatalog` mantém allowlist de fontes HTTPS, SHA-256, deduplicação e rejeição fail-closed; o `SandboxPlatform` expõe apenas importação explícita de snapshots já coletados, sem rede. Transporte remoto e validação Android permanecem fora desta implementação.
 
 ---
 

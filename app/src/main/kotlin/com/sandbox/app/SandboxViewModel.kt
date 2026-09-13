@@ -21,6 +21,8 @@ import com.sandbox.sandbox.InstalledComponent
 import com.sandbox.sandbox.SandboxComponent
 import com.sandbox.sandbox.SandboxPlatform
 import com.sandbox.sandbox.SecurityAssessment
+import com.sandbox.sandbox.PluginOperationRecord
+import com.sandbox.sandbox.PluginSnapshot
 import com.sandbox.sandbox.ToolchainStatus
 import com.brain.planner.PlanoExecucao
 import com.sandbox.sandbox.Project
@@ -93,6 +95,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     private var statusCache by mutableStateOf<Map<String, InstalledComponent>>(emptyMap())
 
     var lastPluginError by mutableStateOf<String?>(null)
+        private set
+    var pluginSnapshots by mutableStateOf<List<PluginSnapshot>>(emptyList())
+        private set
+    var pluginHistory by mutableStateOf<List<PluginOperationRecord>>(emptyList())
         private set
 
     val sandboxReadyForPlugins: Boolean get() = platform != null
@@ -187,6 +193,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                 )
                 pluginListVersion++
                 refreshStatusCache()
+                refreshPluginAudit()
                 phase = SandboxPhase.Ready
             } catch (e: Exception) {
                 runtime = null
@@ -443,6 +450,8 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             platform = null
             installingComponentIds = emptySet()
             statusCache = emptyMap()
+            pluginSnapshots = emptyList()
+            pluginHistory = emptyList()
             pluginListVersion++
             lastResult = null
             lastExecution = null
@@ -527,6 +536,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             } finally {
                 installingComponentIds = installingComponentIds - id
                 result?.getOrNull()?.let { updated -> statusCache = statusCache + (id to updated) }
+                refreshPluginAudit()
                 pluginListVersion++
             }
         }
@@ -557,6 +567,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     val updated = r.getOrNull()
                     statusCache = if (updated != null) statusCache + (id to updated) else statusCache - id
                 }
+                refreshPluginAudit()
                 pluginListVersion++
             }
         }
@@ -564,6 +575,29 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearPluginError() {
         lastPluginError = null
+    }
+
+    fun refreshPluginAudit() {
+        val plat = platform ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val snapshots = plat.plugins.snapshots()
+            val history = plat.plugins.history()
+            withContext(Dispatchers.Main) {
+                pluginSnapshots = snapshots
+                pluginHistory = history
+            }
+        }
+    }
+
+    fun rollbackPlugins(version: Long) {
+        val plat = platform ?: return
+        viewModelScope.launch {
+            runCatching { withContext(Dispatchers.IO) { plat.plugins.rollback(version) } }
+                .onFailure { lastPluginError = it.message ?: "Falha ao restaurar snapshot v$version" }
+            refreshStatusCache()
+            refreshPluginAudit()
+            pluginListVersion++
+        }
     }
 
     private fun ExecutionLog.toUiResult(): SandboxExecutionResult = SandboxExecutionResult(

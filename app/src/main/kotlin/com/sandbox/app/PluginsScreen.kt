@@ -87,6 +87,25 @@ fun PluginsScreen(viewModel: SandboxViewModel, kind: ComponentKind) {
             label = { Text("Só instalados") }
         )
 
+        if (kind == ComponentKind.PLUGIN && viewModel.sandboxReadyForPlugins && viewModel.pluginSnapshots.isNotEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Histórico offline", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "${viewModel.pluginSnapshots.size} snapshot(s) local(is) · ${viewModel.pluginHistory.size} operação(ões)",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        viewModel.pluginSnapshots.takeLast(3).forEach { snapshot ->
+                            OutlinedButton(onClick = { viewModel.rollbackPlugins(snapshot.version) }) {
+                                Text("Rollback v${snapshot.version}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (components.isEmpty()) {
             Text(
                 if (kind == ComponentKind.TOOL) {

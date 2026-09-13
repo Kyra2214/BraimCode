@@ -182,6 +182,12 @@ private fun OperationsScreen(viewModel: SandboxViewModel) {
                             Text(status?.state?.name ?: "Verificar")
                         }
                     }
+                    status?.versionOutput?.takeIf { it.isNotBlank() }?.let {
+                        Text(it.trim(), style = MaterialTheme.typography.bodySmall)
+                    }
+                    status?.error?.takeIf { it.isNotBlank() }?.let {
+                        Text("Erro: ${it.trim()}", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }

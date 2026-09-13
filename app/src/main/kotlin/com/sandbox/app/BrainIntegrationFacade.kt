@@ -9,10 +9,18 @@ import com.brain.discovery.ExplorerLicense
 import com.brain.discovery.OpenSourceStatus
 import com.brain.delivery.DeliveryReceipt
 import com.brain.delivery.ObservableDelivery
+import com.brain.events.BrainEvent
+import com.brain.events.EventStore
+import com.brain.events.InMemoryEventStore
 import com.brain.memory.Experiencia
 import com.brain.memory.ExperienceMemory
 import com.brain.memory.FileExperienceMemory
 import com.brain.memory.ResultadoExperiencia
+import com.brain.prompt.DefaultPromptGenerator
+import com.brain.prompt.PromptGerado
+import com.brain.prompt.PromptLibrary
+import com.brain.core.Roadmap
+import com.brain.core.Tarefa
 import com.brain.skill.SkillManifest
 import com.brain.skill.SkillRecord
 import com.brain.skill.SkillRegistry
@@ -25,15 +33,18 @@ import com.brain.workflow.WorkflowStepResult
 import java.io.File
 import java.time.Instant
 
-/** Fachada Android para os subsistemas Brain que não devem ser instanciados pela UI. */
+/** Fachada Android para os subsistemas Brain locais e persistentes. */
 class BrainIntegrationFacade(stateDir: File) {
     private val skills = SkillRegistry()
     private val workflows = WorkflowEngine(File(stateDir, "workflows.json"))
     private val memory: ExperienceMemory = FileExperienceMemory(File(stateDir, "memory.jsonl"))
     private val discovery = ExplorerIntelligencePipeline()
     private val delivery = ObservableDelivery()
+    private val promptGenerator = DefaultPromptGenerator()
+    private val events: EventStore = InMemoryEventStore()
 
     init {
+        stateDir.mkdirs()
         skills.register(
             SkillManifest(
                 id = "sandbox-health",
@@ -60,7 +71,10 @@ class BrainIntegrationFacade(stateDir: File) {
         runId = runId,
         idempotencyKey = "sandbox-health:$runId",
         authorize = { it == "sandbox.health" },
-        execute = { node, attempt -> WorkflowStepResult(node.id, success = true, attempts = attempt, output = mapOf("capability" to node.capability)) }
+        execute = { node, attempt ->
+            emit(runId, node.id, "WorkflowStepExecuted", mapOf("capability" to node.capability, "attempt" to attempt.toString()))
+            WorkflowStepResult(node.id, success = true, attempts = attempt, output = mapOf("capability" to node.capability))
+        }
     )
 
     suspend fun recordExperience(runId: String, success: Boolean) {
@@ -78,9 +92,36 @@ class BrainIntegrationFacade(stateDir: File) {
                 registradoEm = Instant.now()
             )
         )
+        emit(runId, "memory", "ExperienceRecorded", mapOf("success" to success.toString()))
     }
 
     suspend fun memoryRate(): Double = memory.taxaSucessoPorEstrategia("local-sandbox")
+
+    /** Geração determinística de prompts usando somente a biblioteca local fornecida. */
+    suspend fun generatePrompts(roadmap: Roadmap, library: PromptLibrary): List<PromptGerado> =
+        promptGenerator.gerarPromptsPorRoadmap(roadmap, library)
+
+    /** Gera prompt determinístico de correção sem provider externo. */
+    suspend fun generateCorrectionPrompt(tarefa: Tarefa, reason: String, library: PromptLibrary): PromptGerado =
+        promptGenerator.gerarPromptDeCorrecao(tarefa, reason, library)
+
+    /** Snapshot local dos eventos desta instância; nenhuma rede ou provider externo. */
+    fun localEvents(runId: String? = null): List<BrainEvent> = events.replay(runId)
+    fun localEventsHealthy(): Boolean = events.verifyIntegrity()
+
+    private fun emit(runId: String, taskId: String, type: String, payload: Map<String, String>) {
+        events.append(
+            BrainEvent(
+                runId = runId,
+                sessionId = "android-local",
+                taskId = taskId,
+                type = type,
+                sequence = events.replay(runId).size.toLong(),
+                payload = payload,
+                idempotencyKey = "$runId:$taskId:$type:${events.replay(runId).size}"
+            )
+        )
+    }
 
     /** Publica somente um recibo local dos artefatos; não envia dados para rede. */
     fun publishLocalDelivery(root: File, runId: String): DeliveryReceipt = delivery.publish(

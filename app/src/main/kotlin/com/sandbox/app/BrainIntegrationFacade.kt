@@ -11,7 +11,7 @@ import com.brain.delivery.DeliveryReceipt
 import com.brain.delivery.ObservableDelivery
 import com.brain.events.BrainEvent
 import com.brain.events.EventStore
-import com.brain.events.InMemoryEventStore
+import com.brain.events.FileEventStore
 import com.brain.memory.Experiencia
 import com.brain.memory.ExperienceMemory
 import com.brain.memory.FileExperienceMemory
@@ -33,7 +33,12 @@ import com.brain.workflow.WorkflowStepResult
 import java.io.File
 import java.time.Instant
 
-/** Fachada Android para os subsistemas Brain locais e persistentes. */
+/**
+ * Fachada Android para os subsistemas Brain locais e persistentes.
+ *
+ * Importante: o workflow exposto aqui é deliberadamente LOCAL. Execução
+ * autorizada no Sandbox usa BrainSandboxController/BrainSandboxExecutionBridge.
+ */
 class BrainIntegrationFacade(stateDir: File) {
     private val skills = SkillRegistry()
     private val workflows = WorkflowEngine(File(stateDir, "workflows.json"))
@@ -41,7 +46,7 @@ class BrainIntegrationFacade(stateDir: File) {
     private val discovery = ExplorerIntelligencePipeline()
     private val delivery = ObservableDelivery()
     private val promptGenerator = DefaultPromptGenerator()
-    private val events: EventStore = InMemoryEventStore()
+    private val events: EventStore = FileEventStore(File(stateDir, "events.jsonl"))
 
     init {
         stateDir.mkdirs()
@@ -62,18 +67,22 @@ class BrainIntegrationFacade(stateDir: File) {
 
     fun enabledSkills(): List<SkillRecord> = skills.listEnabled()
 
+    /**
+     * Workflow local/demonstrativo: não executa comandos no Sandbox.
+     * O nome é preservado por compatibilidade com a UI existente.
+     */
     fun runHealthWorkflow(runId: String): WorkflowRunResult = workflows.run(
         manifest = WorkflowManifest(
-            id = "sandbox-health-workflow",
-            version = "1.0.0",
+            id = "sandbox-health-local-workflow",
+            version = "1.1.0",
             nodes = listOf(WorkflowNode("health", "sandbox.health", retryLimit = 1))
         ),
         runId = runId,
-        idempotencyKey = "sandbox-health:$runId",
+        idempotencyKey = "sandbox-health-local:$runId",
         authorize = { it == "sandbox.health" },
         execute = { node, attempt ->
-            emit(runId, node.id, "WorkflowStepExecuted", mapOf("capability" to node.capability, "attempt" to attempt.toString()))
-            WorkflowStepResult(node.id, success = true, attempts = attempt, output = mapOf("capability" to node.capability))
+            emit(runId, node.id, "WorkflowStepEvaluated", mapOf("capability" to node.capability, "attempt" to attempt.toString(), "execution" to "local"))
+            WorkflowStepResult(node.id, success = true, attempts = attempt, output = mapOf("capability" to node.capability, "execution" to "local"))
         }
     )
 
@@ -105,20 +114,21 @@ class BrainIntegrationFacade(stateDir: File) {
     suspend fun generateCorrectionPrompt(tarefa: Tarefa, reason: String, library: PromptLibrary): PromptGerado =
         promptGenerator.gerarPromptDeCorrecao(tarefa, reason, library)
 
-    /** Snapshot local dos eventos desta instância; nenhuma rede ou provider externo. */
+    /** Eventos locais persistentes; sobrevivem ao reinício da instância/app. */
     fun localEvents(runId: String? = null): List<BrainEvent> = events.replay(runId)
     fun localEventsHealthy(): Boolean = events.verifyIntegrity()
 
     private fun emit(runId: String, taskId: String, type: String, payload: Map<String, String>) {
+        val nextSequence = events.replay().size.toLong()
         events.append(
             BrainEvent(
                 runId = runId,
                 sessionId = "android-local",
                 taskId = taskId,
                 type = type,
-                sequence = events.replay(runId).size.toLong(),
+                sequence = nextSequence,
                 payload = payload,
-                idempotencyKey = "$runId:$taskId:$type:${events.replay(runId).size}"
+                idempotencyKey = "$runId:$taskId:$type:$nextSequence"
             )
         )
     }

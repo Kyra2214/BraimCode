@@ -16,6 +16,20 @@ bash scripts/validate-release-readiness.sh
 
 O script não baixa os tarballs completos nem reconstrói RootFS. Ele é um gate de distribuição e integridade, não um teste funcional do `proot`.
 
+## Status consolidado
+
+Os três releases RootFS já foram homologados e hardened no Sandbox de origem,
+migrados byte-a-byte e aprovados pelo preflight de distribuição. Não existe
+pendência de reconstrução ou re-homologação desses artefatos. Os bloqueios
+restantes abaixo pertencem exclusivamente à implantação do app e do host:
+
+- **Android/device:** SDK, JDK 17, `adb` e emulador ou device ARM64;
+- **Assinatura:** autoridade de chaves e verificação do APK de produção;
+- **Host:** cgroups, Bubblewrap, firewall/namespaces e serviços distribuídos.
+
+Esses gates não são simulados como concluídos por validações locais do
+repositório.
+
 ## Gates de implantação
 
 | Gate | Evidência exigida | Estado neste ambiente |

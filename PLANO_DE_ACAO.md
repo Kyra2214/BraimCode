@@ -74,6 +74,8 @@ Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e
 - [ ] Assinar o APK com a autoridade de chaves de produção e verificar a assinatura com `apksigner`.
 - [ ] Validar no host de implantação os controles OS-level e a infraestrutura externa exigida pela Fase 7.
 
+- [x] Atualizar o status consolidado: releases RootFS homologados e preflight de distribuição aprovado; os bloqueios restantes são exclusivamente build/device Android, assinatura de produção e infraestrutura do host. Esses bloqueios estão registrados em `docs/RELEASE_READINESS.md` e não devem ser simulados como concluídos.
+
 A matriz de evidências e bloqueios está em `docs/RELEASE_READINESS.md`. Neste ambiente, `check_android_env.sh` detectou Java 21, mas nenhum Android SDK configurado; `adb` também não está disponível.
 
 ---

@@ -46,7 +46,7 @@ Essas pendências são acompanhadas em [`ROADMAP_UNIFICADO.md`](ROADMAP_UNIFICAD
 Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalhamento e critério de decisão (integrar vs. arquivar) em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
 
 - [x] Ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel`; o caminho de health, planos e retomada agora é acionável pela UI. `BrainExecutionCoordinator` permanece como API avançada ainda não exposta.
-- [x] Integrar Skills, Workflows, Memory e Discovery ao app por `BrainIntegrationFacade`, com catálogo, workflow de health, memória local e pipeline Discovery acionáveis na aba **Operações**. APIs, Events e o `BrainExecutionCoordinator` permanecem para a próxima fatia.
+- [x] Integrar Skills, Workflows, Memory e Discovery ao app por `BrainIntegrationFacade`, com catálogo, workflow de health, memória local e pipeline Discovery acionáveis na aba **Operações**. APIs, Events e o `BrainExecutionCoordinator` avançado permanecem para a próxima fatia.
 - [x] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager` na aba **Operações**; criação/listagem de projetos, `git status` e ciclo básico do SQLite usam o executor protegido compartilhado.
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
 - [x] Ligar `RemotePluginCatalog` ao `PluginManager` real por catálogo composto; snapshots aceitos passam a aparecer na busca e podem ser instalados pelo mesmo fluxo protegido.
@@ -60,9 +60,9 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 
 O caminho ativo do app deve priorizar componentes locais, persistentes e acionáveis
 sem backend: Skills, Workflows, Memory em arquivo, Discovery, Workspace, Git
-básico, Services, Security, Toolchains, TestLab e catálogo de plugins por
-snapshot explícito. O `BrainExecutionCoordinator` avançado, `ObservableDelivery`
-na UI, `DefaultPromptGenerator` exposto e um fluxo remoto completo de plugins
-ficam como implementações futuras locais ou de integração, conforme o caso de
-uso. `HttpProviderClient` fica explicitamente condicionado a servidor, rede e
+básico, Services, Security, Toolchains, TestLab, `ObservableDelivery` e catálogo
+de plugins por snapshot explícito. O `BrainExecutionCoordinator` avançado,
+`DefaultPromptGenerator` exposto e um fluxo remoto completo de plugins ficam como
+implementações futuras locais ou de integração, conforme o caso de uso.
+`HttpProviderClient` fica explicitamente condicionado a servidor, rede e
 credenciais e não faz parte do modo offline.

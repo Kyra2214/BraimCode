@@ -6,7 +6,10 @@ set -euo pipefail
 
 SOURCE_REPO="${SOURCE_REPO:-Kyra2214/SandBox}"
 TARGET_REPO="${TARGET_REPO:-Kyra2214/BrainCode}"
-WORK_DIR="${WORK_DIR:-../output/sandbox-release-migration}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORK_DIR="${WORK_DIR:-$REPO_ROOT/output/sandbox-release-migration}"
+cd "$REPO_ROOT"
 
 mkdir -p "$WORK_DIR"
 command -v gh >/dev/null || { echo "ERRO: gh CLI não encontrado." >&2; exit 1; }
@@ -40,7 +43,9 @@ for entry in "${RELEASES[@]}"; do
     exit 1
   }
 
-  printf '%s  %s\n' "$ACTUAL_SHA" "$ASSET" > "$DEST.sha256"
+  # Copy the original sidecar too; do not regenerate or normalize it.
+  gh release download "$TAG" --repo "$SOURCE_REPO" --pattern "$ASSET.sha256" --dir "$WORK_DIR" --clobber
+  test -f "$DEST.sha256"
 
   # Re-publish the byte-identical artifact under the same release tag/name in BrainCode.
   if gh release view "$TAG" --repo "$TARGET_REPO" >/dev/null 2>&1; then
@@ -57,9 +62,9 @@ done
 
 # Point the BrainCode manifests to the migrated releases only after all source
 # assets have passed the exact size/SHA-256 checks and were published.
-ROOT_MANIFEST="app/src/main/res/raw/rootfs_manifest.json"
-EXTRA_MANIFEST="rootfs-builder/agent_extra_manifest.json"
-ANDROID_MANIFEST="rootfs-builder/agent_android_manifest.json"
+ROOT_MANIFEST="$REPO_ROOT/app/src/main/res/raw/rootfs_manifest.json"
+EXTRA_MANIFEST="$REPO_ROOT/rootfs-builder/agent_extra_manifest.json"
+ANDROID_MANIFEST="$REPO_ROOT/rootfs-builder/agent_android_manifest.json"
 
 python3 - "$ROOT_MANIFEST" "$EXTRA_MANIFEST" "$ANDROID_MANIFEST" "$TARGET_REPO" <<'PY'
 import json

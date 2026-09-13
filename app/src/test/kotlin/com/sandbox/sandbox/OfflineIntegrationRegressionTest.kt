@@ -13,11 +13,7 @@ class OfflineIntegrationRegressionTest {
         val corpus = SecurityRegressionCorpus(dir.resolve("corpus.jsonl"))
         val scenario = SecurityScenarioCatalog.baseline.first()
         val result = SecurityProbeResult(scenario.id, completed = true, blocked = scenario.expectedBlocked, output = "test")
-        val report = SecurityTestLab().evaluate(
-            scan = SecurityScanResult(emptyList(), emptyList()),
-            scenarios = listOf(scenario),
-            probeResults = listOf(result)
-        )
+        val report = SecurityTestLab().evaluate(listOf(scenario), listOf(result))
         corpus.record(report, listOf(result))
         val entry = corpus.entries().single()
         assertEquals(result.blocked, entry.observedBlocked)

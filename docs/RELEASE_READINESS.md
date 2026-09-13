@@ -1,0 +1,34 @@
+# Release readiness — Fase 7
+
+## Objetivo
+
+Este documento define o preflight local e os gates externos necessários para considerar o Sandbox pronto para validação de produção. O preflight não substitui a execução em Android ARM64, a assinatura de produção ou a validação da infraestrutura host; ele impede que um artefato inconsistente avance para esses gates.
+
+## Preflight automatizado
+
+O script `scripts/validate-release-readiness.sh` verifica os três perfis RootFS publicados no BrainCode. Para cada manifesto, ele confirma que a URL usa HTTPS e aponta para um release do `Kyra2214/BrainCode`, compara o `Content-Length` publicado com `sizeBytes` e compara o SHA-256 do sidecar publicado com o valor do manifesto.
+
+Execute a partir da raiz do repositório:
+
+```bash
+bash scripts/validate-release-readiness.sh
+```
+
+O script não baixa os tarballs completos nem reconstrói RootFS. Ele é um gate de distribuição e integridade, não um teste funcional do `proot`.
+
+## Gates de implantação
+
+| Gate | Evidência exigida | Estado neste ambiente |
+|---|---|---|
+| Build Android | `:app:testDebugUnitTest`, `:android-module:test` e `:app:assembleDebug` com JDK 17 e Android SDK configurados | Pendente: SDK/JDK não configurados no clone atual |
+| Device/emulador ARM64 | `scripts/e2e-smoke.sh` executado via `adb` | Pendente: nenhum device/emulador conectado |
+| RootFS/proot real | Preparar sandbox, extrair RootFS, executar `bash`, health check, reset e repetir para os perfis aplicáveis | Pendente: depende do gate Android |
+| Ciclo de vida | Evidência de prepare, running, cancelamento, diagnóstico, reset e recuperação após interrupção | Pendente: depende do gate Android |
+| Assinatura de release | APK assinado pela autoridade de chaves de produção e verificação com `apksigner` | Pendente: credenciais de assinatura não estão no repositório |
+| Infraestrutura OS-level | cgroups graváveis, Bubblewrap/firewall/namespaces e serviços distribuídos validados no host | Pendente: dependência externa de implantação |
+
+## Critério de fechamento
+
+A Fase 7 só pode ser marcada como concluída quando o preflight local passar e cada gate de implantação tiver evidência reproduzível. A ausência de SDK, dispositivo, autoridade de assinatura ou infraestrutura externa deve permanecer registrada como bloqueio; não deve ser simulada como sucesso.
+
+Os RootFS `0.3.3`, `0.4.1` e `0.5.0` permanecem artefatos imutáveis. Uma falha de validação deve investigar o runtime ou o ambiente de implantação, sem reconstruir silenciosamente os tarballs homologados.

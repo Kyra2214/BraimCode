@@ -90,13 +90,14 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 ---
 
 ## Fase 7 — Sandbox 100% completo / validação de produção
-**Status: ❌ pendente — marco final**
+**Status: 🟡 preflight de distribuição aprovado · gates de implantação pendentes — marco final**
 
 Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime estável, plugins, ferramentas, projetos, workspace, terminal, git, toolchains, serviços, rede, segurança, test lab, logs, diagnóstico, recuperação, persistência, experiência consistente) somados às pendências já documentadas em `VALIDACAO_2026-09-12.md`:
 - Validação em device/emulador físico real.
 - RootFS/proot rodando de fato em produção (hoje validado só em build/testes automatizados).
 - Assinatura de release (autoridade de chaves).
 - Infra externa: Postgres/Redis/etcd no lugar do SQLite, cgroups graváveis, Bubblewrap plenamente configurado, coordenação multi-host — tudo isso é dependência de implantação, não é simulado pelo runtime.
+- O preflight local `scripts/validate-release-readiness.sh` confirma que os três manifests, assets publicados e sidecars SHA-256 estão consistentes. A evidência e a matriz de gates estão em `docs/RELEASE_READINESS.md`.
 
 ---
 
@@ -111,6 +112,10 @@ Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime es
 - Uma etapa só é "concluída" com implementação + testes automatizados + comportamento documentado.
 
 ## Histórico de sessões
+
+### 2026-09-12 — Preflight da Fase 7
+
+Adicionado `scripts/validate-release-readiness.sh`, que verifica as URLs dos manifests, o tamanho publicado dos três assets RootFS e os SHA-256 dos sidecars sem baixar ou reconstruir os tarballs. O preflight passou para `rootfs-v0.3.3`, `rootfs-agent-v0.4.1` e `rootfs-agent-android-v0.5.0`. Permanecem pendentes a configuração JDK 17/Android SDK, device ou emulador ARM64, execução real de `proot`, assinatura de produção e infraestrutura OS-level; a matriz foi documentada em `docs/RELEASE_READINESS.md`.
 
 ### Sessão 2026-09-12 — Paridade Kotlin de Skills, Workflows e APIs
 

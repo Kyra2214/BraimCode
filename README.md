@@ -82,6 +82,17 @@ Os testes de `:android-module` exigem Android SDK configurado via `ANDROID_HOME`
 
 `reference/braincode-python/` é um snapshot histórico do runtime original (pré-fusão com o Sandbox Mobile); nada no build atual depende dele — a implementação viva é `brain_runtime/` (Python) e `brain/` (Kotlin).
 
+### Escopo offline do app Android
+
+O caminho de produto atual é Android offline e sem servidor. Por isso, o app
+prioriza capacidades locais e persistentes — Sandbox, Skills, Workflows,
+Memory em arquivo, Discovery, Workspace, Git básico, Services, Security,
+Toolchains, TestLab e plugins por catálogo built-in ou snapshot explícito. O
+transporte remoto de plugins, `HttpProviderClient`, providers externos,
+`BrainExecutionCoordinator` avançado, entrega observável exposta na UI e
+geração de prompts como produto ficam como implementações futuras; não são
+tratados como disponíveis no modo offline.
+
 ## Limites de implantação
 
 Para isolamento forte, a implantação deve fornecer container rootless ou sandbox OS-level, cgroups graváveis, política de rede, filesystem jail e, quando aplicável, autoridade de assinatura. O runtime rejeita controles estritos ausentes e não simula capacidades que o host não fornece.

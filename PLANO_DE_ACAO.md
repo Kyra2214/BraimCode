@@ -27,19 +27,22 @@ Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app 
 
 | Componente | Onde está | Situação hoje | Opção A: Integrar | Opção B: Arquivar |
 |---|---|---|---|---|
-| `BrainSandboxExecutionBridge` + `CicloExecucaoPlano` + `BrainExecutionCoordinator` | `android-module`, `brain` | **Primeira fatia ligada à UI**: `SandboxViewModel` aciona `BrainSandboxController.healthCheck()` depois que o runtime real está pronto; execução Android completa ainda precisa de testes no ambiente com SDK | Expandir de `sandbox.health` para planos de usuário e ligar aprovações/retomada à UI | Mover pra `experimental/`, deixar claro que é protótipo |
-| Todo o `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) | `brain/src/main` | Zero chamada fora do próprio módulo | Definir um primeiro caso de uso real (ex.: rodar 1 skill via UI) como prova de integração | Rebaixar no roadmap pra "biblioteca standalone, integração não iniciada" |
+| `BrainSandboxExecutionBridge` + `CicloExecucaoPlano` + `BrainExecutionCoordinator` | `android-module`, `brain` | Bridge, health, planos e aprovações já são acionáveis; o coordenador avançado ainda não é necessário no fluxo offline atual | **Implementação futura local:** ligar planos avançados ao fluxo Operações quando houver necessidade de múltiplas etapas | — |
+| Todo o `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) | `brain/src/main` | Skills, Workflows, Memory e Discovery já são acionáveis pela fachada offline; APIs/Events avançados ainda não fazem parte do caminho de produto | **Manter e expandir localmente** conforme casos de uso offline; APIs/Events avançados ficam para próxima implementação | — |
 | `WorkspaceManager`, `GitManager`, `ServiceManager`, `TestLab` | `app/sandbox` | Instanciados pela fachada e acionados na aba Operações; fluxo básico implementado | Expandir operações Git e adicionar terminal dedicado | — |
 | `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner` | `app/sandbox` | Instanciados pela fachada e avaliação acionável na aba Operações | Completar executor adversarial, corpus e readiness gate | — |
 | `ToolchainManager`/`ToolchainDetector` | `app/sandbox` | Instanciados pela fachada e acionados na aba Operações | Adicionar SDK/NDK, rollback transacional e cache | — |
 | `SecurityScenarioCatalog` | `app/sandbox` | Conectado à avaliação de segurança como catálogo baseline | Expandir cenários e evidências | — |
-| `RemotePluginCatalog` | `app/sandbox` | `PluginManager` real só usa `BuiltInCatalog` | Fazer `PluginManager` consultar o catálogo remoto como fonte adicional | Arquivar até ter transporte remoto real |
+| `RemotePluginCatalog` | `app/sandbox` | Catálogo composto já ligado ao `PluginManager`; importação de snapshot é explícita e sem rede implícita | **Implementação futura:** transporte remoto e autorização local acionada pela UI | — |
 | `GitOperation` (enum) | `GitManager.kt` | Não usado nem pelo próprio arquivo | — | Removido nesta rodada |
-| `ObservableDelivery`, `InMemoryExperienceMemory`, `DefaultPromptGenerator`, `HttpProviderClient` | `brain` | Zero uso, zero teste | — (dependem da decisão sobre `:brain` acima) | — |
+| `ObservableDelivery` | `brain` | Entrega local com hash e recibo, ainda não necessária para o fluxo offline atual | **Pode ser integrado localmente** para emitir recibos de artefatos na aba Operações | — |
+| `InMemoryExperienceMemory` | `brain` | Implementação volátil; o app já usa `FileExperienceMemory` persistente | **Manter como fallback/teste local**, sem substituir a persistência do app | — |
+| `DefaultPromptGenerator` | `brain` | Gerador determinístico local, sem dependência de servidor | **Implementação futura local** quando a UI expuser geração de prompts/planos | — |
+| `HttpProviderClient` | `brain` | Depende de endpoint, credenciais e rede; não pertence ao modo Android offline | — | **Implementação futura condicionada a transporte/servidor** |
 | `reference/braincode-python/` | raiz | Snapshot congelado, nada importa dele | — | Mover pra fora do repo de build ou marcar com `.buildignore`/README já existe, mas deixar isso explícito no `README.md` principal |
 | `__pycache__/*.pyc` no zip | `tests/`, `brain_runtime/` | Contradiz o próprio `.gitignore` | — | Apagar antes do próximo commit/export |
 
-**Recomendação de ordem, se for integrar em vez de arquivar:** primeiro Workspace/Git/Services/TestLab (menor esforço, backend pronto, só falta UI) → depois o caso de uso mínimo do `:brain` → só então RemotePluginCatalog e Security* completo, que dependem de infraestrutura externa (transporte remoto, executor adversarial) fora do escopo do runtime.
+**Decisão de produto para Android offline:** manter no caminho ativo tudo que é local e persistente — Workspace, Git básico, Services, TestLab, Security, Toolchains, Skills, Workflows, Memory, Discovery e catálogo built-in/remoto por snapshot explícito. Marcar como implementação futura o `BrainExecutionCoordinator` avançado, `ObservableDelivery` na UI, `DefaultPromptGenerator` exposto, transporte remoto de plugins e `HttpProviderClient`; os dois últimos dependem de rede/servidor ou credenciais e não devem ser simulados como offline.
 
 ### Primeira fatia implementada — 2026-09-12
 

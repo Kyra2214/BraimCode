@@ -54,3 +54,14 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 - [x] Remover o enum `GitOperation` não utilizado do `GitManager`.
 - [x] Verificar e remover `__pycache__/*.pyc` do pacote; nenhuma ocorrência permanece.
 - [x] Deixar explícito no `README.md` que `reference/braincode-python/` é histórico e não faz parte do build ativo.
+
+## Decisão de produto — Android offline sem servidor
+
+O caminho ativo do app deve priorizar componentes locais, persistentes e acionáveis
+sem backend: Skills, Workflows, Memory em arquivo, Discovery, Workspace, Git
+básico, Services, Security, Toolchains, TestLab e catálogo de plugins por
+snapshot explícito. O `BrainExecutionCoordinator` avançado, `ObservableDelivery`
+na UI, `DefaultPromptGenerator` exposto e um fluxo remoto completo de plugins
+ficam como implementações futuras locais ou de integração, conforme o caso de
+uso. `HttpProviderClient` fica explicitamente condicionado a servidor, rede e
+credenciais e não faz parte do modo offline.

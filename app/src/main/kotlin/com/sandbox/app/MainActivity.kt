@@ -136,6 +136,25 @@ private fun OperationsScreen(viewModel: SandboxViewModel) {
         }
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Workspace, Git e Services", style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(value = viewModel.workspaceProjectName, onValueChange = { viewModel.workspaceProjectName = it }, label = { Text("Projeto") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { viewModel.createWorkspaceProject() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Criar projeto") }
+                    OutlinedButton(onClick = { viewModel.refreshWorkspace() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Atualizar") }
+                    OutlinedButton(onClick = { viewModel.inspectGitStatus() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Git status") }
+                }
+                Text("Projetos: ${viewModel.workspaceProjects.joinToString { it.name }.ifBlank { "nenhum" }}", style = MaterialTheme.typography.bodySmall)
+                viewModel.lastGitStatus?.let { Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { viewModel.startSqliteService() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Iniciar SQLite") }
+                    OutlinedButton(onClick = { viewModel.stopSqliteService() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Parar SQLite") }
+                }
+                viewModel.sqliteServiceStatus?.let { Text("SQLite: ${if (it.running) "ativo (PID ${it.pid})" else "parado"}") }
+                viewModel.workspaceError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Toolchains catalogadas", style = MaterialTheme.typography.titleMedium)
                 OutlinedButton(onClick = { viewModel.refreshToolchains() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Atualizar status") }
                 BuiltInToolchains.all.forEach { profile ->

@@ -4,7 +4,7 @@ O Braim é um runtime experimental para execução de tarefas com Policy, approv
 
 > **Estado de segurança:** o projeto possui hardening significativo e 134 testes Python aprovados, mas ainda depende de infraestrutura do host para isolamento OS-level completo. Não deve ser interpretado como container ou ambiente de produção isolado sem uma implantação adequada.
 
-> **Estado de integração (2026-09-12):** o app Android (`:app`) que roda de verdade num device usa o rootfs/Sandbox e possui caminhos reais para o Brain (`sandbox.health`) e para TestLab, Security e Toolchains na aba **Operações**. Essas operações compartilham `SandboxPlatform` e o executor protegido. O módulo `:brain` ainda não está unificado por completo: planos de usuário, aprovação/retomada, Skills, Workflows, Memory, Discovery, Workspace, Git e Services continuam pendentes — ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md`.
+> **Estado de integração (2026-09-12):** o app Android (`:app`) que roda de verdade num device usa o rootfs/Sandbox e possui caminhos reais para o Brain (`sandbox.health`), planos com aprovação/retomada, TestLab, Security, Toolchains, Workspace, Git e Services na aba **Operações**. Essas operações compartilham `SandboxPlatform` e o executor protegido. O módulo `:brain` ainda não está unificado por completo: Skills, Workflows, Memory, Discovery e o catálogo remoto de plugins continuam pendentes — ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md`.
 
 ## Executar testes
 

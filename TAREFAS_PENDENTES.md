@@ -47,7 +47,7 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 
 - [x] Ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel`; o caminho de health, planos e retomada agora é acionável pela UI. `BrainExecutionCoordinator` permanece como API avançada ainda não exposta.
 - [ ] Decidir o destino de todo o módulo `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) — hoje zero uso fora dos próprios testes.
-- [ ] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager`; o `TestLab` já é acionável na aba **Operações** pelo executor protegido compartilhado.
+- [x] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager` na aba **Operações**; criação/listagem de projetos, `git status` e ciclo básico do SQLite usam o executor protegido compartilhado.
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
 - [ ] Ligar `RemotePluginCatalog` ao `PluginManager` real, ou arquivar até haver transporte remoto.
 - [ ] Remover o enum `GitOperation` (não usado nem pelo próprio `GitManager`) ou passar a usá-lo.

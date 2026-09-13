@@ -23,6 +23,9 @@ import com.sandbox.sandbox.SandboxPlatform
 import com.sandbox.sandbox.SecurityAssessment
 import com.sandbox.sandbox.ToolchainStatus
 import com.brain.planner.PlanoExecucao
+import com.sandbox.sandbox.Project
+import com.sandbox.sandbox.ServiceStatus
+import com.sandbox.sandbox.BuiltInServices
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -111,6 +114,15 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         private set
     private var pendingApprovalPlan: PlanoExecucao? = null
     private var pendingApprovalRunId: String? = null
+    var workspaceProjectName by mutableStateOf("demo-project")
+    var workspaceProjects by mutableStateOf<List<Project>>(emptyList())
+        private set
+    var lastGitStatus by mutableStateOf<String?>(null)
+        private set
+    var sqliteServiceStatus by mutableStateOf<ServiceStatus?>(null)
+        private set
+    var workspaceError by mutableStateOf<String?>(null)
+        private set
 
     fun runDiagnostics() {
         viewModelScope.launch {
@@ -321,6 +333,49 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun refreshWorkspace() {
+        val plat = platform ?: return
+        workspaceProjects = plat.workspace.listProjects()
+        sqliteServiceStatus = plat.services.status(BuiltInServices.sqlite("/home/sandbox/workspace"))
+    }
+
+    fun createWorkspaceProject() {
+        val plat = platform ?: return
+        workspaceError = null
+        runCatching { plat.workspace.createProject(workspaceProjectName) }
+            .onSuccess { refreshWorkspace() }
+            .onFailure { workspaceError = it.message ?: "Falha ao criar projeto" }
+    }
+
+    fun inspectGitStatus() {
+        val plat = platform ?: return
+        val project = workspaceProjects.firstOrNull { it.name == workspaceProjectName }
+        if (project == null) {
+            workspaceError = "Crie ou selecione um projeto antes de consultar o Git."
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val status = plat.git.status("/home/sandbox/workspace/projects/${project.name}")
+            withContext(Dispatchers.Main) { lastGitStatus = status.stdout.ifBlank { status.stderr } }
+        }
+    }
+
+    fun startSqliteService() {
+        val plat = platform ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val status = runCatching { plat.services.start(BuiltInServices.sqlite("/home/sandbox/workspace")) }.getOrNull()
+            withContext(Dispatchers.Main) { sqliteServiceStatus = status }
+        }
+    }
+
+    fun stopSqliteService() {
+        val plat = platform ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val status = plat.services.stop(BuiltInServices.sqlite("/home/sandbox/workspace"))
+            withContext(Dispatchers.Main) { sqliteServiceStatus = status }
+        }
+    }
+
     fun resetSandbox() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -343,6 +398,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             pendingApprovalId = null
             pendingApprovalPlan = null
             pendingApprovalRunId = null
+            workspaceProjects = emptyList()
+            lastGitStatus = null
+            sqliteServiceStatus = null
+            workspaceError = null
             localModelProgress = null
             localModelReady = false
             localModelError = null

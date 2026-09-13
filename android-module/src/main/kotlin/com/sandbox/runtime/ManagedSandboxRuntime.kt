@@ -130,10 +130,12 @@ class ManagedSandboxRuntime(
         val finished = System.currentTimeMillis()
         val reason = a.reason.get() ?: TerminationReason.RUNTIME_ERROR
         val exitCode = if (!a.process.isAlive) runCatching { a.process.exitValue() }.getOrNull() else null
+        val (cleanedStderr, verifiedLimits) = verifyResourceLimits(stderr.value())
+        if (verifiedLimits == false) emit(RuntimeEventType.RESOURCE_LIMIT_UNVERIFIED, a.id, "requested=${launcher.resourceLimits}")
         val log = ExecutionLog(a.id, sessionId, command, workingDir, started, finished, finished - started,
             if (reason == TerminationReason.PROCESS_EXIT) exitCode else null,
             reason, reason == TerminationReason.TIMEOUT, forcedKill || a.forcedKill.get(),
-            stdout.value(), stderr.value(), SandboxState.READY)
+            stdout.value(), cleanedStderr, SandboxState.READY)
         runCatching { repository.save(log) }.onFailure { emit(RuntimeEventType.PERSISTENCE_ERROR, a.id, it.message) }
         active.compareAndSet(a, null)
         stateRef.set(SandboxState.READY)
@@ -156,6 +158,21 @@ class ManagedSandboxRuntime(
             if (active.get() == null) return
             try { Thread.sleep(100) } catch (_: InterruptedException) { Thread.currentThread().interrupt(); return }
         }
+    }
+
+    /**
+     * Separa a linha de marcação emitida por
+     * [ProotResourceLimits.verifiedPreamble] do stderr real do comando, e
+     * confere se o `ulimit` efetivo bateu com [launcher.resourceLimits].
+     * Retorna `null` no segundo elemento quando o launcher não pediu
+     * nenhum limite (nada para verificar) — nesse caso não há evento a
+     * emitir, só o caso `false` (pedido, mas não confirmado) é uma falha.
+     */
+    private fun verifyResourceLimits(rawStderr: String): Pair<String, Boolean?> {
+        val limits = launcher.resourceLimits
+        if (!limits.hasLimits()) return rawStderr to null
+        val (cleaned, parsed) = ResourceLimitVerification.extract(rawStderr)
+        return cleaned to ResourceLimitVerification.matches(limits, parsed)
     }
 
     private fun stopProcess(process: Process): Boolean {

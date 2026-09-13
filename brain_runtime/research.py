@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from typing import Callable, Iterable
 from urllib.parse import urlparse
-from urllib.request import Request, build_opener, HTTPRedirectHandler
-import ipaddress, re, socket
+from urllib.request import Request, build_opener, HTTPRedirectHandler, HTTPSHandler
+import http.client, ipaddress, re, socket, ssl
 
 _INJECTION = re.compile(r"(?i)(ignore\s+(?:all\s+)?previous|system\s+message|developer\s+instructions|reveal\s+(?:the\s+)?prompt|jailbreak)")
 
@@ -24,7 +24,14 @@ class ResearchResult:
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, request, fp, code, msg, headers, newurl): return None
 
-def validate_external_url(url: str, allowed_hosts: tuple[str, ...] = ()) -> None:
+def validate_external_url(url: str, allowed_hosts: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """Valida o URL e retorna os IPs resolvidos e aprovados.
+
+    O chamador deve conectar exatamente a um desses IPs (ver
+    _PinnedHTTPSConnection abaixo) em vez de deixar a camada HTTP resolver o
+    host de novo — resolver duas vezes abre uma janela de DNS rebinding entre
+    a validação e a conexão real.
+    """
     parsed = urlparse(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password: raise ValueError("only credential-free HTTPS URLs are allowed")
     host = parsed.hostname.lower()
@@ -34,12 +41,33 @@ def validate_external_url(url: str, allowed_hosts: tuple[str, ...] = ()) -> None
     for address in addresses:
         ip = ipaddress.ip_address(address)
         if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast: raise PermissionError("research URL resolves to a forbidden network")
+    return tuple(sorted(addresses))
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """Conecta direto no IP já validado, mantendo SNI/verificação de certificado no hostname original."""
+    def __init__(self, host: str, pinned_ip: str, **kwargs):
+        super().__init__(host, **kwargs); self._pinned_ip = pinned_ip
+    def connect(self) -> None:
+        sock = socket.create_connection((self._pinned_ip, self.port), self.timeout, self.source_address)
+        if getattr(self, "_tunnel_host", None):
+            self.sock = sock; self._tunnel()
+        context = self._context or ssl.create_default_context()
+        self.sock = context.wrap_socket(sock, server_hostname=self.host)
+
+class _PinnedHTTPSHandler(HTTPSHandler):
+    def __init__(self, pinned_ip: str, **kwargs): super().__init__(**kwargs); self._pinned_ip = pinned_ip
+    def https_open(self, req):
+        return self.do_open(lambda host, **kw: _PinnedHTTPSConnection(host, self._pinned_ip, **kw), req)
 
 class HTTPSResearchFetcher:
-    def __init__(self, *, allowed_hosts: tuple[str, ...] = (), max_bytes: int = 2_000_000, timeout_seconds: float = 10.0): self.allowed_hosts, self.max_bytes, self.timeout_seconds = allowed_hosts, max_bytes, timeout_seconds; self._opener = build_opener(NoRedirect)
+    def __init__(self, *, allowed_hosts: tuple[str, ...] = (), max_bytes: int = 2_000_000, timeout_seconds: float = 10.0): self.allowed_hosts, self.max_bytes, self.timeout_seconds = allowed_hosts, max_bytes, timeout_seconds
     def __call__(self, source: ResearchSource) -> str:
-        validate_external_url(source.url, self.allowed_hosts); request = Request(source.url, headers={"User-Agent": "BraimCode-Research/1", "Accept": "text/plain,text/html,application/json"}, method="GET")
-        with self._opener.open(request, timeout=self.timeout_seconds) as response:
+        addresses = validate_external_url(source.url, self.allowed_hosts)
+        # Pina a conexão real no primeiro IP já validado acima; nenhuma nova
+        # resolução de DNS acontece entre a validação e o connect().
+        opener = build_opener(NoRedirect, _PinnedHTTPSHandler(addresses[0]))
+        request = Request(source.url, headers={"User-Agent": "BraimCode-Research/1", "Accept": "text/plain,text/html,application/json"}, method="GET")
+        with opener.open(request, timeout=self.timeout_seconds) as response:
             if response.status < 200 or response.status >= 300: raise ValueError(f"HTTP status {response.status}")
             content_type = response.headers.get("Content-Type", "")
             if content_type and not any(kind in content_type.lower() for kind in ("text/", "json", "xml")): raise ValueError("unsupported research content type")

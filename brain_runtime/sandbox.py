@@ -2,7 +2,7 @@ from __future__ import annotations
 import hashlib, os, resource, signal, shutil, subprocess, time
 from dataclasses import dataclass
 from pathlib import Path
-from .host_controls import CgroupController
+from .host_controls import CgroupController, DistributedLeaseStore, Lease
 
 @dataclass(frozen=True)
 class SandboxJob:
@@ -14,6 +14,16 @@ class SandboxJob:
     allowed_extensions: tuple[str, ...] = (); cancel_event: object | None = None
     isolation_required: bool = False; network_namespace: bool = False
     filesystem_jail: bool = False; cgroup_path: str = ""; allowed_artifact_dirs: tuple[str, ...] = (); modified_artifacts_only: bool = False
+    # Caminho de um rootfs controlado (ex: saída do rootfs-builder) usado para
+    # popular /usr e /bin dentro do bwrap. Sem isso, o jail cai de volta para
+    # os binários do host — ver diagnóstico "isolation:bubblewrap using host
+    # /usr and /bin" quando isso acontece.
+    rootfs_path: str = ""
+    # Chave de fencing (ver DistributedLeaseStore em host_controls.py) e a
+    # lease já adquirida para essa chave. Se um lease_store for passado ao
+    # SandboxExecutor, todo job precisa de uma lease válida e corrente para
+    # essa chave antes de qualquer processo ser iniciado.
+    lease: object | None = None
 
 @dataclass(frozen=True)
 class SandboxJobResult:
@@ -41,9 +51,26 @@ def _namespace_command(argv: tuple[str, ...], job: SandboxJob) -> tuple[list[str
     if job.filesystem_jail:
         bwrap = shutil.which("bwrap")
         if bwrap:
-            command = [bwrap, "--die-with-parent", "--unshare-pid", "--proc", "/proc", "--dev", "/dev", "--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin", "--bind", str(Path(job.cwd).resolve()), "/workspace", "--chdir", "/workspace"]
+            command = [bwrap, "--die-with-parent", "--unshare-pid", "--proc", "/proc", "--dev", "/dev"]
+            jail_diagnostics: tuple[str, ...]
+            if job.rootfs_path:
+                rootfs = Path(job.rootfs_path).resolve()
+                if not rootfs.is_dir() or not (rootfs / "usr").is_dir() or not (rootfs / "bin").is_dir():
+                    if job.isolation_required: return [], ("configured rootfs_path is missing /usr or /bin; strict filesystem jail refused",)
+                    command += ["--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin"]
+                    jail_diagnostics = ("isolation:bubblewrap filesystem jail enabled", "isolation:rootfs_path invalid; fell back to host /usr and /bin")
+                else:
+                    command += ["--ro-bind", str(rootfs / "usr"), "/usr", "--ro-bind", str(rootfs / "bin"), "/bin"]
+                    if (rootfs / "lib").is_dir(): command += ["--ro-bind", str(rootfs / "lib"), "/lib"]
+                    if (rootfs / "lib64").is_dir(): command += ["--ro-bind", str(rootfs / "lib64"), "/lib64"]
+                    jail_diagnostics = ("isolation:bubblewrap filesystem jail enabled", "isolation:bwrap using configured rootfs_path, no host /usr or /bin exposed")
+            else:
+                if job.isolation_required: return [], ("rootfs_path not configured; strict filesystem jail refused rather than exposing host /usr and /bin",)
+                command += ["--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin"]
+                jail_diagnostics = ("isolation:bubblewrap filesystem jail enabled", "isolation:bubblewrap using host /usr and /bin — no rootfs_path configured, filesystem isolation weakened")
+            command += ["--bind", str(Path(job.cwd).resolve()), "/workspace", "--chdir", "/workspace"]
             if not job.network_allowed: command.append("--unshare-net")
-            return command + ["--"] + list(argv), ("isolation:bubblewrap filesystem jail enabled", "isolation:network namespace enabled" if not job.network_allowed else "isolation:network namespace not requested")
+            return command + ["--"] + list(argv), jail_diagnostics + (("isolation:network namespace enabled",) if not job.network_allowed else ("isolation:network namespace not requested",))
         if job.isolation_required: return [], ("bubblewrap unavailable; strict filesystem jail refused",)
     command = [unshare, "--user", "--map-root-user", "--mount", "--pid", "--fork", "--mount-proc"]
     diagnostics = ("isolation:user namespace enabled", "isolation:mount namespace enabled", "isolation:PID namespace enabled")
@@ -73,7 +100,25 @@ def strict_isolation_available(*, require_filesystem_jail: bool = False, require
     return not diagnostics, tuple(diagnostics)
 
 class SandboxExecutor:
+    """Único ponto de entrada de execução de sandbox.
+
+    Todo consumidor (SandboxDispatcher, Orchestrator, etc.) chama
+    ``execute()``. Quando um ``lease_store`` é configurado aqui, o fencing
+    (ver DistributedLeaseStore em host_controls.py) passa a ser obrigatório
+    para *todos* os consumidores automaticamente — não é preciso lembrar de
+    checar a lease em cada chamador individualmente.
+    """
+    def __init__(self, lease_store: DistributedLeaseStore | None = None):
+        self.lease_store = lease_store
+
     def execute(self, job: SandboxJob) -> SandboxJobResult:
+        if self.lease_store is not None:
+            if job.lease is None or not isinstance(job.lease, Lease):
+                return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=("fencing lease required",), run_id=job.run_id, session_id=job.session_id)
+            try:
+                self.lease_store.assert_current(job.lease)
+            except PermissionError as error:
+                return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=(f"fencing lease invalid: {error}",), run_id=job.run_id, session_id=job.session_id)
         if not job.argv or job.argv[0] not in job.allowed_commands or any(token in job.argv[0] for token in ("/", "\\")):
             return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=("command not allowlisted",), run_id=job.run_id, session_id=job.session_id)
         if job.cancel_event is not None and getattr(job.cancel_event, "is_set", lambda: False)():

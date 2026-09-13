@@ -9,7 +9,13 @@ enum class TerminationReason {
 enum class RuntimeEventType {
     ROOTFS_NOT_FOUND, PROOT_NOT_FOUND, PROOT_START_FAILED, ROOTFS_EXTRACTION_FAILED,
     STREAM_READ_ERROR, PROCESS_TIMEOUT, PROCESS_CANCELLED, PROCESS_FORCED_KILL,
-    RUNTIME_CLOSE, RUNTIME_RESET, PERSISTENCE_ERROR
+    RUNTIME_CLOSE, RUNTIME_RESET, PERSISTENCE_ERROR,
+    // O ulimit efetivo (RLIMIT_* real, ver ProotResourceLimits.kt) não bateu
+    // com o pedido — normalmente um /bin/bash minimalista do rootfs sem
+    // suporte a alguma flag. Isso é uma falha de isolamento, não um detalhe
+    // de log: memory_mb/cpu_seconds/etc. configurados podem não estar
+    // valendo de verdade para essa execução.
+    RESOURCE_LIMIT_UNVERIFIED
 }
 
 data class ExecutionLog(
@@ -57,4 +63,13 @@ interface ExecutionLogRepository {
 
 interface SandboxProcessLauncher {
     fun launch(command: List<String>, workingDir: String): Process
+
+    /**
+     * Limites de RLIMIT que este launcher já embutiu no comando lançado
+     * (ver ProotResourceLimits.kt). Default `NONE` para não quebrar
+     * launchers de teste/host que não passam por `proot` e não emitem o
+     * marcador de verificação — nesse caso [ResourceLimitVerification]
+     * simplesmente não tem nada para checar.
+     */
+    val resourceLimits: ProotResourceLimits get() = ProotResourceLimits.NONE
 }

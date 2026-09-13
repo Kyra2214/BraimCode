@@ -8,6 +8,7 @@ import com.sandbox.runtime.FileExecutionLogRepository
 import com.sandbox.runtime.FileRuntimeEventStore
 import com.sandbox.runtime.ManagedSandboxRuntime
 import com.sandbox.runtime.ProotProcessLauncher
+import com.sandbox.runtime.ProotResourceLimits
 import com.sandbox.runtime.SandboxRuntime
 import com.sandbox.runtime.PackagedRuntime
 import com.sandbox.runtime.TarGzExtractor
@@ -83,7 +84,11 @@ class AndroidSandboxFactory(private val context: Context) {
             rootfsDir = extractedRootfsDir,
             tmpDir = packagedRuntime.prootTmpPath,
             nativeLibraryDir = packagedRuntime.nativeLibraryPath,
-            prootLoader = packagedRuntime.packagedLoaderPath
+            prootLoader = packagedRuntime.packagedLoaderPath,
+            // Explícito (não só o default) para deixar claro na composição
+            // real de produção que todo comando via proot carrega RLIMIT_*
+            // real — ver ProotResourceLimits.kt e AUDITORIA_PESADA.md item 4.
+            resourceLimits = ProotResourceLimits.DEFAULT
         )
         ensureVenv(runtime)
         return runtime
@@ -103,7 +108,8 @@ class AndroidSandboxFactory(private val context: Context) {
             rootfsDir = extractedRootfsDir,
             tmpDir = packagedRuntime.prootTmpPath,
             nativeLibraryDir = packagedRuntime.nativeLibraryPath,
-            prootLoader = packagedRuntime.packagedLoaderPath
+            prootLoader = packagedRuntime.packagedLoaderPath,
+            resourceLimits = ProotResourceLimits.DEFAULT
         )
         return ManagedSandboxRuntime(launcher, repository, sessionId, runtimeEventRepository = eventStore)
     }

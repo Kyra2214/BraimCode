@@ -38,7 +38,9 @@ class SandboxRuntime(
     private val tmpDir: File,
     private val disableSeccompAcceleration: Boolean = true,
     private val nativeLibraryDir: String? = null,
-    private val prootLoader: String? = null
+    private val prootLoader: String? = null,
+    // Ver ProotResourceLimits.kt — mesmo mecanismo do ProotProcessLauncher.
+    private val resourceLimits: ProotResourceLimits = ProotResourceLimits.DEFAULT
 ) {
 
     init {
@@ -136,23 +138,34 @@ class SandboxRuntime(
             process.destroyForcibly()
             stdoutThread.join(2_000)
             stderrThread.join(2_000)
+            val (cleaned, verified) = verifyResourceLimits(stderrBuffer.toString())
             return SandboxExecutionResult(
                 stdout = stdoutBuffer.toString(),
-                stderr = stderrBuffer.toString(),
+                stderr = cleaned,
                 exitCode = -1,
-                timedOut = true
+                timedOut = true,
+                resourceLimitsVerified = verified
             )
         }
 
         stdoutThread.join()
         stderrThread.join()
 
+        val (cleanedStderr, verifiedLimits) = verifyResourceLimits(stderrBuffer.toString())
         return SandboxExecutionResult(
             stdout = stdoutBuffer.toString(),
-            stderr = stderrBuffer.toString(),
+            stderr = cleanedStderr,
             exitCode = process.exitValue(),
-            timedOut = false
+            timedOut = false,
+            resourceLimitsVerified = verifiedLimits
         )
+    }
+
+    /** Ver ManagedSandboxRuntime.verifyResourceLimits — mesma lógica, launcher diferente. */
+    private fun verifyResourceLimits(rawStderr: String): Pair<String, Boolean?> {
+        if (!resourceLimits.hasLimits()) return rawStderr to null
+        val (cleaned, parsed) = ResourceLimitVerification.extract(rawStderr)
+        return cleaned to ResourceLimitVerification.matches(resourceLimits, parsed)
     }
 
     /**
@@ -193,19 +206,16 @@ class SandboxRuntime(
      * e é instalado como pacote de primeira classe no Dockerfile do
      * rootfs-builder, não via alternatives — bem mais robusto aqui.
      */
-    private fun buildProotCommand(command: List<String>, workingDir: String): List<String> {
-        return listOf(
-            prootExecutable,
-            "-r", rootfsDir.absolutePath,
-            "-w", workingDir,
-            "-0",
-            "-b", "/dev",
-            "-b", "/proc",
-            "-b", "/sys",
-            "--link2symlink",
-            "--kill-on-exit",
-            "/bin/bash", "-c", command.joinToString(" ") { shellEscape(it) }
-        )
+    private fun buildProotCommand(command: List<String>, workingDir: String): List<String> = buildList {
+        add(prootExecutable)
+        add("-r"); add(rootfsDir.absolutePath)
+        add("-w"); add(workingDir)
+        add("-0")
+        addAll(ProotDeviceBinds.bindArgs())
+        add("--link2symlink")
+        add("--kill-on-exit")
+        add("/bin/bash"); add("-c")
+        add(resourceLimits.verifiedPreamble() + "exec " + command.joinToString(" ") { shellEscape(it) })
     }
 
     private fun shellEscape(arg: String): String {

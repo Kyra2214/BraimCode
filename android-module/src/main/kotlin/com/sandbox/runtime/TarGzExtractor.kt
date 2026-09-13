@@ -24,10 +24,17 @@ object TarGzExtractor {
      * Rejeita entradas com ".." no caminho (path traversal) — mesmo padrão
      * de validação usado no importador de workspace do projeto anterior.
      */
-    fun extract(archive: File, destinationDir: File) {
+    fun extract(archive: File, destinationDir: File, progressListener: ((Long) -> Unit)? = null) {
         if (!destinationDir.exists()) destinationDir.mkdirs()
 
-        GZIPInputStream(archive.inputStream()).use { gzipStream ->
+        var compressedBytesRead = 0L
+        val source = object : java.io.FilterInputStream(archive.inputStream()) {
+            override fun read(): Int = super.read().also { if (it >= 0) { compressedBytesRead++; progressListener?.invoke(compressedBytesRead) } }
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int = super.read(buffer, offset, length).also {
+                if (it > 0) { compressedBytesRead += it; progressListener?.invoke(compressedBytesRead) }
+            }
+        }
+        source.use { input -> GZIPInputStream(input).use { gzipStream ->
             TarArchiveInputStream(gzipStream).use { tarStream ->
                 var entry: TarArchiveEntry? = tarStream.nextEntry
                 while (entry != null) {
@@ -70,7 +77,7 @@ object TarGzExtractor {
                     entry = tarStream.nextEntry
                 }
             }
-        }
+        } }
     }
 
     private fun resolveSafePath(base: File, entryName: String): File {

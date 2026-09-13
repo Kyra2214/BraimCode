@@ -79,7 +79,10 @@ class AndroidSandboxFactory(private val context: Context) {
 
     fun modelFile(modelId: String): File = File(modelDir, "$modelId.gguf")
 
-    fun prepareRuntime(forceReExtract: Boolean = false): SandboxRuntime {
+    fun prepareRuntime(
+        forceReExtract: Boolean = false,
+        progressListener: ((completed: Long, total: Long, stage: String) -> Unit)? = null
+    ): SandboxRuntime {
         require(downloadedArchives.all { it.exists() }) {
             "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
         }
@@ -87,12 +90,23 @@ class AndroidSandboxFactory(private val context: Context) {
         val needsReExtract = !extractedRootfsDir.exists() || extractedRootfsDir.list().isNullOrEmpty() || extractionMarker.readTextOrNull() != EXTRACTOR_VERSION
         if (needsReExtract) {
             if (extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
-            downloadedArchives.forEach { archive ->
-                TarGzExtractor.extract(archive, extractedRootfsDir)
+            val totalArchiveBytes = downloadedArchives.sumOf { it.length() }.coerceAtLeast(1L)
+            var completedArchiveBytes = 0L
+            downloadedArchives.forEachIndexed { index, archive ->
+                progressListener?.invoke(completedArchiveBytes, totalArchiveBytes, "Extraindo camada ${index + 1}/3")
+                TarGzExtractor.extract(archive, extractedRootfsDir) { bytesRead ->
+                    progressListener?.invoke(
+                        (completedArchiveBytes + bytesRead).coerceAtMost(totalArchiveBytes),
+                        totalArchiveBytes,
+                        "Extraindo camada ${index + 1}/3"
+                    )
+                }
+                completedArchiveBytes += archive.length()
             }
             validateExtractedRootfs()
             extractionMarker.writeText(EXTRACTOR_VERSION)
         }
+        progressListener?.invoke(1L, 1L, "Inicializando runtime")
         ensureResolvConf()
         val packagedRuntime = PackagedRuntime(context, extractedRootfsDir)
         packagedRuntime.prepare()
@@ -111,11 +125,14 @@ class AndroidSandboxFactory(private val context: Context) {
         return runtime
     }
 
-    fun prepareManagedRuntime(sessionId: String = persistentSessionId()): ManagedSandboxRuntime {
+    fun prepareManagedRuntime(
+        sessionId: String = persistentSessionId(),
+        progressListener: ((completed: Long, total: Long, stage: String) -> Unit)? = null
+    ): ManagedSandboxRuntime {
         require(downloadedArchives.all { it.exists() }) {
             "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
         }
-        prepareRuntime()
+        prepareRuntime(progressListener = progressListener)
         val packagedRuntime = PackagedRuntime(context, extractedRootfsDir)
         packagedRuntime.prepare()
         val logDir = File(sandboxBaseDir, "execution-logs")

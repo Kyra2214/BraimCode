@@ -256,8 +256,18 @@ private fun StatusSection(viewModel: SandboxViewModel) {
                     } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 is SandboxPhase.Preparing -> {
-                    Text("Extraindo rootfs e preparando o runtime gerenciado...")
-                    CircularProgressIndicator()
+                    Text(phase.stage)
+                    if (phase.totalBytes > 0L) {
+                        val progress = (phase.bytesCompleted.toFloat() / phase.totalBytes.toFloat()).coerceIn(0f, 1f)
+                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                        Text(
+                            "${(progress * 100).toInt()}% — ${phase.bytesCompleted / (1024 * 1024)} MiB / ${phase.totalBytes / (1024 * 1024)} MiB",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                    Text("Não feche o aplicativo durante esta etapa.", style = MaterialTheme.typography.bodySmall)
                 }
                 is SandboxPhase.Ready -> {
                     Text("Sandbox pronto — lifecycle gerenciado ativo.")

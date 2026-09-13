@@ -36,7 +36,11 @@ import kotlinx.coroutines.withContext
 sealed interface SandboxPhase {
     data object NotReady : SandboxPhase
     data class Downloading(val bytesDownloaded: Long, val totalBytes: Long) : SandboxPhase
-    data object Preparing : SandboxPhase
+    data class Preparing(
+        val stage: String = "Preparando runtime",
+        val bytesCompleted: Long = 0L,
+        val totalBytes: Long = 0L
+    ) : SandboxPhase
     data object Ready : SandboxPhase
     data object Running : SandboxPhase
     data class Blocked(val reason: String) : SandboxPhase
@@ -178,11 +182,13 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     phase = SandboxPhase.Blocked(failedDownload.reason)
                     return@launch
             }
-            phase = SandboxPhase.Preparing
+            phase = SandboxPhase.Preparing("Extraindo RootFS", 0L, manifests.sumOf { it.sizeBytes })
             try {
                 runtime?.shutdown()
                 val preparedRuntime = withContext(Dispatchers.IO) {
-                    factory.prepareManagedRuntime(factory.persistentSessionId())
+                    factory.prepareManagedRuntime(factory.persistentSessionId()) { completed, total, stage ->
+                        phase = SandboxPhase.Preparing(stage, completed, total)
+                    }
                 }
                 runtime = preparedRuntime
                 val sandboxDir = File(getApplication<Application>().filesDir, "sandbox")

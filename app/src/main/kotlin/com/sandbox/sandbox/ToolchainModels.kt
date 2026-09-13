@@ -62,11 +62,27 @@ class ToolchainDetector(private val executor: SandboxCommandExecutor) {
         return ToolchainDetection(profile, result.succeeded, (result.stdout.ifBlank { result.stderr }).take(4096), result.stderr.takeIf { !result.succeeded }?.take(4096))
     }
 
+    /** Captura somente versões dos pacotes do próprio perfil que já estavam instalados. */
+    fun snapshotInstalledPackages(profile: ToolchainProfile): List<String> {
+        val packageArgs = profile.packages.joinToString(" ") { shellQuote(it) }
+        val script = "for p in $packageArgs; do v=\$(dpkg-query -W -f='\${'$'}{db:Status-Status} \${'$'}{Version}' \"\${'$'}p\" 2>/dev/null || true); case \"\${'$'}v\" in installed\\ *) echo \"\${'$'}p=\${'$'}{v#installed }\";; esac; done"
+        val result = executor.execute(listOf("bash", "-c", script), timeoutSeconds = 30)
+        check(result.succeeded) { result.stderr.ifBlank { "não foi possível capturar estado dos pacotes" } }
+        return result.stdout.lineSequence()
+            .map(String::trim)
+            .filter { it.matches(Regex("[A-Za-z0-9][A-Za-z0-9+._:-]*=.+")) }
+            .distinct()
+            .sorted()
+            .toList()
+    }
+
     fun planInstall(profile: ToolchainProfile): ToolchainInstallPlan {
         val packages = profile.packages.joinToString(" ")
         val script = "set -o pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get -o Dpkg::Use-Pty=0 install -y --no-install-recommends $packages"
         return ToolchainInstallPlan(profile, listOf("bash", "-c", script))
     }
+
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }
 
 enum class ToolchainState { NOT_INSTALLED, INSTALLING, INSTALLED, FAILED, REMOVING, ROLLED_BACK }
@@ -79,7 +95,7 @@ data class ToolchainStatus(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-/** Lifecycle transacional local: snapshot antes da mudança, cache após validação e rollback em falha. */
+/** Lifecycle transacional local com restauração exata do estado observado antes da instalação. */
 class ToolchainManager(
     private val executor: SandboxCommandExecutor,
     private val stateDir: File,
@@ -106,7 +122,8 @@ class ToolchainManager(
         val before = detector.detect(profile)
         val previous = ToolchainStatus(id, if (before.installed) ToolchainState.INSTALLED else ToolchainState.NOT_INSTALLED, before.versionOutput, before.diagnostic)
         if (before.installed) return@synchronized persist(previous)
-        transactionStore.saveBeforeInstall(profile, previous)
+        val installedBefore = detector.snapshotInstalledPackages(profile)
+        transactionStore.saveBeforeInstall(profile, previous, installedBefore)
         persist(ToolchainStatus(id, ToolchainState.INSTALLING))
         return@synchronized try {
             val execution = executor.execute(detector.planInstall(profile).command, 900)
@@ -146,13 +163,26 @@ class ToolchainManager(
 
     private fun rollbackLocked(profile: ToolchainProfile): String? {
         val snapshot = transactionStore.loadSnapshot(profile.id) ?: return null
-        if (snapshot.state == ToolchainState.NOT_INSTALLED) {
-            val packages = snapshot.installedPackages.joinToString(" ")
-            if (packages.isNotBlank()) {
-                val result = executor.execute(listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 remove -y $packages"), 900)
-                if (!result.succeeded) return result.stderr.ifBlank { "rollback remove falhou" }.take(4096)
-            }
+        val preExistingNames = snapshot.installedPackages.map { it.substringBefore('=') }.toSet()
+        val addedByTransaction = profile.packages.filter { it !in preExistingNames }
+        if (addedByTransaction.isNotEmpty()) {
+            val packages = addedByTransaction.joinToString(" ")
+            val result = executor.execute(
+                listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 remove -y $packages"),
+                900
+            )
+            if (!result.succeeded) return result.stderr.ifBlank { "rollback remove falhou" }.take(4096)
         }
+
+        if (snapshot.installedPackages.isNotEmpty()) {
+            val exact = snapshot.installedPackages.joinToString(" ")
+            val result = executor.execute(
+                listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 install -y $exact"),
+                900
+            )
+            if (!result.succeeded) return result.stderr.ifBlank { "rollback restore falhou: versão anterior indisponível" }.take(4096)
+        }
+
         transactionStore.clearSnapshot(profile.id)
         return null
     }

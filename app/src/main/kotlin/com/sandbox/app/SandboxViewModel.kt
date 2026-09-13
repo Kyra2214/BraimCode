@@ -29,6 +29,7 @@ import com.sandbox.sandbox.Project
 import com.sandbox.sandbox.ServiceStatus
 import com.sandbox.sandbox.BuiltInServices
 import java.io.File
+import com.sandbox.runtime.NamespaceSupport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -65,6 +66,7 @@ val QUICK_COMMANDS: List<QuickCommand> = listOf(
 
 class SandboxViewModel(application: Application) : AndroidViewModel(application) {
     private val factory = AndroidSandboxFactory(application)
+    val namespaceSupport: NamespaceSupport = NamespaceSupport.detect()
     private var runtime: ManagedSandboxRuntime? = null
     private var platform: SandboxPlatform? = null
     private var brainController: BrainSandboxController? = null

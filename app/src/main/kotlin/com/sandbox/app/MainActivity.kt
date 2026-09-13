@@ -242,6 +242,19 @@ private fun DiagnosticsSection(report: String) {
 private fun StatusSection(viewModel: SandboxViewModel) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (viewModel.namespaceSupport.compatibilityMode) {
+                Text(
+                    "Modo compatibilidade: user namespaces indisponíveis no kernel. " +
+                        "Executando via proot com isolamento reduzido (${viewModel.namespaceSupport.reason}).",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    "User namespaces disponíveis; o runtime continuará usando proot por compatibilidade.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             when (val phase = viewModel.phase) {
                 is SandboxPhase.NotReady -> {
                     Text("Sandbox ainda não preparado.")

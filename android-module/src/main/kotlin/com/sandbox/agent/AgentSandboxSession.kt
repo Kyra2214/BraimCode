@@ -3,6 +3,7 @@ package com.sandbox.agent
 import com.brain.policy.ExecutionAuthorization
 import com.sandbox.runtime.ExecutionLog
 import com.sandbox.runtime.ManagedSandboxRuntime
+import com.sandbox.runtime.NamespaceSupport
 import java.io.File
 import java.time.Instant
 
@@ -20,7 +21,8 @@ class AgentSandboxSession(
     private val workspaceHostDir: File,
     private val workspaceGuestPath: String,
     private val capabilityResolver: CapabilityResolver = CapabilityResolver(),
-    private val clock: () -> Instant = Instant::now
+    private val clock: () -> Instant = Instant::now,
+    private val namespaceSupport: NamespaceSupport = NamespaceSupport.detect()
 ) : AutoCloseable {
 
     enum class Status { OPEN, EXPIRED, BUDGET_EXCEEDED, CLOSED }
@@ -73,6 +75,12 @@ class AgentSandboxSession(
     internal fun rodarComandoInterno(comando: List<String>, timeoutSeconds: Long = 60): CommandOutcome {
         synchronized(lock) {
             checkGate()?.let { return CommandOutcome.Refused(it) }
+            if (authorization.networkAllowed && namespaceSupport.compatibilityMode) {
+                return CommandOutcome.Refused(
+                    "rede recusada: o kernel não oferece user namespaces; " +
+                        "isolamento de rede OS-level indisponível"
+                )
+            }
             if (comando.isEmpty()) return CommandOutcome.Refused("comando vazio")
             val log = runtime.execute(comando, timeoutSeconds = timeoutSeconds, workingDir = workspaceGuestPath, networkAllowed = authorization.networkAllowed)
             cpuMillisUsed += log.durationMs

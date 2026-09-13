@@ -33,7 +33,7 @@ import java.io.File
 object ProotDeviceBinds {
     /** Nós de /dev que python3/node/bash precisam para funcionar normalmente. */
     private val DEV_NODES = listOf(
-        "/dev/null", "/dev/zero", "/dev/full",
+        "/dev/null", "/dev/zero",
         "/dev/random", "/dev/urandom",
         "/dev/tty", "/dev/ptmx"
     )

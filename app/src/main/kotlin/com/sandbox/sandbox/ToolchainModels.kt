@@ -112,7 +112,15 @@ class ToolchainManager(
         val profile = profile(id)
         val persisted = readState(profile)
         if (persisted != null) return@synchronized persisted
-        transactionStore.cached(id) ?: ToolchainStatus(id, ToolchainState.NOT_INSTALLED)
+        transactionStore.cached(id) ?: run {
+            val detected = detector.detect(profile)
+            ToolchainStatus(
+                profileId = id,
+                state = if (detected.installed) ToolchainState.INSTALLED else ToolchainState.NOT_INSTALLED,
+                versionOutput = detected.versionOutput,
+                error = detected.diagnostic
+            )
+        }
     }
 
     fun cachedStatus(id: String): ToolchainStatus? = synchronized(lock) { profile(id); transactionStore.cached(id) }

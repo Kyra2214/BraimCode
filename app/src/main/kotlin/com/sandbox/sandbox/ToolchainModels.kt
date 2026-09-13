@@ -66,7 +66,28 @@ class ToolchainDetector(private val executor: SandboxCommandExecutor) {
             listOf(profile.executable) + profile.versionArguments
         }
         val result = executor.execute(command, timeoutSeconds = 30)
-        return ToolchainDetection(profile, result.succeeded, (result.stdout.ifBlank { result.stderr }).take(4096), result.stderr.takeIf { !result.succeeded }?.take(4096))
+        if (result.succeeded) {
+            return ToolchainDetection(profile, true, result.stdout.take(4096), null)
+        }
+        val diagnostic = result.stderr.take(4096)
+        val memoryProbeFailure = diagnostic.contains("reserve", ignoreCase = true) ||
+            diagnostic.contains("memory", ignoreCase = true) ||
+            diagnostic.contains("heap", ignoreCase = true)
+        if (memoryProbeFailure) {
+            val presence = executor.execute(
+                listOf("bash", "-c", "command -v ${profile.executable}"),
+                timeoutSeconds = 10
+            )
+            if (presence.succeeded && presence.stdout.isNotBlank()) {
+                return ToolchainDetection(
+                    profile,
+                    installed = true,
+                    versionOutput = "binário instalado: ${presence.stdout.trim()}",
+                    diagnostic = "probe de versão bloqueado por memória: $diagnostic"
+                )
+            }
+        }
+        return ToolchainDetection(profile, false, (result.stdout.ifBlank { result.stderr }).take(4096), diagnostic.ifBlank { null })
     }
 
     /** Captura somente versões dos pacotes do próprio perfil que já estavam instalados. */

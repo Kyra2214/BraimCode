@@ -35,6 +35,27 @@ class TarGzExtractorTest {
         }
     }
 
+    @Test
+    fun preservesGuestSelfDirectorySymlinkUsedByUsrBinX11() {
+        val archive = createArchive(
+            listOf(
+                Entry("usr/bin", null, null, directory = true),
+                Entry("usr/bin/X11", null, ".")
+            )
+        )
+        val destination = Files.createTempDirectory("sandbox-rootfs-x11-").toFile()
+        try {
+            TarGzExtractor.extract(archive, destination)
+            val link = File(destination, "usr/bin/X11").toPath()
+            assertTrue(Files.isSymbolicLink(link))
+            assertEquals(".", Files.readSymbolicLink(link).toString())
+            assertTrue(File(destination, "usr/bin/X11").isDirectory)
+        } finally {
+            archive.delete()
+            destination.deleteRecursively()
+        }
+    }
+
     private fun createArchive(entries: List<Entry>): File {
         val archive = Files.createTempFile("sandbox-fixture-", ".tar.gz").toFile()
         GZIPOutputStream(FileOutputStream(archive)).use { gzip ->

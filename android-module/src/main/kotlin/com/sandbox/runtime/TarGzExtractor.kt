@@ -97,6 +97,13 @@ object TarGzExtractor {
         require(guestTarget.startsWith(basePath)) {
             "Symlink de rootfs suspeito (fora da raiz): $linkName"
         }
-        return linkPath.parent.relativize(guestTarget)
+        // Path.relativize devolve um caminho vazio quando o alvo é o próprio
+        // diretório pai. Files.createSymbolicLink não aceita esse caminho;
+        // o RootFS usa exatamente esse padrão em /usr/bin/X11 -> . .
+        return if (guestTarget == linkPath.parent) {
+            java.nio.file.Paths.get(".")
+        } else {
+            linkPath.parent.relativize(guestTarget)
+        }
     }
 }

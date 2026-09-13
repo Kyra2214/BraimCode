@@ -38,7 +38,10 @@ class SecurityTestLabTest {
 
     @Test
     fun `probe ausente bloqueia readiness`() {
-        val report = SecurityTestLab().evaluate(listOf(blocked), emptyList())
+        val report = SecurityTestLab().evaluate(
+            listOf(blocked),
+            listOf(SecurityProbeResult(blocked.id, completed = false, blocked = false, diagnostic = "probe não concluído"))
+        )
         assertFalse(report.readiness.ready)
         assertTrue(report.readiness.blockers.single().contains("Probe incompleto"))
     }

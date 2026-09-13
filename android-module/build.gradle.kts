@@ -9,11 +9,6 @@ android {
 
     defaultConfig {
         minSdk = 26 // ProcessBuilder + symlinks reais exigem API razoavelmente moderna
-        // Mantido igual ao targetSdk do módulo :app (ver comentário lá) —
-        // esse valor aqui não tem efeito em runtime por si só (é o
-        // targetSdk do APK final que decide a política do SELinux), mas
-        // deixamos consistente pra não confundir/gerar lint discrepante.
-        targetSdk = 28
         ndk { abiFilters += "arm64-v8a" }
     }
 
@@ -31,8 +26,11 @@ android {
             useLegacyPackaging = true
             keepDebugSymbols += "**/libproot.so"
             keepDebugSymbols += "**/libapp_proot_loader.so"
+            keepDebugSymbols += "**/libandroid-shmem.so"
+            keepDebugSymbols += "**/libtalloc.so"
         }
     }
+
 }
 
 dependencies {

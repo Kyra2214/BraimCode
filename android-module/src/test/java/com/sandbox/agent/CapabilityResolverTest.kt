@@ -29,12 +29,12 @@ class CapabilityResolverTest {
         assertEquals(CapabilityResolver.Resolution.Comando(listOf("sandbox-health")), result)
     }
 
-    @Test fun `sandbox run exige pelo menos um parametro`() {
+    @Test fun `capacidade de comando generico permanece fora do catalogo`() {
         val vazio = resolver.resolve("sandbox.run")
         assertTrue(vazio is CapabilityResolver.Resolution.Refused)
 
         val comArgs = resolver.resolve("sandbox.run", listOf("ls", "-la"))
-        assertEquals(CapabilityResolver.Resolution.Comando(listOf("sandbox-run", "ls", "-la")), comArgs)
+        assertTrue(comArgs is CapabilityResolver.Resolution.Refused)
     }
 
     @Test fun `catalogo customizado pode ser injetado`() {

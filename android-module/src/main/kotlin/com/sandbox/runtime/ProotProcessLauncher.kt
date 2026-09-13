@@ -55,7 +55,7 @@ class ProotProcessLauncher(
         }
         return ProcessBuilder(args).redirectErrorStream(false).apply {
             environment().clear()
-            environment()["LD_LIBRARY_PATH"] = nativeLibraryDir ?: File(prootExecutable).parentFile.absolutePath
+            environment()["LD_LIBRARY_PATH"] = nativeLibraryDir ?: File(prootExecutable).parentFile?.absolutePath.orEmpty()
             environment()["PATH"] = "/home/sandbox/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             environment()["HOME"] = workingDir
             environment()["USER"] = "sandbox"

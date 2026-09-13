@@ -176,17 +176,28 @@ class ManagedSandboxRuntime(
     }
 
     private fun stopProcess(process: Process): Boolean {
-        val descendants = process.toHandle().descendants().toList()
-        if (launcher.processGroupManaged) ProcessTreeTerminator.signalGroup(process.pid(), "TERM")
-        descendants.asReversed().forEach { it.destroy() }
+        val pid = processPid(process)
+        if (launcher.processGroupManaged && pid != null) ProcessTreeTerminator.signalGroup(pid, "TERM")
         process.destroy()
         if (runCatching { process.waitFor(250, TimeUnit.MILLISECONDS) }.getOrDefault(false)) return false
-        if (launcher.processGroupManaged) ProcessTreeTerminator.signalGroup(process.pid(), "KILL")
-        descendants.asReversed().forEach { it.destroyForcibly() }
+        if (launcher.processGroupManaged && pid != null) ProcessTreeTerminator.signalGroup(pid, "KILL")
         process.destroyForcibly()
         runCatching { process.waitFor(1, TimeUnit.SECONDS) }
         return true
     }
+
+    /**
+     * Obtém o PID sem referenciar APIs de [Process] que não existem no
+     * android.jar de todas as versões suportadas. Em JVMs modernas o método
+     * `pid()` é descoberto por reflexão; em Androids que não o expõem, o
+     * encerramento direto do processo continua funcionando.
+     */
+    private fun processPid(process: Process): Long? = runCatching {
+        val method = process.javaClass.methods.firstOrNull {
+            it.name == "pid" && it.parameterTypes.isEmpty()
+        } ?: return@runCatching null
+        (method.invoke(process) as? Number)?.toLong()
+    }.getOrNull()
 
     private fun stream(input: java.io.InputStream, collector: StringCollector, latch: CountDownLatch): Thread = Thread {
         try { input.bufferedReader().forEachLine { collector.append(it) } }

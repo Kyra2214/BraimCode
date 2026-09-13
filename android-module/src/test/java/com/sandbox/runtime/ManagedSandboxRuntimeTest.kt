@@ -3,12 +3,13 @@ package com.sandbox.runtime
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
 class ManagedSandboxRuntimeTest {
     @Test fun `successful execution is persisted with output and exit code`() {
-        val dir = createTempDir(prefix = "sandbox-log-")
+        val dir = Files.createTempDirectory("sandbox-log-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir)
             val runtime = ManagedSandboxRuntime(TestLauncher(), repo, sessionId = "session-1")
@@ -22,7 +23,7 @@ class ManagedSandboxRuntimeTest {
     }
 
     @Test fun `timeout preserves bounded partial output`() {
-        val dir = createTempDir(prefix = "sandbox-log-")
+        val dir = Files.createTempDirectory("sandbox-log-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir, maxOutputChars = 64)
             val runtime = ManagedSandboxRuntime(TestLauncher(), repo, sessionId = "session-2", maxOutputChars = 64)
@@ -36,7 +37,7 @@ class ManagedSandboxRuntimeTest {
     }
 
     @Test fun `cancel stops an active execution and records cancellation`() {
-        val dir = createTempDir(prefix = "sandbox-log-")
+        val dir = Files.createTempDirectory("sandbox-log-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir)
             val runtime = ManagedSandboxRuntime(TestLauncher(), repo, sessionId = "session-3")
@@ -55,7 +56,7 @@ class ManagedSandboxRuntimeTest {
     }
 
     @Test fun `reset does not delete historical evidence`() {
-        val dir = createTempDir(prefix = "sandbox-log-")
+        val dir = Files.createTempDirectory("sandbox-log-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir)
             val runtime = ManagedSandboxRuntime(TestLauncher(), repo, sessionId = "session-4")

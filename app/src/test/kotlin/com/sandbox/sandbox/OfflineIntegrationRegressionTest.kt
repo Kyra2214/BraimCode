@@ -1,9 +1,9 @@
 package com.sandbox.sandbox
 
 import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 /** Contratos determinísticos das conexões fechadas no backlog offline. */
 class OfflineIntegrationRegressionTest {

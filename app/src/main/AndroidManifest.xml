@@ -10,7 +10,6 @@
 
     <application
         android:allowBackup="false"
-        android:extractNativeLibs="true"
         android:label="Sandbox Mobile"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 

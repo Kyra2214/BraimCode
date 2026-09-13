@@ -54,13 +54,26 @@ A UI também possui chamadas reais para `SandboxPlatform` em Plugins, Workspace,
 
 A implementação de referência em `brain_runtime/` possui PolicyBroker, approval, pipeline, binding, sandbox, workflows, APIs, skills, memory/learning, observabilidade, Project Intelligence, readiness e release intelligence.
 
-Executar a suíte documentada:
+### Preparar o ambiente de testes
+
+O setup reproduzível instala JDK 17, Android SDK API 34, Build Tools 34.0.0, platform-tools e NDK 26.3.11579264. Ele usa `/home/ubuntu/Android/Sdk` por padrão, aceita `ANDROID_HOME`/`ANDROID_SDK_ROOT` e não modifica arquivos versionados:
 
 ```bash
-python3 -m unittest discover -s tests -q
+bash scripts/setup-test-dependencies.sh
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
 ```
 
-A documentação histórica registra **134 testes Python aprovados**. Esta auditoria de 2026-09-13 não reexecutou a suíte nem o Gradle a partir do conector; os números históricos não devem ser tratados como uma nova execução desta rodada.
+Executar a suíte Python:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Para a validação completa, use `./gradlew test`, `./gradlew check`, `./gradlew :app:assembleDebug`, `bash scripts/validate-release-readiness.sh` e `bash -n scripts/*.sh rootfs-builder/*.sh`. A matriz executada em 2026-09-13 aprovou **155 testes Python e 252 testes Kotlin/JVM/Android**, além de lint, check, APK debug, preflight de releases e sintaxe shell. O build limpo com `--warning-mode=all` terminou sem warnings.
 
 ## Kotlin / Android
 

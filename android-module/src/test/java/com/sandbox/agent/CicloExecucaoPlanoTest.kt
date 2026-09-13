@@ -14,6 +14,7 @@ import com.sandbox.runtime.FileExecutionLogRepository
 import com.sandbox.runtime.ManagedSandboxRuntime
 import com.sandbox.runtime.SandboxProcessLauncher
 import java.io.File
+import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -54,7 +55,7 @@ class CicloExecucaoPlanoTest {
 
     @Test
     fun `passo autorizado roda a capacidade e aprova quando validacao nao acusa falha`() {
-        val root = createTempDir(prefix = "ciclo-")
+        val root = Files.createTempDirectory("ciclo-").toFile()
         try {
             val plano = PlanoExecucao(objetivo = "dizer oi", passos = listOf(passo("hello")))
             val resultado = ciclo(root).autorizarEExecutar(plano, runId = "run-1", actor = "agent-1")
@@ -69,7 +70,7 @@ class CicloExecucaoPlanoTest {
 
     @Test
     fun `capacidade nao registrada na policy nega o passo e bloqueia quem depende dele`() {
-        val root = createTempDir(prefix = "ciclo-")
+        val root = Files.createTempDirectory("ciclo-").toFile()
         try {
             val plano = PlanoExecucao(
                 objetivo = "cadeia com passo negado",
@@ -90,7 +91,7 @@ class CicloExecucaoPlanoTest {
 
     @Test
     fun `router so e consultado quando o passo declara papel`() {
-        val root = createTempDir(prefix = "ciclo-")
+        val root = Files.createTempDirectory("ciclo-").toFile()
         try {
             val plano = PlanoExecucao(
                 objetivo = "com e sem papel",
@@ -112,7 +113,7 @@ class CicloExecucaoPlanoTest {
     /** Roda comandos de verdade no host (não em proot) — mesma técnica do restante de :android-module. */
     @Test
     fun `passo de alto risco pede approval persistido e retoma uma unica vez`() {
-        val root = createTempDir(prefix = "ciclo-approval-")
+        val root = Files.createTempDirectory("ciclo-approval-").toFile()
         try {
             val store = com.brain.policy.FileApprovalStore(File(root, "approvals.jsonl"))
             val plano = PlanoExecucao("operação sensível", listOf(passo("sensitive", capacidade = "sandbox.hello", riskClass = com.brain.execution.RiskClass.HIGH)))

@@ -20,7 +20,7 @@ class PolicyBroker(
 
     fun authorize(actor: String, capability: String, resource: String, context: PolicyContext): PolicyDecision {
         var decision = Decision.DENY
-        var reason = "denied by default"
+        var reason: String
 
         when {
             context.ttlSeconds <= 0 -> reason = "policy TTL must be positive"

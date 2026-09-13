@@ -89,7 +89,7 @@ class SandboxRuntime(
             // libtalloc.so e libandroid-shmem.so. O linker do Android não
             // procura automaticamente essas dependências no diretório do
             // executável, então informamos explicitamente esse caminho.
-            put("LD_LIBRARY_PATH", nativeLibraryDir ?: File(prootExecutable).parentFile.absolutePath)
+            put("LD_LIBRARY_PATH", nativeLibraryDir ?: File(prootExecutable).parentFile?.absolutePath.orEmpty())
             put(
                 "PATH",
                 "/home/sandbox/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

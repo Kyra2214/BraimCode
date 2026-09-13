@@ -47,6 +47,7 @@ class CicloExecucaoPlano(
     private val approvedSteps = mutableSetOf<String>()
 
     /** Fronteira Agent/Sandbox: não aceita PlanoExecucao cru. */
+    @Suppress("UNUSED_PARAMETER")
     fun executar(autorizado: AuthorizedPlan, runId: String, actor: String): ResultadoCiclo {
         val plano = autorizado.plan
         val resultados = mutableListOf<ResultadoPasso>()
@@ -78,8 +79,26 @@ class CicloExecucaoPlano(
             val contexto = PolicyContext(runId, passo.id, actor, riskClass = passo.riskClass, approval = if (highRisk && passo.id !in approvedSteps) ApprovalRequired.USER else ApprovalRequired.NONE)
             val decision = policyBroker.authorize(actor, passo.capacidade, passo.id, contexto)
             if (decision.decision != Decision.ALLOW) {
-                val approvalId = if (decision.decision == Decision.ASK) approvalStore?.create(ApprovalRequest(runId, passo.id, passo.capacidade, passo.id, java.time.Instant.parse(decision.expiresAt)))?.request?.id else null
-                return ResultadoCiclo(plano.objetivo, runId, listOf(ResultadoPasso(passo.id, if (decision.decision == Decision.ASK) StatusPasso.AGUARDANDO_APROVACAO else StatusPasso.NEGADO_PELA_POLICY, decisaoPolicy = decision, motivo = decision.reason, approvalId = approvalId)))
+                val approvalId = if (decision.decision == Decision.ASK) approvalStore?.create(
+                    ApprovalRequest(
+                        runId = runId,
+                        taskId = passo.id,
+                        capability = passo.capacidade,
+                        resource = passo.id,
+                        expiresAt = java.time.Instant.parse(decision.expiresAt)
+                    )
+                )?.request?.id else null
+                val resultadoInicial = ResultadoPasso(
+                    passo.id,
+                    if (decision.decision == Decision.ASK) StatusPasso.AGUARDANDO_APROVACAO else StatusPasso.NEGADO_PELA_POLICY,
+                    decisaoPolicy = decision,
+                    motivo = decision.reason,
+                    approvalId = approvalId
+                )
+                val bloqueados = plano.ordemDeExecucao.dropWhile { it.id != passo.id }.drop(1).map {
+                    ResultadoPasso(it.id, StatusPasso.BLOQUEADO_POR_DEPENDENCIA, motivo = "ciclo abortado por passo anterior")
+                }
+                return ResultadoCiclo(plano.objetivo, runId, listOf(resultadoInicial) + bloqueados)
             }
             authorizations[passo.id] = ExecutionAuthorization.fromDecision(decision)
                 ?: return ResultadoCiclo(plano.objetivo, runId, listOf(ResultadoPasso(passo.id, StatusPasso.NEGADO_PELA_POLICY, decisaoPolicy = decision, motivo = "autorização inválida")))

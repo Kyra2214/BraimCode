@@ -29,7 +29,7 @@ object TarGzExtractor {
 
         GZIPInputStream(archive.inputStream()).use { gzipStream ->
             TarArchiveInputStream(gzipStream).use { tarStream ->
-                var entry: TarArchiveEntry? = tarStream.nextTarEntry
+                var entry: TarArchiveEntry? = tarStream.nextEntry
                 while (entry != null) {
                     val safeEntry = entry
                     val outputFile = resolveSafePath(destinationDir, safeEntry.name)
@@ -67,7 +67,7 @@ object TarGzExtractor {
                             }
                         }
                     }
-                    entry = tarStream.nextTarEntry
+                    entry = tarStream.nextEntry
                 }
             }
         }

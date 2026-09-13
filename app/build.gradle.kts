@@ -39,6 +39,8 @@ android {
             useLegacyPackaging = true
             keepDebugSymbols += "**/libproot.so"
             keepDebugSymbols += "**/libapp_proot_loader.so"
+            keepDebugSymbols += "**/libandroid-shmem.so"
+            keepDebugSymbols += "**/libtalloc.so"
         }
     }
 

@@ -2,26 +2,50 @@
 
 ## Resultado executivo
 
-A validação confirmou que o código Python, o módulo Kotlin/JVM `:brain`, o preflight dos releases RootFS e a sintaxe dos scripts estão aprovados neste ambiente. A validação Android completa não foi executada porque o clone não possui Android SDK configurado.
+A validação final foi executada após a instalação das toolchains necessárias e após a correção das falhas encontradas na primeira rodada. O resultado foi aprovado em todas as etapas automatizadas: Python, Kotlin/JVM, Android unit tests, Gradle agregado, lint, montagem do APK debug, preflight dos releases RootFS e sintaxe dos scripts. Um build limpo executado com `--warning-mode=all` também terminou sem warnings de compilador, lint, manifesto ou empacotamento.
 
-Essa limitação foi registrada como falha de ambiente, não como aprovação implícita. Nenhum resultado Android foi marcado como bem-sucedido sem SDK.
+A validação continua limitada ao host de build. A instalação em emulador ou dispositivo, a execução real do proot em ARM64, a assinatura de release e a validação de lifecycle continuam sendo gates de implantação separados.
 
-## Matriz de validação
+## Ambiente preparado
 
-| Área | Comando | Resultado | Observação |
+| Componente | Versão/localização |
+|---|---|
+| JDK | OpenJDK 17.0.20 em `/usr/lib/jvm/java-17-openjdk-amd64` |
+| Gradle | Wrapper Gradle 8.7 |
+| Android SDK | API 34 em `/home/ubuntu/Android/Sdk` |
+| Android Build Tools | 34.0.0 |
+| Android platform-tools | 37.0.1 |
+| Android NDK | 26.3.11579264 |
+| Python | 3.12.3 |
+
+O procedimento foi consolidado em `scripts/setup-test-dependencies.sh`. A configuração `local.properties` é local e ignorada pelo Git.
+
+## Matriz de validação final
+
+| Área | Comando | Resultado | Evidência |
 |---|---|---:|---|
-| Python | `python3 -m unittest discover -s tests -p 'test_*.py' -v` | **PASS** | 155 testes aprovados em 2,902 s |
-| Brain Kotlin/JVM | `./gradlew :brain:test --no-daemon` | **PASS** | `BUILD SUCCESSFUL`; 5 tasks executadas |
-| Gradle agregado | `./gradlew test --no-daemon` | **BLOCKED** | Android SDK ausente para `:android-module:testDebugUnitTest` |
-| Verificação Gradle | `./gradlew check --no-daemon` | **BLOCKED** | Android SDK ausente para `:android-module:lintReportDebug` |
-| APK debug | `./gradlew :app:assembleDebug --no-daemon` | **BLOCKED** | Android SDK ausente para `:app:compileDebugJavaWithJavac` |
-| Release readiness | `scripts/validate-release-readiness.sh` | **PASS** | Os três manifests, assets publicados e sidecars SHA-256 conferem |
-| Sintaxe shell | `bash -n scripts/validate-release-readiness.sh scripts/validate-proot-binary.sh` | **PASS** | Nenhum erro de sintaxe |
-| SDK discovery | Busca por `sdkmanager` em `$HOME`, `/opt` e `/usr/local` | **NOT FOUND** | Confirma a causa dos bloqueios Android |
+| Python | `python3 -m unittest discover -s tests -p 'test_*.py' -v` | **PASS** | 155 testes aprovados |
+| Brain Kotlin/JVM | `./gradlew :brain:test --no-daemon` | **PASS** | 64 execuções entre variantes debug/release |
+| Android module | `./gradlew :android-module:test --no-daemon` | **PASS** | 68 execuções entre variantes debug/release |
+| App Android | `./gradlew :app:test --no-daemon` | **PASS** | 120 execuções entre variantes debug/release |
+| Gradle agregado | `./gradlew test --no-daemon` | **PASS** | `BUILD SUCCESSFUL` |
+| Verificação Gradle e lint | `./gradlew check --no-daemon` | **PASS** | `BUILD SUCCESSFUL` |
+| APK debug | `./gradlew :app:assembleDebug --no-daemon` | **PASS** | `BUILD SUCCESSFUL` |
+| Release readiness | `bash scripts/validate-release-readiness.sh` | **PASS** | três manifests, assets e sidecars conferidos |
+| Sintaxe shell | `bash -n scripts/*.sh rootfs-builder/*.sh` | **PASS** | nenhum erro |
+| Build limpo sem warnings | `./gradlew clean test check :app:assembleDebug --no-daemon --warning-mode=all` | **PASS** | 154 tasks executadas; zero warnings |
 
-## Evidência dos releases
+O total reportado pelos XMLs JUnit foi de **252 execuções Kotlin/JVM/Android** nas variantes debug e release, além dos **155 testes Python**.
 
-O preflight confirmou os três artefatos publicados:
+## Correções aplicadas nesta rodada
+
+A suíte Android foi alinhada aos contratos atuais de segurança. Os fixtures de `AgentSandboxSessionTest` passaram a obter autorizações com tokens emitidos pelo `PolicyBroker`; comandos arbitrários continuam fora do catálogo e os testes usam capacidades allowlisted. O ciclo de execução passou a devolver o passo negado junto com os passos dependentes bloqueados, preservando a evidência completa do plano.
+
+Também foram corrigidos os testes de limites de recursos para usar comandos Python válidos no host, o teste de integração offline passou a usar JUnit já declarado pelo módulo, e o teste do `SecurityTestLab` passou a representar explicitamente um probe incompleto sem acionar a simulação determinística automática.
+
+Para eliminar warnings, o código substituiu APIs obsoletas de temporários e de `TarArchiveInputStream`, eliminou parâmetros e inicializações redundantes, tornou seguros os acessos a `parentFile`, removeu `extractNativeLibs` do manifesto e marcou corretamente as bibliotecas nativas pré-compiladas para preservação durante o empacotamento. O `targetSdk = 28` permanece somente no APK final, documentado como requisito operacional do proot e do domínio SELinux de compatibilidade.
+
+## Evidência dos releases RootFS
 
 | Release | Tamanho publicado | SHA-256 do manifesto |
 |---|---:|---|
@@ -31,24 +55,32 @@ O preflight confirmou os três artefatos publicados:
 
 Os sidecars remotos coincidiram com os hashes declarados nos manifests.
 
-## Limitação Android
+## Limitações que permanecem
 
-O Gradle encontrou corretamente os módulos Android, mas não conseguiu resolver as dependências das tasks porque não existe `ANDROID_HOME` válido nem `sdk.dir` em `local.properties`. Também não foi encontrado `sdkmanager` nos diretórios pesquisados.
+O APK foi montado e os testes unitários passaram, mas esta sessão não possui emulador ou dispositivo Android conectado. Portanto, não foram declarados como aprovados o transporte real do APK, a execução ARM64 de proot, o lifecycle em device, a instalação do RootFS, a assinatura de produção ou o comportamento sob políticas específicas de fabricantes.
 
-A validação pendente deve ser repetida em ambiente com JDK 17, Android SDK API 34, Build Tools compatíveis, platform-tools e NDK configurados. Os comandos mínimos são:
+O projeto também mantém as limitações arquiteturais já registradas: proot não é isolamento OS-level, `/proc` ainda expõe informações do host e a integração Android não representa todos os caminhos avançados do Brain. Essas condições não foram mascaradas pelos resultados automatizados.
+
+## Reprodução
 
 ```bash
+bash scripts/setup-test-dependencies.sh
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export ANDROID_HOME="$HOME/Android/Sdk"
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 ./gradlew test --no-daemon
 ./gradlew check --no-daemon
 ./gradlew :app:assembleDebug --no-daemon
+bash scripts/validate-release-readiness.sh
+bash -n scripts/*.sh rootfs-builder/*.sh
 ```
 
-A instalação em emulador ou dispositivo, a execução real de `proot` e a validação de lifecycle continuam sendo gates separados e não foram simulados por esta execução.
+Para repetir a verificação específica de warnings:
 
-## Observação de compilação
-
-O módulo `:brain` emitiu apenas um warning Kotlin sobre inicialização redundante da variável `reason` em `PolicyBroker.kt`. O warning não impediu a compilação nem os testes.
-
-## Conclusão
-
-O estado correto após esta sessão é: **Python aprovado, Brain Kotlin aprovado, releases aprovados, scripts aprovados e Android bloqueado por dependência de ambiente ausente**. O roadmap foi atualizado com essa distinção.
+```bash
+./gradlew clean test check :app:assembleDebug --no-daemon --warning-mode=all
+```

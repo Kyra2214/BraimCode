@@ -3,10 +3,11 @@ package com.sandbox.runtime
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 
 class FileExecutionLogRepositoryTest {
     @Test fun `secrets are redacted and output is bounded`() {
-        val dir = createTempDir(prefix = "sandbox-store-")
+        val dir = Files.createTempDirectory("sandbox-store-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir, maxLogs = 10, maxOutputChars = 16)
             val log = ExecutionLog("id1", "s1", listOf("curl", "token=SUPERSECRET"), "/home/sandbox",
@@ -22,7 +23,7 @@ class FileExecutionLogRepositoryTest {
     }
 
     @Test fun `running marker is recovered as interrupted`() {
-        val dir = createTempDir(prefix = "sandbox-store-")
+        val dir = Files.createTempDirectory("sandbox-store-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir)
             repo.save(ExecutionLog("id2", "s2", listOf("sleep", "99"), "/home/sandbox",

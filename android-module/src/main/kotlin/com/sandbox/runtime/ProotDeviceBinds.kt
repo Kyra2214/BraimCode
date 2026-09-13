@@ -9,8 +9,8 @@ import java.io.File
  * que é "bindado" aqui continua sendo, de fato, o nó do host visto de
  * dentro do processo sandboxed. Antes, o launcher fazia `-b /dev`, `-b
  * /proc` e `-b /sys` — a árvore inteira — o que expõe nós como
- * `/dev/block/*`, `/dev/input/*`, `/dev/kmsg`, `/dev/binder`,
- * `/dev/graphics/*` (informação de hardware do dispositivo real e acesso a
+ * `/dev/block/<qualquer>`, `/dev/input/<qualquer>`, `/dev/kmsg`, `/dev/binder`,
+ * `/dev/graphics/<qualquer>` (informação de hardware do dispositivo real e acesso a
  * drivers do host) sem nenhum motivo funcional: python3/node/bash não usam
  * nada disso.
  *
@@ -18,7 +18,7 @@ import java.io.File
  *
  * Limitações conhecidas, aceitas nesta fase (não escondidas):
  * - `/proc` continua bindado por inteiro. python3, node e a maioria dos
- *   runtimes modernos leem `/proc/self/*` (maps, exe, fd) na inicialização
+ *   runtimes modernos leem `/proc/self/<arquivos>` (maps, exe, fd) na inicialização
  *   e quebram sem isso, e o `proot` não tem como sintetizar um
  *   `/proc/self` plausível sozinho. Dentro do sandbox ainda é possível
  *   listar processos do host e ler `/proc/meminfo`, `/proc/version` etc.

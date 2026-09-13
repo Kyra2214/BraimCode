@@ -3,13 +3,14 @@ package com.sandbox.runtime
 import org.junit.Assert.*
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 class ManagedSandboxShutdownTest {
     @Test fun `shutdown during execution stops process and persists evidence`() {
-        val dir = createTempDir(prefix = "sandbox-shutdown-")
+        val dir = Files.createTempDirectory("sandbox-shutdown-").toFile()
         try {
             val repo = FileExecutionLogRepository(dir)
             val runtime = ManagedSandboxRuntime(

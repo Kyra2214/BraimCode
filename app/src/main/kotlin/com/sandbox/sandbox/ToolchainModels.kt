@@ -38,7 +38,7 @@ data class ToolchainInstallPlan(
     val timeoutSeconds: Long = 900
 ) {
     init {
-        require(command == listOf("bash", "-c", command.getOrNull(2).orEmpty()))
+        require(command.size == 3 && command[0] == "bash" && command[1] == "-c")
         require(timeoutSeconds in 60..3600)
     }
 }
@@ -59,23 +59,17 @@ object BuiltInToolchains {
 class ToolchainDetector(private val executor: SandboxCommandExecutor) {
     fun detect(profile: ToolchainProfile): ToolchainDetection {
         val result = executor.execute(listOf(profile.executable) + profile.versionArguments, timeoutSeconds = 30)
-        return ToolchainDetection(
-            profile = profile,
-            installed = result.succeeded,
-            versionOutput = (result.stdout.ifBlank { result.stderr }).take(4096),
-            diagnostic = result.stderr.takeIf { !result.succeeded }?.take(4096)
-        )
+        return ToolchainDetection(profile, result.succeeded, (result.stdout.ifBlank { result.stderr }).take(4096), result.stderr.takeIf { !result.succeeded }?.take(4096))
     }
 
     fun planInstall(profile: ToolchainProfile): ToolchainInstallPlan {
         val packages = profile.packages.joinToString(" ")
-        val script = "set -o pipefail; export DEBIAN_FRONTEND=noninteractive; " +
-            "apt-get update -qq && apt-get -o Dpkg::Use-Pty=0 install -y --no-install-recommends $packages"
+        val script = "set -o pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get -o Dpkg::Use-Pty=0 install -y --no-install-recommends $packages"
         return ToolchainInstallPlan(profile, listOf("bash", "-c", script))
     }
 }
 
-enum class ToolchainState { NOT_INSTALLED, INSTALLING, INSTALLED, FAILED, REMOVING }
+enum class ToolchainState { NOT_INSTALLED, INSTALLING, INSTALLED, FAILED, REMOVING, ROLLED_BACK }
 
 data class ToolchainStatus(
     val profileId: String,
@@ -85,7 +79,7 @@ data class ToolchainStatus(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-/** Lifecycle explícito: instala, valida, persiste estado e remove somente pacotes do perfil. */
+/** Lifecycle transacional local: snapshot antes da mudança, cache após validação e rollback em falha. */
 class ToolchainManager(
     private val executor: SandboxCommandExecutor,
     private val stateDir: File,
@@ -93,32 +87,45 @@ class ToolchainManager(
 ) {
     private val profilesById = profiles.associateBy { it.id }
     private val detector = ToolchainDetector(executor)
+    private val transactionStore = ToolchainTransactionStore(File(stateDir, "transactions"))
     private val lock = Any()
 
     init { stateDir.mkdirs() }
 
     fun status(id: String): ToolchainStatus = synchronized(lock) {
         val profile = profile(id)
-        val file = stateFile(profile)
-        if (!file.isFile) return@synchronized ToolchainStatus(id, ToolchainState.NOT_INSTALLED)
-        val parts = file.readLines()
-        ToolchainStatus(id, runCatching { ToolchainState.valueOf(parts.firstOrNull().orEmpty()) }.getOrDefault(ToolchainState.FAILED), parts.getOrNull(1).orEmpty(), parts.getOrNull(2))
+        val persisted = readState(profile)
+        if (persisted != null) return@synchronized persisted
+        transactionStore.cached(id) ?: ToolchainStatus(id, ToolchainState.NOT_INSTALLED)
     }
+
+    fun cachedStatus(id: String): ToolchainStatus? = synchronized(lock) { profile(id); transactionStore.cached(id) }
 
     fun install(id: String): ToolchainStatus = synchronized(lock) {
         val profile = profile(id)
         val before = detector.detect(profile)
-        if (before.installed) return@synchronized persist(ToolchainStatus(id, ToolchainState.INSTALLED, before.versionOutput))
+        val previous = ToolchainStatus(id, if (before.installed) ToolchainState.INSTALLED else ToolchainState.NOT_INSTALLED, before.versionOutput, before.diagnostic)
+        if (before.installed) return@synchronized persist(previous)
+        transactionStore.saveBeforeInstall(profile, previous)
         persist(ToolchainStatus(id, ToolchainState.INSTALLING))
         return@synchronized try {
             val execution = executor.execute(detector.planInstall(profile).command, 900)
             if (!execution.succeeded) error(execution.stderr.ifBlank { "instalação falhou" })
             val after = detector.detect(profile)
             check(after.installed) { "validação pós-instalação falhou" }
-            persist(ToolchainStatus(id, ToolchainState.INSTALLED, after.versionOutput))
+            val installed = persist(ToolchainStatus(id, ToolchainState.INSTALLED, after.versionOutput))
+            transactionStore.clearSnapshot(id)
+            installed
         } catch (error: Exception) {
-            persist(ToolchainStatus(id, ToolchainState.FAILED, error = error.message ?: error.javaClass.simpleName))
+            val rollbackError = rollbackLocked(profile)
+            val diagnostic = listOfNotNull(error.message, rollbackError).joinToString("; ")
+            persist(ToolchainStatus(id, if (rollbackError == null) ToolchainState.ROLLED_BACK else ToolchainState.FAILED, error = diagnostic))
         }
+    }
+
+    fun rollback(id: String): ToolchainStatus = synchronized(lock) {
+        rollbackLocked(profile(id))
+        status(id)
     }
 
     fun remove(id: String): ToolchainStatus = synchronized(lock) {
@@ -129,17 +136,44 @@ class ToolchainManager(
             val command = listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 remove -y $packages")
             val execution = executor.execute(command, 900)
             check(execution.succeeded) { execution.stderr.ifBlank { "remoção falhou" } }
-            persist(ToolchainStatus(id, ToolchainState.NOT_INSTALLED))
+            val result = persist(ToolchainStatus(id, ToolchainState.NOT_INSTALLED))
+            transactionStore.clearSnapshot(id)
+            result
         } catch (error: Exception) {
             persist(ToolchainStatus(id, ToolchainState.FAILED, error = error.message ?: error.javaClass.simpleName))
         }
     }
 
+    private fun rollbackLocked(profile: ToolchainProfile): String? {
+        val snapshot = transactionStore.loadSnapshot(profile.id) ?: return null
+        if (snapshot.state == ToolchainState.NOT_INSTALLED) {
+            val packages = snapshot.installedPackages.joinToString(" ")
+            if (packages.isNotBlank()) {
+                val result = executor.execute(listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 remove -y $packages"), 900)
+                if (!result.succeeded) return result.stderr.ifBlank { "rollback remove falhou" }.take(4096)
+            }
+        }
+        transactionStore.clearSnapshot(profile.id)
+        return null
+    }
+
     private fun profile(id: String): ToolchainProfile = profilesById[id] ?: error("Toolchain desconhecida: $id")
     private fun stateFile(profile: ToolchainProfile) = File(stateDir, "${profile.id}.state")
+
+    private fun readState(profile: ToolchainProfile): ToolchainStatus? {
+        val file = stateFile(profile)
+        if (!file.isFile) return null
+        val parts = file.readLines()
+        return runCatching { ToolchainStatus(profile.id, ToolchainState.valueOf(parts.firstOrNull().orEmpty()), parts.getOrNull(1).orEmpty(), parts.getOrNull(2).orEmpty().ifBlank { null }, parts.getOrNull(3)?.toLong() ?: file.lastModified()) }.getOrNull()
+    }
+
     private fun persist(status: ToolchainStatus): ToolchainStatus {
         stateDir.mkdirs()
-        stateFile(profile(status.profileId)).writeText(listOf(status.state.name, status.versionOutput, status.error.orEmpty()).joinToString("\n"))
+        val file = stateFile(profile(status.profileId))
+        val temp = File(file.parentFile, file.name + ".tmp")
+        temp.writeText(listOf(status.state.name, status.versionOutput.take(4096), status.error.orEmpty().take(4096), status.updatedAt.toString()).joinToString("\n"))
+        check(temp.renameTo(file)) { "Não foi possível confirmar estado da toolchain" }
+        transactionStore.cache(status)
         return status
     }
 }

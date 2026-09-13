@@ -154,23 +154,29 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         if (phase is SandboxPhase.Downloading || phase is SandboxPhase.Preparing) return
         viewModelScope.launch {
             phase = SandboxPhase.Downloading(0, 0)
-            val manifest = try {
-                ManifestLoader.load(getApplication())
+            val manifests = try {
+                ManifestLoader.loadAll(getApplication())
             } catch (e: IllegalStateException) {
                 phase = SandboxPhase.Blocked(e.message ?: "Manifesto inválido")
                 return@launch
             }
+            val totalBytes = manifests.sumOf { it.sizeBytes }
+            var completedBytes = 0L
             val downloadResult = withContext(Dispatchers.IO) {
-                factory.resourceManager().ensureAvailable(manifest) { downloaded, total ->
-                    phase = SandboxPhase.Downloading(downloaded, total)
+                manifests.mapIndexed { index, manifest ->
+                    val result = factory.layerResourceManager(index).ensureAvailable(manifest) { downloaded, _ ->
+                        phase = SandboxPhase.Downloading(completedBytes + downloaded, totalBytes)
+                    }
+                    if (result is SandboxResourceManager.DownloadResult.Success) {
+                        completedBytes += manifest.sizeBytes
+                    }
+                    result
                 }
             }
-            when (downloadResult) {
-                is SandboxResourceManager.DownloadResult.Failure -> {
-                    phase = SandboxPhase.Blocked(downloadResult.reason)
+            val failedDownload = downloadResult.filterIsInstance<SandboxResourceManager.DownloadResult.Failure>().firstOrNull()
+            if (failedDownload != null) {
+                    phase = SandboxPhase.Blocked(failedDownload.reason)
                     return@launch
-                }
-                is SandboxResourceManager.DownloadResult.Success -> Unit
             }
             phase = SandboxPhase.Preparing
             try {

@@ -23,7 +23,11 @@ class AndroidSandboxFactory(private val context: Context) {
     }
 
     private val sandboxBaseDir = File(context.filesDir, "sandbox")
-    private val downloadedArchive = File(sandboxBaseDir, "rootfs.tar.gz")
+    private val downloadedArchives = listOf(
+        File(sandboxBaseDir, "rootfs-base.tar.gz"),
+        File(sandboxBaseDir, "rootfs-extra.tar.gz"),
+        File(sandboxBaseDir, "rootfs-android.tar.gz")
+    )
     private val modelDir = File(sandboxBaseDir, "models")
     private val extractedRootfsDir = File(sandboxBaseDir, "rootfs")
     private val extractionMarker = File(sandboxBaseDir, ".extractor-version")
@@ -54,7 +58,13 @@ class AndroidSandboxFactory(private val context: Context) {
 
     fun resourceManager(): SandboxResourceManager {
         sandboxBaseDir.mkdirs()
-        return SandboxResourceManager(downloadedArchive)
+        return SandboxResourceManager(downloadedArchives.first())
+    }
+
+    fun layerResourceManager(layer: Int): SandboxResourceManager {
+        require(layer in downloadedArchives.indices) { "Camada RootFS inválida: $layer" }
+        sandboxBaseDir.mkdirs()
+        return SandboxResourceManager(downloadedArchives[layer])
     }
 
     /** Gerenciador de artefatos de modelo; mantém a mini-LLM fora do RootFS. */
@@ -67,12 +77,16 @@ class AndroidSandboxFactory(private val context: Context) {
     fun modelFile(modelId: String): File = File(modelDir, "$modelId.gguf")
 
     fun prepareRuntime(forceReExtract: Boolean = false): SandboxRuntime {
-        require(downloadedArchive.exists()) { "Rootfs ainda não foi baixado. Chame resourceManager().ensureAvailable() primeiro." }
+        require(downloadedArchives.all { it.exists() }) {
+            "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
+        }
         if (forceReExtract && extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
         val needsReExtract = !extractedRootfsDir.exists() || extractedRootfsDir.list().isNullOrEmpty() || extractionMarker.readTextOrNull() != EXTRACTOR_VERSION
         if (needsReExtract) {
             if (extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
-            TarGzExtractor.extract(downloadedArchive, extractedRootfsDir)
+            downloadedArchives.forEach { archive ->
+                TarGzExtractor.extract(archive, extractedRootfsDir)
+            }
             validateExtractedRootfs()
             extractionMarker.writeText(EXTRACTOR_VERSION)
         }
@@ -95,7 +109,9 @@ class AndroidSandboxFactory(private val context: Context) {
     }
 
     fun prepareManagedRuntime(sessionId: String = persistentSessionId()): ManagedSandboxRuntime {
-        require(downloadedArchive.exists()) { "Rootfs ainda não foi baixado. Chame resourceManager().ensureAvailable() primeiro." }
+        require(downloadedArchives.all { it.exists() }) {
+            "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
+        }
         prepareRuntime()
         val packagedRuntime = PackagedRuntime(context, extractedRootfsDir)
         packagedRuntime.prepare()
@@ -260,7 +276,7 @@ class AndroidSandboxFactory(private val context: Context) {
     }
 
     fun purgeAll() {
-        resourceManager().purge()
+        downloadedArchives.forEach { archive -> SandboxResourceManager(archive).purge() }
         if (extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
         if (extractionMarker.exists()) extractionMarker.delete()
         if (prootTmpDir.exists()) prootTmpDir.deleteRecursively()

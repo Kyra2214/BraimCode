@@ -53,7 +53,7 @@ class NetworkPolicyBroker(private val policy: NetworkPolicy = NetworkPolicy()) {
     }
 }
 
-private fun isSafeHost(value: String): Boolean {
+internal fun isSafeHost(value: String): Boolean {
     if (value.isBlank() || value.length > 253 || value.contains('/') || value.contains('@')) return false
     val lower = value.lowercase()
     if (lower == "localhost" || lower.endsWith(".localhost")) return false

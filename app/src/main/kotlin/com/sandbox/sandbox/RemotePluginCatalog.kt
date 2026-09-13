@@ -104,6 +104,5 @@ private fun isSafeHttps(value: String): Boolean = runCatching {
     val uri = URI(value.trim())
     uri.scheme.equals("https", ignoreCase = true) &&
         !uri.host.isNullOrBlank() && uri.userInfo == null && uri.fragment == null &&
-        !uri.host.equals("localhost", ignoreCase = true) &&
-        !uri.host.startsWith("127.") && !uri.host.startsWith("10.") && !uri.host.startsWith("192.168.")
+        isSafeHost(uri.host)
 }.getOrDefault(false)

@@ -23,6 +23,12 @@ A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDB
 
 ## Pendências remanescentes
 
+### Unificação Brain ↔ Sandbox
+
+- [x] Ligar uma primeira operação real da UI ao `:brain`: o botão **Verificar pelo Brain** executa `sandbox.health` através de Policy, sessão autorizada, capability resolver e runtime Sandbox.
+- [ ] Expandir o controlador para planos de usuário e remover os caminhos de execução paralelos onde houver equivalência segura.
+- [ ] Validar `:android-module` e `:app` em ambiente com Android SDK configurado e executar o fluxo em emulador ou device.
+
 As tarefas abaixo permanecem abertas porque não fazem parte da migração copy-only dos artefatos homologados:
 
 - [ ] Validar RootFS/proot em dispositivo ou emulador Android real.

@@ -180,6 +180,21 @@ private fun StatusSection(viewModel: SandboxViewModel) {
                         OutlinedButton(onClick = { viewModel.resetSandbox() }) { Text("Resetar sandbox") }
                         OutlinedButton(onClick = { viewModel.runDiagnostics() }) { Text("Diagnóstico") }
                     }
+                    Button(onClick = { viewModel.runBrainHealthCheck() }) {
+                        Text("Verificar pelo Brain")
+                    }
+                    viewModel.lastBrainCycle?.let { cycle ->
+                        val result = cycle.passos.singleOrNull()
+                        Text(
+                            if (cycle.aprovado) {
+                                "Brain → Policy → Sandbox: aprovado"
+                            } else {
+                                "Brain → Policy → Sandbox: ${result?.motivo ?: "reprovado"}"
+                            },
+                            color = if (cycle.aprovado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
                 is SandboxPhase.Running -> {
                     Text("Executando comando — estado RUNNING")

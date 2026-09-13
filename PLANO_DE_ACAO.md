@@ -27,7 +27,7 @@ Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app 
 
 | Componente | Onde está | Situação hoje | Opção A: Integrar | Opção B: Arquivar |
 |---|---|---|---|---|
-| `BrainSandboxExecutionBridge` + `CicloExecucaoPlano` + `BrainExecutionCoordinator` | `android-module`, `brain` | Só roda em teste unitário | Ligar ao `SandboxViewModel` como caminho real de execução de planos | Mover pra `experimental/`, deixar claro que é protótipo |
+| `BrainSandboxExecutionBridge` + `CicloExecucaoPlano` + `BrainExecutionCoordinator` | `android-module`, `brain` | **Primeira fatia ligada à UI**: `SandboxViewModel` aciona `BrainSandboxController.healthCheck()` depois que o runtime real está pronto; execução Android completa ainda precisa de testes no ambiente com SDK | Expandir de `sandbox.health` para planos de usuário e ligar aprovações/retomada à UI | Mover pra `experimental/`, deixar claro que é protótipo |
 | Todo o `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) | `brain/src/main` | Zero chamada fora do próprio módulo | Definir um primeiro caso de uso real (ex.: rodar 1 skill via UI) como prova de integração | Rebaixar no roadmap pra "biblioteca standalone, integração não iniciada" |
 | `WorkspaceManager`, `GitManager`, `ServiceManager`, `TestLab` | `app/sandbox` | Construídos em `SandboxPlatform`, nunca chamados pela UI | Criar abas/telas que os exponham (baixo esforço — backend já pronto) | Remover a instanciação em `SandboxPlatform` até terem uso |
 | `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner` | `app/sandbox` | Nem instanciados fora do próprio arquivo/teste | Plugar no fluxo de `TestLab`/readiness | Arquivar até haver um gate real que os consuma |
@@ -40,6 +40,12 @@ Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app 
 | `__pycache__/*.pyc` no zip | `tests/`, `brain_runtime/` | Contradiz o próprio `.gitignore` | — | Apagar antes do próximo commit/export |
 
 **Recomendação de ordem, se for integrar em vez de arquivar:** primeiro Workspace/Git/Services/TestLab (menor esforço, backend pronto, só falta UI) → depois o caso de uso mínimo do `:brain` → só então RemotePluginCatalog e Security* completo, que dependem de infraestrutura externa (transporte remoto, executor adversarial) fora do escopo do runtime.
+
+### Primeira fatia implementada — 2026-09-12
+
+O botão **Verificar pelo Brain**, na tela de Validação, agora percorre o caminho real `SandboxViewModel → BrainSandboxController → BrainSandboxExecutionBridge → CicloExecucaoPlano → PolicyBroker → AgentSandboxSession → CapabilityResolver → ManagedSandboxRuntime`. O caso de uso atual é deliberadamente pequeno: executar `sandbox.health` com autorização deny-by-default e exibir o resultado aprovado ou reprovado na UI. Isso prova a ligação fora de teste, mas não representa a unificação completa: o comando livre existente, plugins, Workspace, Git, Services, TestLab, Security* e Toolchains ainda têm caminhos próprios ou não estão expostos.
+
+Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e a suíte Python passou com 134 testes. A validação dos módulos Android permanece pendente neste ambiente por ausência de Android SDK configurado.
 
 ---
 

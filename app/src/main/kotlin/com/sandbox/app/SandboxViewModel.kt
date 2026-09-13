@@ -7,6 +7,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sandbox.android.AndroidSandboxFactory
+import com.sandbox.agent.BrainSandboxController
+import com.sandbox.agent.ResultadoCiclo
 import com.sandbox.resource.SandboxResourceManager
 import com.sandbox.runtime.ExecutionLog
 import com.sandbox.runtime.ManagedSandboxRuntime
@@ -53,6 +55,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     private val factory = AndroidSandboxFactory(application)
     private var runtime: ManagedSandboxRuntime? = null
     private var platform: SandboxPlatform? = null
+    private var brainController: BrainSandboxController? = null
 
     var phase by mutableStateOf<SandboxPhase>(SandboxPhase.NotReady)
         private set
@@ -92,6 +95,8 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var lastExecution by mutableStateOf<ExecutionLog?>(null)
         private set
     var diagnosticsReport by mutableStateOf<String?>(null)
+        private set
+    var lastBrainCycle by mutableStateOf<ResultadoCiclo?>(null)
         private set
 
     fun runDiagnostics() {
@@ -133,6 +138,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                 }
                 runtime = preparedRuntime
                 val sandboxDir = File(getApplication<Application>().filesDir, "sandbox")
+                brainController = BrainSandboxController(
+                    runtime = preparedRuntime,
+                    rootfsDir = File(sandboxDir, "rootfs")
+                )
                 platform = SandboxPlatform(
                     runtime = preparedRuntime,
                     workspaceRoot = File(sandboxDir, "workspace"),
@@ -205,11 +214,26 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Primeiro caminho acionado pela UI que passa pelo Brain e não pelo executor direto. */
+    fun runBrainHealthCheck() {
+        val controller = brainController
+        if (controller == null || phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            phase = SandboxPhase.Running
+            val cycle = withContext(Dispatchers.IO) {
+                runCatching { controller.healthCheck(factory.persistentSessionId()) }.getOrNull()
+            }
+            lastBrainCycle = cycle
+            phase = SandboxPhase.Ready
+        }
+    }
+
     fun resetSandbox() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 runtime?.reset { factory.purgeAll() }
                 runtime = null
+                brainController = null
                 factory.clearPersistentSession()
             }
             platform = null
@@ -219,6 +243,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lastResult = null
             lastExecution = null
             diagnosticsReport = null
+            lastBrainCycle = null
             localModelProgress = null
             localModelReady = false
             localModelError = null

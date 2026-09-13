@@ -60,7 +60,13 @@ Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e
 ## Fase D — Releases (sem pendência crítica, um ajuste de escopo)
 
 - [x] As três releases RootFS (`0.3.3`, `0.4.1`, `0.5.0`) estão migradas e documentadas corretamente — nenhuma ação necessária aqui.
-- [ ] Documentar explicitamente (já feito neste pacote, ver `docs/SANDBOX_RELEASE_MIGRATION.md` e `TAREFAS_PENDENTES.md`) que o app hoje só baixa/consome a `0.3.3` via `rootfs_manifest.json`; `0.4.1` e `0.5.0` existem como release mas não têm manifest nem seleção de perfil no app. Decidir se isso entra no roadmap como feature futura (seletor de perfil) ou fica só como material pro `rootfs-builder`.
+- [x] Documentar explicitamente que o app hoje só baixa/consome a `0.3.3` via `rootfs_manifest.json`; `0.4.1` e `0.5.0` existem como releases, mas não têm manifest nem seleção de perfil no app. A evidência está em `docs/SANDBOX_RELEASE_MIGRATION.md` e `TAREFAS_PENDENTES.md`.
+
+### Próxima frente — homologação Android ARM64
+
+- [ ] Validar `:android-module` e `:app` em ambiente com Android SDK configurado e executar o fluxo em emulador ou device.
+- [ ] Validar RootFS/proot em dispositivo ou emulador Android real, incluindo os perfis `0.3.3`, `0.4.1` e `0.5.0`.
+- [ ] Registrar evidências de health check, extração, execução de comandos, lifecycle e integridade dos artefatos.
 
 ---
 

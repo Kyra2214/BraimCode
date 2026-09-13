@@ -17,7 +17,7 @@ import java.util.zip.ZipFile
 
 class AndroidSandboxFactory(private val context: Context) {
     private companion object {
-        private const val EXTRACTOR_VERSION = "3"
+        private const val EXTRACTOR_VERSION = "4"
         private const val SESSION_PREFS = "sandbox_runtime"
         private const val SESSION_ID = "session_id"
     }
@@ -228,7 +228,14 @@ class AndroidSandboxFactory(private val context: Context) {
                 else "QUEBRADO: alvo final ${relativeLabel(current.toFile())} não é um arquivo regular"
             }
             val link = java.nio.file.Files.readSymbolicLink(current)
-            current = (if (link.isAbsolute) link else current.parent.resolve(link)).normalize()
+            // Caminhos absolutos no RootFS são absolutos para o guest, não
+            // para o Android host. Sem este prefixo, /usr/bin/... é resolvido
+            // fora da árvore extraída e uma cadeia válida aparece quebrada.
+            current = (if (link.isAbsolute) {
+                extractedRootfsDir.toPath().resolve(link.toString().removePrefix("/"))
+            } else {
+                current.parent.resolve(link)
+            }).normalize()
             chain.add(current)
         }
         return "QUEBRADO: cadeia de symlink excede $maxHops saltos (possível loop) — " + chain.joinToString(" -> ") { relativeLabel(it.toFile()) }

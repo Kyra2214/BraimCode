@@ -76,9 +76,9 @@ Validação desta fatia: `./gradlew :brain:test`, `./gradlew :android-module:tes
 - [ ] Expor o `DefaultPromptGenerator` pela UI usando a biblioteca local de prompts.
 - [ ] Integrar APIs/Events locais avançados ao fluxo de Operações sem provider externo.
 
-- [x] Atualizar o status consolidado: releases RootFS homologados e preflight de distribuição aprovado; os bloqueios restantes são exclusivamente build/device Android, assinatura de produção e infraestrutura do host. Esses bloqueios estão registrados em `docs/RELEASE_READINESS.md` e não devem ser simulados como concluídos.
+- [x] Atualizar o status consolidado: releases RootFS homologados, preflight de distribuição aprovado e build/testes Android aprovados no host. O único gate restante do escopo offline é device/emulador; assinatura e infraestrutura externa estão registradas como futuro em `docs/RELEASE_READINESS.md`.
 
-Os gates externos de SDK, device, assinatura e infraestrutura permanecem apenas como registro em `docs/RELEASE_READINESS.md`; não fazem parte do backlog de implementação offline.
+O SDK já foi validado. O gate de device pertence ao fechamento do escopo offline. Assinatura e infraestrutura externa permanecem apenas como futuro em `docs/RELEASE_READINESS.md`; não fazem parte do backlog de implementação offline.
 
 ---
 

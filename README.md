@@ -96,4 +96,4 @@ tratados como disponíveis no modo offline.
 
 ## Limites de implantação
 
-Para isolamento forte, a implantação deve fornecer container rootless ou sandbox OS-level, cgroups graváveis, política de rede, filesystem jail e, quando aplicável, autoridade de assinatura. O runtime rejeita controles estritos ausentes e não simula capacidades que o host não fornece.
+O escopo atual é Android offline e não depende de servidor, keystore ou infraestrutura distribuída. Container rootless, cgroups graváveis, filesystem jail, autoridade de assinatura e demais controles de produção permanecem documentados como extensões futuras; o runtime não simula essas capacidades.

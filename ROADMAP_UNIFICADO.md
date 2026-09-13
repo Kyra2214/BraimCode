@@ -95,10 +95,10 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime estável, plugins, ferramentas, projetos, workspace, terminal, git, toolchains, serviços, rede, segurança, test lab, logs, diagnóstico, recuperação, persistência, experiência consistente) somados às pendências já documentadas em `VALIDACAO_2026-09-12.md`:
 - Validação em device/emulador físico real.
 - RootFS/proot: os perfis `0.3.3`, `0.4.1` e `0.5.0` já foram validados e hardened no Sandbox de origem; a migração para o BrainCode preservou os bytes. Permanece apenas a validação de implantação no app/device, sem reabrir a homologação dos artefatos.
-- Assinatura de release (autoridade de chaves).
-- Infra externa: Postgres/Redis/etcd no lugar do SQLite, cgroups graváveis, Bubblewrap plenamente configurado, coordenação multi-host — tudo isso é dependência de implantação, não é simulado pelo runtime.
+- Futuro — assinatura de release e autoridade de chaves.
+- Futuro — infra externa: Postgres/Redis/etcd no lugar do SQLite, cgroups graváveis, Bubblewrap plenamente configurado e coordenação multi-host. Nada disso faz parte do produto Android offline atual.
 - O preflight local `scripts/validate-release-readiness.sh` confirma que os três manifests, assets publicados e sidecars SHA-256 estão consistentes. A evidência e a matriz de gates estão em `docs/RELEASE_READINESS.md`.
-- Status consolidado: não há pendência de homologação dos releases RootFS. Permanecem somente os gates de implantação que exigem Android SDK/device, autoridade de assinatura ou infraestrutura do host.
+- Status consolidado: não há pendência de homologação dos releases RootFS. No escopo atual permanece somente o gate de device/emulador; assinatura e infraestrutura externa são futuras.
 - Para a execução do produto Android offline, o trabalho restante está no backlog local: plugins com rollback/histórico, toolchains com cache, Security Test Lab offline, `BrainExecutionCoordinator`, `DefaultPromptGenerator` e APIs/Events locais avançados. SDK, device, assinatura e infraestrutura não entram nessa lista de implementação.
 
 ---
@@ -171,20 +171,20 @@ Uma execução relevante deve permitir responder: por que essa estratégia foi e
 
 ## Resumo executivo — o que falta, sem duplicar
 
-1. **Brain no Kotlin** já possui memória persistente integrada ao coordenador, catálogo de Skills, engine de Workflows e discovery avançado de APIs — mas nada disso é chamado pelo app Android; é uma biblioteca completa e isolada. A integração com `:app`/`:android-module` é a pendência nº 1 do projeto hoje, antes até de qualquer fonte de transporte externa.
-2. **Sandbox Mobile** ainda não tem, *acessível pela UI*: catálogo remoto de plugins (Fase 2 — implementado, não ligado ao `PluginManager`), gerenciamento de toolchains (Fase 5 — implementado, não instanciado por `SandboxPlatform`), rede/serviços (Fase 6 — implementado e instanciado, mas sem tela) e um Security Test Lab de verdade com attack simulation (Fase 6 deste documento / P4 — implementado, não instanciado em lugar nenhum).
-3. **Validação final em produção** (device físico, RootFS real, assinatura de release, infra distribuída) continua em aberto — é o gate para chamar o projeto de "Fase 8 / 100% completo".
+1. **Brain no Kotlin** possui memória, Skills, Workflows e Discovery integráveis; a primeira fatia acionável pelo app já está ligada ao fluxo de `sandbox.health`, planos e aprovação/retomada. Integrações avançadas continuam no backlog offline.
+2. **Sandbox Mobile** já possui caminhos acionáveis para catálogo local, toolchains, rede/serviços, Security, TestLab, Workspace, Git, Memory, Discovery e delivery local; o que falta é completar as expansões listadas no backlog, não validar servidor.
+3. **Validação do produto offline** (device físico/emulador, RootFS/proot real e lifecycle) continua em aberto. Assinatura de release e infraestrutura distribuída são fases futuras e não bloqueiam o escopo atual.
 4. O plano de ação com a ordem recomendada de integração (ou arquivamento) de cada peça acima está em `PLANO_DE_ACAO.md`.
 
 
 ## Registro da entrega — 2026-09-12 — Cinco frentes
 
-Foi criado `LocalLLMSecretario` com fallback seguro, adicionado o perfil Android ao catálogo declarativo de toolchains, criado `SecurityScenarioCatalog` com seis cenários baseline e publicada a documentação em `docs/FASES_1_A_5_ENTREGA.md`. A suíte Python passou com 134 testes. A validação Kotlin permanece bloqueada neste ambiente pela ausência do JDK 17 exigido pelo Gradle; a validação Android depende de SDK configurado. As dependências externas não são simuladas como concluídas.
+Foi criado `LocalLLMSecretario` com fallback seguro, adicionado o perfil Android ao catálogo declarativo de toolchains, criado `SecurityScenarioCatalog` com seis cenários baseline e publicada a documentação em `docs/FASES_1_A_5_ENTREGA.md`. A suíte Python passou com 134 testes. A validação Kotlin/Android passou com JDK 17 e SDK 34 no clone limpo, conforme `docs/VALIDACAO_ANDROID_2026-09-13.md`. As extensões futuras não são simuladas como concluídas.
 
 
 ### 2026-09-12 — Validação Android local
 
-Ambiente preparado com JDK 17, Android SDK API 34, Build Tools 34.0.0 e platform-tools. `:app:testDebugUnitTest` e `:app:assembleDebug` passaram. A rodada corrigiu compatibilidade de leitura de arquivos no `SecurityProjectScanner`, detecção case-insensitive de chave privada, contrato de exceção do `ServiceManager` e o relatório do script de ambiente. APK debug gerado com SHA-256 `d4bcfbc1a961218e0115f70e2080ea0c8d5ec6a77add147aa6888e5f34eb0247`. Instalação em emulador/dispositivo físico, RootFS/proot e assinatura release continuam pendentes.
+Ambiente preparado com JDK 17, Android SDK API 34, Build Tools 34.0.0, platform-tools e NDK 26.3. `:brain:test`, `:android-module:test`, `:app:test` e `:app:assembleDebug` passaram. O APK debug mais recente possui SHA-256 `e51adf29e818ec073dc89cea247ae6c50f1652a6673995cb6a21ac355bb3b93e`. Instalação em emulador/dispositivo físico, RootFS/proot e lifecycle continuam pendentes do escopo offline; assinatura release é futura.
 
 
 ### 2026-09-12 — Download da mini-LLM local

@@ -33,8 +33,8 @@ O APK validado é `app/build/outputs/apk/debug/app-debug.apk`, com aproximadamen
 e51adf29e818ec073dc89cea247ae6c50f1652a6673995cb6a21ac355bb3b93e
 ```
 
-## Limitações que continuam abertas
+## Pendências do escopo Android offline
 
-A validação comprova testes JVM, compilação Android e empacotamento do APK Debug. Ela não comprova instalação ou execução em device/emulador ARM64, execução real de RootFS/proot, lifecycle sob interrupção, desempenho, assinatura de release ou funcionamento com infraestrutura OS-level de produção.
+A validação comprova testes JVM, compilação Android e empacotamento do APK Debug. Para fechar o escopo atual Android offline ainda falta instalação ou execução em device/emulador ARM64, execução real de RootFS/proot, lifecycle sob interrupção e desempenho. Assinatura de release, keystore, infraestrutura OS-level de servidor e backends distribuídos são extensões futuras e não fazem parte do fechamento atual.
 
 Há warnings não bloqueantes sobre o uso depreciado de `createTempDir` nos testes Kotlin e sobre a busca de um caminho alternativo de JDK 17 pelo Gradle.

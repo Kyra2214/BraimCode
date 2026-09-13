@@ -24,7 +24,7 @@ A base de código e o roadmap foram mantidos honestos quanto ao limite de implan
 
 ## Fase 5 — Infraestrutura de produção
 
-A implementação local continua deny-by-default e não simula cgroups, Bubblewrap, firewall, namespaces ou coordenação distribuída. Para produção, o operador deve fornecer essas garantias e configurar Postgres/Redis/etcd quando houver necessidade de leases e workflows multi-host. A ausência desses serviços deve bloquear readiness em modo protegido, não ser convertida em falso sucesso.
+A implementação local continua deny-by-default. cgroups, Bubblewrap, firewall, namespaces, coordenação distribuída e Postgres/Redis/etcd pertencem a uma futura implantação de servidor/host e não fazem parte do escopo atual Android offline.
 
 ## Validação desta entrega
 
@@ -40,7 +40,7 @@ A implementação local continua deny-by-default e não simula cgroups, Bubblewr
 
 ## Pendências que continuam abertas
 
-A entrega não substitui a validação de produção. Continuam abertas a integração de transporte real do LLM local, executor OS-level de probes, corpus persistente de regressão, cgroups/Bubblewrap/firewall, backend distribuído, assinatura de release e validação em dispositivo físico.
+A entrega não substitui a validação de device. Continuam abertas a integração de transporte real do LLM local, executor OS-level de probes, corpus persistente de regressão e validação em dispositivo físico. Assinatura de release, backend distribuído e infraestrutura de servidor estão documentados como futuro.
 
 ## Critério para chamar as cinco fases de prontas
 

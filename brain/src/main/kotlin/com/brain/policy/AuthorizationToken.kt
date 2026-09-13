@@ -1,11 +1,8 @@
 package com.brain.policy
 
 /**
- * Opaque proof that a PolicyDecision was issued by PolicyBroker and has not
- * had its authorization-relevant fields changed through data-class copy().
- *
- * The constructor is private and the issuer is internal to the brain module;
- * consumers can only validate a token they already received from PolicyBroker.
+ * Opaque proof that a PolicyDecision was issued by PolicyBroker and that all
+ * execution-relevant fields still match the broker-issued decision.
  */
 class AuthorizationToken private constructor(
     private val decisionId: String,
@@ -13,7 +10,14 @@ class AuthorizationToken private constructor(
     private val taskId: String,
     private val actor: String,
     private val capability: String,
-    private val resource: String
+    private val resource: String,
+    private val riskClass: RiskClass,
+    private val approvalRequired: ApprovalRequired,
+    private val sandboxRequired: Boolean,
+    private val networkAllowed: Boolean,
+    private val filesystemRoots: List<String>,
+    private val budget: Map<String, Long>,
+    private val expiresAt: String
 ) {
     fun matches(decision: PolicyDecision): Boolean =
         decisionId == decision.decisionId &&
@@ -21,7 +25,14 @@ class AuthorizationToken private constructor(
             taskId == decision.taskId &&
             actor == decision.actor &&
             capability == decision.capability &&
-            resource == decision.resource
+            resource == decision.resource &&
+            riskClass == decision.riskClass &&
+            approvalRequired == decision.approvalRequired &&
+            sandboxRequired == decision.sandboxRequired &&
+            networkAllowed == decision.networkAllowed &&
+            filesystemRoots == decision.filesystemRoots &&
+            budget == decision.budget &&
+            expiresAt == decision.expiresAt
 
     companion object {
         internal fun issue(decision: PolicyDecision): AuthorizationToken =
@@ -31,7 +42,14 @@ class AuthorizationToken private constructor(
                 taskId = decision.taskId,
                 actor = decision.actor,
                 capability = decision.capability,
-                resource = decision.resource
+                resource = decision.resource,
+                riskClass = decision.riskClass,
+                approvalRequired = decision.approvalRequired,
+                sandboxRequired = decision.sandboxRequired,
+                networkAllowed = decision.networkAllowed,
+                filesystemRoots = decision.filesystemRoots.toList(),
+                budget = decision.budget.toMap(),
+                expiresAt = decision.expiresAt
             )
     }
 }

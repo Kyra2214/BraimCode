@@ -30,11 +30,8 @@ class ProotResourceLimitsTest {
         assertEquals(listOf("ulimit -v 65536", "ulimit -f 1024"), limits.ulimitStatements())
     }
 
-    @Test fun `DEFAULT does not set maxProcesses`() {
-        // Ver docstring de ProotResourceLimits: RLIMIT_NPROC é agregado por
-        // UID real, não por processo — não é seguro por padrão no Android
-        // porque o app host compartilha o mesmo UID real do sandbox.
-        assertNull(ProotResourceLimits.DEFAULT.maxProcesses)
+    @Test fun `DEFAULT activates maxProcesses with tree watchdog support`() {
+        assertEquals(128, ProotResourceLimits.DEFAULT.maxProcesses)
         assertTrue(ProotResourceLimits.DEFAULT.hasLimits())
     }
 

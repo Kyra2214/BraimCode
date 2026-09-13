@@ -105,7 +105,9 @@ data class ProotResourceLimits(
          * Baseado nos padrões do `SandboxJob` no caminho de referência Python
          * (`brain_runtime/sandbox.py`: `memory_mb=512`, `max_processes=32`,
          * `max_open_files=64`, `max_disk_bytes=100MB`, `RLIMIT_CPU=60`) —
-         * exceto `maxProcesses` (ver docstring da classe) e `maxMemoryBytes`.
+         * O limite de processos usa RLIMIT_NPROC como camada adicional, mas o
+         * watchdog Android em ManagedSandboxRuntime é a autoridade por árvore;
+         * isso evita confiar apenas no UID compartilhado do Android.
          *
          * `maxMemoryBytes` foi elevado de 512MB para 4GB porque `ulimit -v`
          * mapeia para `RLIMIT_AS`, que limita **espaço de endereçamento
@@ -123,7 +125,7 @@ data class ProotResourceLimits(
         val DEFAULT = ProotResourceLimits(
             maxMemoryBytes = 4L * 1024 * 1024 * 1024,
             maxCpuSeconds = 60,
-            maxProcesses = null,
+            maxProcesses = 128,
             maxOpenFiles = 64,
             maxFileSizeBytes = 100L * 1024 * 1024
         )

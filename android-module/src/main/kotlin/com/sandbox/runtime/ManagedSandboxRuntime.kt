@@ -38,6 +38,7 @@ class ManagedSandboxRuntime(
                 val a = ActiveExecution(id, process)
                 active.set(a)
                 stateRef.set(SandboxState.RUNNING)
+                startProcessWatchdog(a)
                 val marker = ExecutionLog(id, sessionId, command, workingDir, started, 0L, 0L, null,
                     TerminationReason.RUNTIME_ERROR, false, false, "", "", SandboxState.RUNNING)
                 runCatching { repository.save(marker) }.onFailure { emit(RuntimeEventType.PERSISTENCE_ERROR, id, it.message) }
@@ -160,6 +161,22 @@ class ManagedSandboxRuntime(
         }
     }
 
+    private fun startProcessWatchdog(a: ActiveExecution) {
+        val limit = launcher.resourceLimits.maxProcesses ?: return
+        Thread {
+            while (active.get() === a && a.process.isAlive) {
+                val pid = processPid(a.process)
+                if (pid != null && ProcessTreeTerminator.processCount(pid) > limit) {
+                    a.reason.compareAndSet(null, TerminationReason.RESOURCE_LIMIT)
+                    emit(RuntimeEventType.PROCESS_FORCED_KILL, a.id, "maxProcesses=$limit")
+                    stopProcess(a.process)
+                    return@Thread
+                }
+                try { Thread.sleep(100) } catch (_: InterruptedException) { return@Thread }
+            }
+        }.apply { isDaemon = true; name = "sandbox-process-watchdog-${a.id}"; start() }
+    }
+
     /**
      * Separa a linha de marcação emitida por
      * [ProotResourceLimits.verifiedPreamble] do stderr real do comando, e
@@ -233,6 +250,8 @@ class ManagedSandboxRuntime(
 }
 
 private object ProcessTreeTerminator {
+    fun processCount(root: Long): Int = descendantPids(root).size + 1
+
     fun terminateTree(pid: Long, signal: String, processGroupManaged: Boolean) {
         if (pid <= 0) return
         val kill = listOf("/system/bin/kill", "/usr/bin/kill", "/bin/kill").firstOrNull { java.io.File(it).canExecute() } ?: return

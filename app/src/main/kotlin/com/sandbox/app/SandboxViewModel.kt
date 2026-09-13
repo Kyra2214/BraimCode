@@ -317,32 +317,39 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     fun prepareSandbox() {
         if (phase is SandboxPhase.Downloading || phase is SandboxPhase.Preparing) return
         viewModelScope.launch {
-            phase = SandboxPhase.Downloading(0, 0)
-            val manifests = try {
-                ManifestLoader.loadAll(getApplication())
-            } catch (e: IllegalStateException) {
-                phase = SandboxPhase.Blocked(e.message ?: "Manifesto inválido")
-                return@launch
-            }
-            val totalBytes = manifests.sumOf { it.sizeBytes }
-            var completedBytes = 0L
-            val downloadResult = withContext(Dispatchers.IO) {
-                manifests.mapIndexed { index, manifest ->
-                    val result = factory.layerResourceManager(index).ensureAvailable(manifest) { downloaded, _ ->
-                        phase = SandboxPhase.Downloading(completedBytes + downloaded, totalBytes)
+            // Se o rootfs já foi extraído e validado numa preparação anterior,
+            // os .tar.gz baixados já foram apagados (liberamos espaço assim
+            // que a "instalação" terminou) — não faz sentido baixar tudo de
+            // novo só para extrair algo que já está pronto no disco.
+            val rootfsAlreadyReady = withContext(Dispatchers.IO) { factory.isRootfsReady() }
+            if (!rootfsAlreadyReady) {
+                phase = SandboxPhase.Downloading(0, 0)
+                val manifests = try {
+                    ManifestLoader.loadAll(getApplication())
+                } catch (e: IllegalStateException) {
+                    phase = SandboxPhase.Blocked(e.message ?: "Manifesto inválido")
+                    return@launch
+                }
+                val totalBytes = manifests.sumOf { it.sizeBytes }
+                var completedBytes = 0L
+                val downloadResult = withContext(Dispatchers.IO) {
+                    manifests.mapIndexed { index, manifest ->
+                        val result = factory.layerResourceManager(index).ensureAvailable(manifest) { downloaded, _ ->
+                            phase = SandboxPhase.Downloading(completedBytes + downloaded, totalBytes)
+                        }
+                        if (result is SandboxResourceManager.DownloadResult.Success) {
+                            completedBytes += manifest.sizeBytes
+                        }
+                        result
                     }
-                    if (result is SandboxResourceManager.DownloadResult.Success) {
-                        completedBytes += manifest.sizeBytes
-                    }
-                    result
+                }
+                val failedDownload = downloadResult.filterIsInstance<SandboxResourceManager.DownloadResult.Failure>().firstOrNull()
+                if (failedDownload != null) {
+                        phase = SandboxPhase.Blocked(failedDownload.reason)
+                        return@launch
                 }
             }
-            val failedDownload = downloadResult.filterIsInstance<SandboxResourceManager.DownloadResult.Failure>().firstOrNull()
-            if (failedDownload != null) {
-                    phase = SandboxPhase.Blocked(failedDownload.reason)
-                    return@launch
-            }
-            phase = SandboxPhase.Preparing("Extraindo RootFS", 0L, manifests.sumOf { it.sizeBytes })
+            phase = SandboxPhase.Preparing("Extraindo RootFS", 0L, 1L)
             try {
                 runtime?.shutdown()
                 val preparedRuntime = withContext(Dispatchers.IO) {

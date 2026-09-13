@@ -79,19 +79,48 @@ class AndroidSandboxFactory(private val context: Context) {
 
     fun modelFile(modelId: String): File = File(modelDir, "$modelId.gguf")
 
+    /**
+     * True quando o rootfs já foi extraído com sucesso e está íntegro
+     * (marcador de versão bate e as entradas essenciais existem). Quando
+     * isto é true, os arquivos baixados (rootfs-*.tar.gz) não são mais
+     * necessários — só servem de "instalador", e podem já ter sido
+     * removidos por [prepareRuntime] para liberar espaço.
+     */
+    fun isRootfsReady(): Boolean = rootfsExtractionValid()
+
+    private fun rootfsExtractionValid(): Boolean =
+        extractedRootfsDir.exists() &&
+            !extractedRootfsDir.list().isNullOrEmpty() &&
+            extractionMarker.readTextOrNull() == EXTRACTOR_VERSION &&
+            hasRequiredRootfsEntries()
+
+    /**
+     * Apaga os arquivos .tar.gz baixados (e eventuais .part remanescentes).
+     * Só deve ser chamado depois que a extração foi validada com sucesso:
+     * assim como um instalador, uma vez que o conteúdo já foi "instalado"
+     * (extraído e verificado) em [extractedRootfsDir], os pacotes de
+     * origem só ocupam espaço à toa.
+     */
+    private fun deleteDownloadedArchives() {
+        downloadedArchives.forEach { archive ->
+            SandboxResourceManager(archive).purge()
+        }
+    }
+
     fun prepareRuntime(
         forceReExtract: Boolean = false,
         progressListener: ((completed: Long, total: Long, stage: String) -> Unit)? = null
     ): SandboxRuntime {
-        require(downloadedArchives.all { it.exists() }) {
-            "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
-        }
         if (forceReExtract && extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
-        val needsReExtract = !extractedRootfsDir.exists() ||
-            extractedRootfsDir.list().isNullOrEmpty() ||
-            extractionMarker.readTextOrNull() != EXTRACTOR_VERSION ||
-            !hasRequiredRootfsEntries()
+        val needsReExtract = forceReExtract || !rootfsExtractionValid()
         if (needsReExtract) {
+            // As camadas só precisam existir em disco quando é preciso
+            // (re)extrair. Se o rootfs já está extraído e válido, os
+            // arquivos baixados podem já ter sido apagados por uma
+            // preparação anterior — nesse caso nem chegamos aqui.
+            require(downloadedArchives.all { it.exists() }) {
+                "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
+            }
             if (extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
             extractionMarker.delete()
             val totalArchiveBytes = downloadedArchives.sumOf { it.length() }.coerceAtLeast(1L)
@@ -109,6 +138,10 @@ class AndroidSandboxFactory(private val context: Context) {
             }
             validateExtractedRootfs()
             extractionMarker.writeText(EXTRACTOR_VERSION)
+            // "Instalação" concluída e validada: os .tar.gz baixados não
+            // servem mais pra nada (só pra re-extrair do zero, e pra isso
+            // dá pra baixar de novo) — apaga pra liberar espaço no device.
+            deleteDownloadedArchives()
         }
         progressListener?.invoke(1L, 1L, "Inicializando runtime")
         ensureResolvConf()
@@ -133,9 +166,9 @@ class AndroidSandboxFactory(private val context: Context) {
         sessionId: String = persistentSessionId(),
         progressListener: ((completed: Long, total: Long, stage: String) -> Unit)? = null
     ): ManagedSandboxRuntime {
-        require(downloadedArchives.all { it.exists() }) {
-            "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
-        }
+        // A checagem de que as 3 camadas existem só faz sentido quando uma
+        // (re)extração é realmente necessária — e quem decide isso, de
+        // forma consistente com a limpeza pós-instalação, é prepareRuntime.
         prepareRuntime(progressListener = progressListener)
         val packagedRuntime = PackagedRuntime(context, extractedRootfsDir)
         packagedRuntime.prepare()

@@ -20,6 +20,18 @@ repositório `Kyra2214/BrainCode`.
 Esses valores são os metadados dos releases publicados no SandBox e devem
 ser tratados como referência de integridade da migração.
 
+## Documentação específica por release
+
+As análises técnicas de cada perfil foram consolidadas separadamente a partir
+da documentação, Dockerfiles, scripts de build, manifests e scripts de
+integração do repositório SandBox:
+
+| Release | Documento |
+|---|---|
+| `rootfs-v0.3.3` | [RootFS Base 0.3.3](SANDBOX_RELEASE_0.3.3.md) |
+| `rootfs-agent-v0.4.1` | [Agent Extra 0.4.1](SANDBOX_RELEASE_AGENT_EXTRA_0.4.1.md) |
+| `rootfs-agent-android-v0.5.0` | [Agent Android/API 0.5.0](SANDBOX_RELEASE_AGENT_ANDROID_0.5.0.md) |
+
 ## Regra de preservação
 
 A migração não cria uma nova build. Para cada artefato:

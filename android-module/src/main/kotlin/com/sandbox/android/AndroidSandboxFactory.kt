@@ -17,7 +17,10 @@ import java.util.zip.ZipFile
 
 class AndroidSandboxFactory(private val context: Context) {
     private companion object {
-        private const val EXTRACTOR_VERSION = "4"
+        // 5: composição base + agent-extra + agent-android. O valor 4
+        // identificava a extração de uma única camada e não pode ser
+        // reutilizado após a migração para os três artefatos.
+        private const val EXTRACTOR_VERSION = "5"
         private const val SESSION_PREFS = "sandbox_runtime"
         private const val SESSION_ID = "session_id"
     }

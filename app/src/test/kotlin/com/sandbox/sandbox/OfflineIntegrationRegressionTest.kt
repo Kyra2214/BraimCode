@@ -1,0 +1,27 @@
+package com.sandbox.sandbox
+
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/** Contratos determinísticos das conexões fechadas no backlog offline. */
+class OfflineIntegrationRegressionTest {
+    @Test
+    fun `security corpus records observed probe result`() {
+        val dir = Files.createTempDirectory("braincode-security").toFile()
+        val corpus = SecurityRegressionCorpus(dir.resolve("corpus.jsonl"))
+        val scenario = SecurityScenarioCatalog.baseline.first()
+        val result = SecurityProbeResult(scenario.id, completed = true, blocked = scenario.expectedBlocked, output = "test")
+        val report = SecurityTestLab().evaluate(
+            scan = SecurityScanResult(emptyList(), emptyList()),
+            scenarios = listOf(scenario),
+            probeResults = listOf(result)
+        )
+        corpus.record(report, listOf(result))
+        val entry = corpus.entries().single()
+        assertEquals(result.blocked, entry.observedBlocked)
+        assertEquals(scenario.expectedBlocked, entry.expectedBlocked)
+        assertTrue(corpus.digest().isNotBlank())
+    }
+}

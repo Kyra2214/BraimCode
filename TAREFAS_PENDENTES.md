@@ -26,7 +26,7 @@ A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDB
 ### Unificação Brain ↔ Sandbox
 
 - [x] Ligar uma primeira operação real da UI ao `:brain`: o botão **Verificar pelo Brain** executa `sandbox.health` através de Policy, sessão autorizada, capability resolver e runtime Sandbox.
-- [ ] Expandir o controlador para planos de usuário e remover os caminhos de execução paralelos onde houver equivalência segura.
+- [x] Expandir o controlador para executar planos, exigir aprovação em passos HIGH/CRITICAL, persistir solicitações em `approvals.jsonl` e permitir consumo único via retomada na aba **Operações**.
 - [ ] Validar `:android-module` e `:app` em ambiente com Android SDK configurado e executar o fluxo em emulador ou device.
 
 As tarefas abaixo permanecem abertas porque não fazem parte da migração copy-only dos artefatos homologados:
@@ -45,7 +45,7 @@ Essas pendências são acompanhadas em [`ROADMAP_UNIFICADO.md`](ROADMAP_UNIFICAD
 
 Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalhamento e critério de decisão (integrar vs. arquivar) em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
 
-- [x] Ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel` pelo botão **Verificar pelo Brain**; `BrainExecutionCoordinator` permanece como API de planos avançados ainda não exposta.
+- [x] Ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel`; o caminho de health, planos e retomada agora é acionável pela UI. `BrainExecutionCoordinator` permanece como API avançada ainda não exposta.
 - [ ] Decidir o destino de todo o módulo `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) — hoje zero uso fora dos próprios testes.
 - [ ] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager`; o `TestLab` já é acionável na aba **Operações** pelo executor protegido compartilhado.
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.

@@ -11,4 +11,7 @@ import com.brain.planner.PlanoExecucao
 class BrainSandboxExecutionBridge(private val ciclo: CicloExecucaoPlano) {
     fun execute(plano: PlanoExecucao, runId: String, actor: String): ResultadoCiclo =
         ciclo.executar(plano, runId, actor)
+
+    fun resume(plano: PlanoExecucao, runId: String, actor: String, approvalId: String): ResultadoCiclo =
+        ciclo.retomar(plano, runId, actor, approvalId)
 }

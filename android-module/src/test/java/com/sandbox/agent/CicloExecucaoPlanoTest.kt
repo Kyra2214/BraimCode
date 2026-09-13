@@ -3,6 +3,7 @@ package com.sandbox.agent
 import com.brain.planner.PassoPlano
 import com.brain.planner.PlanoExecucao
 import com.brain.policy.Decision
+import com.brain.policy.ApprovalStore
 import com.brain.policy.PolicyBroker
 import com.brain.router.DefaultAIRouter
 import com.brain.router.InMemoryApiCatalog
@@ -31,7 +32,8 @@ class CicloExecucaoPlanoTest {
     private fun ciclo(
         root: File,
         allowedCapabilities: Collection<String> = listOf("sandbox.hello"),
-        actor: String = "agent-1"
+        actor: String = "agent-1",
+        approvalStore: ApprovalStore? = null
     ): CicloExecucaoPlano {
         val logDir = File(root, "logs")
         val runtime = ManagedSandboxRuntime(TestLauncher(root), FileExecutionLogRepository(logDir), sessionId = "session-1")
@@ -46,7 +48,7 @@ class CicloExecucaoPlanoTest {
         val apiCatalog = InMemoryApiCatalog(listOf(
             ProviderModel("groq", "modelo-x", listOf(PapelPipeline.EXECUCAO_CODIGO), JanelaLimite())
         ))
-        return CicloExecucaoPlano(policyBroker, sandbox, DefaultAIRouter(), apiCatalog)
+        return CicloExecucaoPlano(policyBroker, sandbox, DefaultAIRouter(), apiCatalog, approvalStore = approvalStore)
     }
 
     @Test
@@ -107,6 +109,24 @@ class CicloExecucaoPlanoTest {
     }
 
     /** Roda comandos de verdade no host (não em proot) — mesma técnica do restante de :android-module. */
+    @Test
+    fun `passo de alto risco pede approval persistido e retoma uma unica vez`() {
+        val root = createTempDir(prefix = "ciclo-approval-")
+        try {
+            val store = com.brain.policy.FileApprovalStore(File(root, "approvals.jsonl"))
+            val plano = PlanoExecucao("operação sensível", listOf(passo("sensitive", capacidade = "sandbox.hello", riskClass = com.brain.execution.RiskClass.HIGH)))
+            val pending = ciclo(root, approvalStore = store).executar(plano, "run-approval", "agent-1")
+            val approvalId = pending.passos.single().approvalId
+            assertEquals(StatusPasso.AGUARDANDO_APROVACAO, pending.passos.single().status)
+            assertNotNull(approvalId)
+            store.decide(approvalId!!, approved = true)
+            val resumed = ciclo(root, approvalStore = store).retomar(plano, "run-approval", "agent-1", approvalId)
+            assertTrue(resumed.aprovado)
+            val consumed = ciclo(root, approvalStore = store).retomar(plano, "run-approval", "agent-1", approvalId)
+            assertEquals(StatusPasso.NEGADO_PELA_POLICY, consumed.passos.single().status)
+        } finally { root.deleteRecursively() }
+    }
+
     private class TestLauncher(private val rootDir: File) : SandboxProcessLauncher {
         override fun launch(command: List<String>, workingDir: String): Process {
             val hostDir = File(rootDir, workingDir.removePrefix("/")).apply { mkdirs() }

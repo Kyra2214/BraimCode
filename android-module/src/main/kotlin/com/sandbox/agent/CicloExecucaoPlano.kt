@@ -3,6 +3,9 @@ package com.sandbox.agent
 import com.brain.planner.PassoPlano
 import com.brain.planner.PlanoExecucao
 import com.brain.policy.Decision
+import com.brain.policy.ApprovalRequired
+import com.brain.policy.ApprovalRequest
+import com.brain.policy.ApprovalStore
 import com.brain.policy.ExecutionAuthorization
 import com.brain.policy.PolicyBroker
 import com.brain.policy.PolicyContext
@@ -24,7 +27,8 @@ data class ResultadoPasso(
     val decisaoRouter: RoutingDecision? = null,
     val execucao: AgentSandboxSession.CommandOutcome? = null,
     val evidencias: List<EvidenciaComando> = emptyList(),
-    val motivo: String? = null
+    val motivo: String? = null,
+    val approvalId: String? = null
 )
 
 data class ResultadoCiclo(
@@ -74,8 +78,11 @@ class CicloExecucaoPlano(
     private val router: AIRouter,
     private val catalog: ApiCatalog,
     private val validador: ExecutorValidacaoProjeto = ExecutorValidacaoProjeto(),
-    private val profiles: List<RoutingProfile> = emptyList()
+    private val profiles: List<RoutingProfile> = emptyList(),
+    private val approvalStore: ApprovalStore? = null
 ) {
+
+    private val approvedSteps = mutableSetOf<String>()
 
     fun executar(plano: PlanoExecucao, runId: String, actor: String): ResultadoCiclo {
         val resultados = mutableListOf<ResultadoPasso>()
@@ -110,10 +117,26 @@ class CicloExecucaoPlano(
         return ResultadoCiclo(plano.objetivo, runId, resultados)
     }
 
+    /** Retoma um plano após consumir uma aprovação persistida, uma única vez. */
+    fun retomar(plano: PlanoExecucao, runId: String, actor: String, approvalId: String): ResultadoCiclo {
+        val approval = approvalStore?.consume(approvalId)
+            ?: return ResultadoCiclo(plano.objetivo, runId, listOf(ResultadoPasso("approval", StatusPasso.NEGADO_PELA_POLICY, motivo = "aprovação inexistente, já consumida ou expirada", approvalId = approvalId)))
+        require(approval.request.runId == runId) { "aprovação pertence a outro runId" }
+        approvedSteps += approval.request.taskId
+        return try { executar(plano, runId, actor) } finally { approvedSteps -= approval.request.taskId }
+    }
+
     private fun processarPasso(passo: PassoPlano, runId: String, actor: String): ResultadoPasso {
         val decisaoRouter = passo.papel?.let { router.decidir(it, catalog, profiles) }
 
-        val contexto = PolicyContext(runId = runId, taskId = passo.id, actor = actor, riskClass = passo.riskClass)
+        val requiresApproval = passo.riskClass == com.brain.execution.RiskClass.HIGH || passo.riskClass == com.brain.execution.RiskClass.CRITICAL
+        val contexto = PolicyContext(
+            runId = runId,
+            taskId = passo.id,
+            actor = actor,
+            riskClass = passo.riskClass,
+            approval = if (requiresApproval && passo.id !in approvedSteps) ApprovalRequired.USER else ApprovalRequired.NONE
+        )
         val decisaoPolicy = policyBroker.authorize(actor, passo.capacidade, resource = passo.id, contexto)
         val autorizacao = ExecutionAuthorization.fromDecision(decisaoPolicy)
             ?: return ResultadoPasso(
@@ -121,7 +144,18 @@ class CicloExecucaoPlano(
                 status = if (decisaoPolicy.decision == Decision.ASK) StatusPasso.AGUARDANDO_APROVACAO else StatusPasso.NEGADO_PELA_POLICY,
                 decisaoPolicy = decisaoPolicy,
                 decisaoRouter = decisaoRouter,
-                motivo = decisaoPolicy.reason
+                motivo = decisaoPolicy.reason,
+                approvalId = if (decisaoPolicy.decision == Decision.ASK) {
+                    approvalStore?.create(
+                        ApprovalRequest(
+                            runId = runId,
+                            taskId = passo.id,
+                            capability = passo.capacidade,
+                            resource = passo.id,
+                            expiresAt = java.time.Instant.parse(decisaoPolicy.expiresAt)
+                        )
+                    )?.request?.id
+                } else null
             )
 
         sandbox.abrirSessao(autorizacao).use { sessao ->

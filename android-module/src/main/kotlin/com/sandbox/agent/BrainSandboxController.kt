@@ -2,7 +2,9 @@ package com.sandbox.agent
 
 import com.brain.planner.PassoPlano
 import com.brain.planner.PlanoExecucao
+import com.brain.execution.RiskClass
 import com.brain.policy.PolicyBroker
+import com.brain.policy.FileApprovalStore
 import com.brain.router.DefaultAIRouter
 import com.brain.router.InMemoryApiCatalog
 import com.sandbox.runtime.ManagedSandboxRuntime
@@ -21,6 +23,7 @@ class BrainSandboxController(
     rootfsDir: File,
     private val actor: String = "android-app"
 ) {
+    private val approvals = FileApprovalStore(File(rootfsDir.parentFile ?: rootfsDir, "approvals.jsonl"))
     private val sandbox = Sandbox(runtime = runtime, rootfsDir = rootfsDir)
     private val policy = PolicyBroker(
         allowedCapabilities = setOf("sandbox.health"),
@@ -31,7 +34,8 @@ class BrainSandboxController(
             policyBroker = policy,
             sandbox = sandbox,
             router = DefaultAIRouter(),
-            catalog = InMemoryApiCatalog(emptyList())
+            catalog = InMemoryApiCatalog(emptyList()),
+            approvalStore = approvals
         )
     )
 
@@ -50,4 +54,22 @@ class BrainSandboxController(
         )
         return bridge.execute(plano, runId = runId, actor = actor)
     }
+
+    fun executePlan(plano: PlanoExecucao, runId: String = "plan-${System.currentTimeMillis()}"): ResultadoCiclo =
+        bridge.execute(plano, runId = runId, actor = actor)
+
+    fun resumePlan(plano: PlanoExecucao, runId: String, approvalId: String): ResultadoCiclo =
+        bridge.resume(plano, runId = runId, actor = actor, approvalId = approvalId)
+
+    fun approvalDemoPlan(): PlanoExecucao = PlanoExecucao(
+        objetivo = "executar plano de demonstração com aprovação humana",
+        passos = listOf(
+            PassoPlano(
+                id = "approval-demo",
+                capacidade = "sandbox.health",
+                criterioSucesso = "sandbox.health deve concluir após aprovação",
+                riskClass = RiskClass.HIGH
+            )
+        )
+    )
 }

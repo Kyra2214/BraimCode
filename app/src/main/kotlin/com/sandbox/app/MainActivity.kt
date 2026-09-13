@@ -118,6 +118,13 @@ private fun OperationsScreen(viewModel: SandboxViewModel) {
                     Button(onClick = { viewModel.runTestLab() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Executar TestLab") }
                     OutlinedButton(onClick = { viewModel.runSecurityAssessment() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Avaliar segurança") }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { viewModel.requestApprovalDemo() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Solicitar aprovação") }
+                    if (viewModel.pendingApprovalId != null) {
+                        Button(onClick = { viewModel.approveAndResume() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Aprovar e retomar") }
+                    }
+                }
+                viewModel.pendingApprovalId?.let { Text("Aprovação pendente: ${it.take(18)}…", style = MaterialTheme.typography.bodySmall) }
                 viewModel.lastTestLabReport?.let { report ->
                     Text("TestLab: ${if (report.success) "passou" else "reprovado"} (${report.passed}/${report.steps.size})")
                 }

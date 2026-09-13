@@ -22,6 +22,7 @@ import com.sandbox.sandbox.SandboxComponent
 import com.sandbox.sandbox.SandboxPlatform
 import com.sandbox.sandbox.SecurityAssessment
 import com.sandbox.sandbox.ToolchainStatus
+import com.brain.planner.PlanoExecucao
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -106,6 +107,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         private set
     var toolchainStatuses by mutableStateOf<Map<String, ToolchainStatus>>(emptyMap())
         private set
+    var pendingApprovalId by mutableStateOf<String?>(null)
+        private set
+    private var pendingApprovalPlan: PlanoExecucao? = null
+    private var pendingApprovalRunId: String? = null
 
     fun runDiagnostics() {
         viewModelScope.launch {
@@ -283,6 +288,39 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun requestApprovalDemo() {
+        val controller = brainController ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            phase = SandboxPhase.Running
+            val plan = controller.approvalDemoPlan()
+            val runId = "approval-${System.currentTimeMillis()}"
+            val cycle = withContext(Dispatchers.IO) { controller.executePlan(plan, runId) }
+            pendingApprovalPlan = plan
+            pendingApprovalRunId = runId
+            pendingApprovalId = cycle.passos.firstOrNull()?.approvalId
+            lastBrainCycle = cycle
+            phase = SandboxPhase.Ready
+        }
+    }
+
+    fun approveAndResume() {
+        val controller = brainController ?: return
+        val plan = pendingApprovalPlan ?: return
+        val runId = pendingApprovalRunId ?: return
+        val approvalId = pendingApprovalId ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            phase = SandboxPhase.Running
+            val cycle = withContext(Dispatchers.IO) { controller.resumePlan(plan, runId, approvalId) }
+            lastBrainCycle = cycle
+            pendingApprovalId = null
+            pendingApprovalPlan = null
+            pendingApprovalRunId = null
+            phase = SandboxPhase.Ready
+        }
+    }
+
     fun resetSandbox() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -302,6 +340,9 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lastTestLabReport = null
             lastSecurityAssessment = null
             toolchainStatuses = emptyMap()
+            pendingApprovalId = null
+            pendingApprovalPlan = null
+            pendingApprovalRunId = null
             localModelProgress = null
             localModelReady = false
             localModelError = null

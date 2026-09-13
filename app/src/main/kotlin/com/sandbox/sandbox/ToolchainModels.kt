@@ -127,6 +127,7 @@ class ToolchainManager(
 
     fun refreshStatus(id: String): ToolchainStatus = synchronized(lock) {
         val profile = profile(id)
+        stateFile(profile).delete()
         val detected = detector.detect(profile)
         persist(
             ToolchainStatus(

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.sandbox.runtime.SandboxExecutionResult
+import com.sandbox.sandbox.BuiltInToolchains
 import com.sandbox.sandbox.ComponentKind
 
 class MainActivity : ComponentActivity() {
@@ -59,7 +60,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TAB_TITLES = listOf("Validação", "Plugins", "Ferramentas")
+private val TAB_TITLES = listOf("Validação", "Plugins", "Ferramentas", "Operações")
 
 @Composable
 fun SandboxMobileApp(viewModel: SandboxViewModel) {
@@ -82,7 +83,8 @@ fun SandboxMobileApp(viewModel: SandboxViewModel) {
         when (selectedTab) {
             0 -> SandboxValidationScreen(viewModel)
             1 -> PluginsScreen(viewModel, ComponentKind.PLUGIN)
-            else -> PluginsScreen(viewModel, ComponentKind.TOOL)
+            2 -> PluginsScreen(viewModel, ComponentKind.TOOL)
+            else -> OperationsScreen(viewModel)
         }
     }
 }
@@ -99,6 +101,47 @@ fun SandboxValidationScreen(viewModel: SandboxViewModel) {
         if (phase is SandboxPhase.Ready || phase is SandboxPhase.Running) CommandSection(viewModel)
         viewModel.lastResult?.let { ResultSection(it, viewModel.lastExecution) }
         viewModel.diagnosticsReport?.let { DiagnosticsSection(it) }
+    }
+}
+
+@Composable
+private fun OperationsScreen(viewModel: SandboxViewModel) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Operações unificadas", style = MaterialTheme.typography.titleMedium)
+                Text("As ações usam o SandboxPlatform e o executor protegido.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { viewModel.runTestLab() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Executar TestLab") }
+                    OutlinedButton(onClick = { viewModel.runSecurityAssessment() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Avaliar segurança") }
+                }
+                viewModel.lastTestLabReport?.let { report ->
+                    Text("TestLab: ${if (report.success) "passou" else "reprovado"} (${report.passed}/${report.steps.size})")
+                }
+                viewModel.lastSecurityAssessment?.let { assessment ->
+                    Text("Security gate: ${if (assessment.readiness.ready) "aprovado" else "bloqueado"}")
+                    Text("Arquivos analisados: ${assessment.scan.filesScanned}; achados: ${assessment.findings.size}", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Toolchains catalogadas", style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(onClick = { viewModel.refreshToolchains() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Atualizar status") }
+                BuiltInToolchains.all.forEach { profile ->
+                    val status = viewModel.toolchainStatuses[profile.id]
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(profile.displayName)
+                        OutlinedButton(onClick = { viewModel.installToolchain(profile.id) }, enabled = viewModel.phase == SandboxPhase.Ready) {
+                            Text(status?.state?.name ?: "Verificar")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

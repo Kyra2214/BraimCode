@@ -20,6 +20,8 @@ import com.sandbox.sandbox.InstallationState
 import com.sandbox.sandbox.InstalledComponent
 import com.sandbox.sandbox.SandboxComponent
 import com.sandbox.sandbox.SandboxPlatform
+import com.sandbox.sandbox.SecurityAssessment
+import com.sandbox.sandbox.ToolchainStatus
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -97,6 +99,12 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var diagnosticsReport by mutableStateOf<String?>(null)
         private set
     var lastBrainCycle by mutableStateOf<ResultadoCiclo?>(null)
+        private set
+    var lastTestLabReport by mutableStateOf<com.sandbox.sandbox.TestLabReport?>(null)
+        private set
+    var lastSecurityAssessment by mutableStateOf<SecurityAssessment?>(null)
+        private set
+    var toolchainStatuses by mutableStateOf<Map<String, ToolchainStatus>>(emptyMap())
         private set
 
     fun runDiagnostics() {
@@ -228,6 +236,53 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Executa o TestLab pelo executor protegido do SandboxPlatform. */
+    fun runTestLab(projectPath: String = "/home/sandbox/workspace") {
+        val plat = platform ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            phase = SandboxPhase.Running
+            lastTestLabReport = withContext(Dispatchers.IO) { runCatching { plat.testLab.run(projectPath) }.getOrNull() }
+            phase = SandboxPhase.Ready
+        }
+    }
+
+    /** Executa o scanner e o gate de segurança catalogado no workspace atual. */
+    fun runSecurityAssessment() {
+        val plat = platform ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            phase = SandboxPhase.Running
+            lastSecurityAssessment = withContext(Dispatchers.IO) {
+                runCatching {
+                    val root = File(getApplication<Application>().filesDir, "sandbox/workspace")
+                    val scan = plat.securityScanner.scan(root)
+                    plat.security.evaluate(scan, plat.securityScenarios, emptyList())
+                }.getOrNull()
+            }
+            phase = SandboxPhase.Ready
+        }
+    }
+
+    fun refreshToolchains() {
+        val plat = platform ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val statuses = com.sandbox.sandbox.BuiltInToolchains.all.associate { it.id to plat.toolchains.status(it.id) }
+            withContext(Dispatchers.Main) { toolchainStatuses = statuses }
+        }
+    }
+
+    fun installToolchain(id: String) {
+        val plat = platform ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            phase = SandboxPhase.Running
+            val status = withContext(Dispatchers.IO) { runCatching { plat.toolchains.install(id) }.getOrNull() }
+            if (status != null) toolchainStatuses = toolchainStatuses + (id to status)
+            phase = SandboxPhase.Ready
+        }
+    }
+
     fun resetSandbox() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -244,6 +299,9 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lastExecution = null
             diagnosticsReport = null
             lastBrainCycle = null
+            lastTestLabReport = null
+            lastSecurityAssessment = null
+            toolchainStatuses = emptyMap()
             localModelProgress = null
             localModelReady = false
             localModelError = null

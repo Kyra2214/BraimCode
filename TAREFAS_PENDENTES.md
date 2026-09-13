@@ -45,10 +45,10 @@ Essas pendências são acompanhadas em [`ROADMAP_UNIFICADO.md`](ROADMAP_UNIFICAD
 
 Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalhamento e critério de decisão (integrar vs. arquivar) em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
 
-- [ ] Decidir e executar: ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano`/`BrainExecutionCoordinator` ao `SandboxViewModel`, ou arquivar essa cadeia explicitamente.
+- [x] Ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel` pelo botão **Verificar pelo Brain**; `BrainExecutionCoordinator` permanece como API de planos avançados ainda não exposta.
 - [ ] Decidir o destino de todo o módulo `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) — hoje zero uso fora dos próprios testes.
-- [ ] Expor na UI (ou remover a instanciação) de `WorkspaceManager`, `GitManager`, `ServiceManager` e `TestLab` — hoje construídos em `SandboxPlatform` sem nenhuma tela que os acione.
-- [ ] Decidir o destino de `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog` — nenhum é instanciado fora do próprio arquivo/teste.
+- [ ] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager`; o `TestLab` já é acionável na aba **Operações** pelo executor protegido compartilhado.
+- [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
 - [ ] Ligar `RemotePluginCatalog` ao `PluginManager` real, ou arquivar até haver transporte remoto.
 - [ ] Remover o enum `GitOperation` (não usado nem pelo próprio `GitManager`) ou passar a usá-lo.
 - [ ] Remover `__pycache__/*.pyc` do pacote (contradiz o próprio `.gitignore`).

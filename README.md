@@ -4,7 +4,7 @@ O Braim é um runtime experimental para execução de tarefas com Policy, approv
 
 > **Estado de segurança:** o projeto possui hardening significativo e 134 testes Python aprovados, mas ainda depende de infraestrutura do host para isolamento OS-level completo. Não deve ser interpretado como container ou ambiente de produção isolado sem uma implantação adequada.
 
-> **Estado de integração (2026-09-12):** o app Android (`:app`) que roda de verdade num device usa o rootfs/Sandbox (execução de comando, plugins locais) e já possui uma primeira operação Brain real: o botão **Verificar pelo Brain** percorre `BrainSandboxController` → Policy → sessão autorizada → capability `sandbox.health` → runtime. O módulo `:brain` ainda não está unificado por completo: planos de usuário, aprovação/retomada, Skills, Workflows, Memory, Discovery e os subsistemas adicionais continuam pendentes — ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md`.
+> **Estado de integração (2026-09-12):** o app Android (`:app`) que roda de verdade num device usa o rootfs/Sandbox e possui caminhos reais para o Brain (`sandbox.health`) e para TestLab, Security e Toolchains na aba **Operações**. Essas operações compartilham `SandboxPlatform` e o executor protegido. O módulo `:brain` ainda não está unificado por completo: planos de usuário, aprovação/retomada, Skills, Workflows, Memory, Discovery, Workspace, Git e Services continuam pendentes — ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md`.
 
 ## Executar testes
 
@@ -59,7 +59,7 @@ Quando configurado, o runtime atualiza `.projectbrain/`, emite `ProjectScanned` 
 
 ## Kotlin e Android
 
-O repositório agora também contém o projeto Gradle do Sandbox Mobile integrado ao BrainCode. O módulo `:brain` é Kotlin/JVM puro para Policy, Router, Planner, Prompt, QA e contratos; `:android-module` fornece a sessão de agente, resolução de capabilities e runtime Sandbox; `:app` contém o cliente Android Compose e os recursos do RootFS. **A primeira operação `sandbox.health` já é chamada por `:app` via `BrainSandboxController`; a unificação de planos de usuário e dos demais componentes ainda está pendente** — o plano de integração está em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
+O repositório agora também contém o projeto Gradle do Sandbox Mobile integrado ao BrainCode. O módulo `:brain` é Kotlin/JVM puro para Policy, Router, Planner, Prompt, QA e contratos; `:android-module` fornece a sessão de agente, resolução de capabilities e runtime Sandbox; `:app` contém o cliente Android Compose e os recursos do RootFS. **A operação `sandbox.health`, o TestLab, o gate de Security e o gerenciamento de Toolchains já são acionáveis pelo caminho da UI; planos de usuário, aprovação/retomada, Workspace, Git, Services e demais componentes ainda estão pendentes** — o plano de integração está em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
 
 Validações locais disponíveis:
 

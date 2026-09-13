@@ -26,6 +26,11 @@ class SandboxPlatform(
     val git = GitManager(securedExecutor)
     val diagnostics = SandboxDiagnostics(securedExecutor)
     val testLab = TestLab(securedExecutor)
+    /** Todos os subsistemas usam o mesmo executor protegido e o mesmo workspace. */
+    val toolchains = ToolchainManager(securedExecutor, File(workspaceRoot, "toolchains"))
+    val security = SecurityAssessmentEngine()
+    val securityScanner = SecurityProjectScanner()
+    val securityScenarios = SecurityScenarioCatalog.baseline
     val securityPolicy: SandboxSecurityPolicy = policy
     fun close() = runtime.shutdown()
 }

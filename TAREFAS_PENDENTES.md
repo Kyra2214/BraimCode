@@ -49,7 +49,8 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 - [x] Integrar Skills, Workflows, Memory e Discovery ao app por `BrainIntegrationFacade`, com catálogo, workflow de health, memória local e pipeline Discovery acionáveis na aba **Operações**. APIs, Events e o `BrainExecutionCoordinator` permanecem para a próxima fatia.
 - [x] Expor na UI `WorkspaceManager`, `GitManager` e `ServiceManager` na aba **Operações**; criação/listagem de projetos, `git status` e ciclo básico do SQLite usam o executor protegido compartilhado.
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
-- [ ] Ligar `RemotePluginCatalog` ao `PluginManager` real, ou arquivar até haver transporte remoto.
+- [x] Ligar `RemotePluginCatalog` ao `PluginManager` real por catálogo composto; snapshots aceitos passam a aparecer na busca e podem ser instalados pelo mesmo fluxo protegido.
+- [ ] Adicionar transporte remoto e autorização local acionada pela UI para coletar/importar snapshots; a API atual permanece explícita e sem rede implícita.
 - [ ] Remover o enum `GitOperation` (não usado nem pelo próprio `GitManager`) ou passar a usá-lo.
 - [ ] Remover `__pycache__/*.pyc` do pacote (contradiz o próprio `.gitignore`).
 - [ ] Deixar explícito no `README.md` que `reference/braincode-python/` é histórico e não faz parte do build ativo (feito nesta rodada — conferir se persiste em futuros merges).

@@ -462,7 +462,8 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     fun pluginComponents(kind: ComponentKind, query: String, installedOnly: Boolean): List<SandboxComponent> {
         // Filtra só em memória (catálogo + statusCache) — nunca toca o disco aqui,
         // pra não travar a thread principal a cada recomposição da lista.
-        val base = BuiltInCatalog.all.filter { it.kind == kind }
+        val base = (platform?.plugins?.components() ?: BuiltInCatalog.all)
+            .filter { it.kind == kind }
         val searched = if (query.isBlank()) base else base.filter {
             it.name.contains(query, ignoreCase = true) ||
                 it.description.contains(query, ignoreCase = true) ||
@@ -478,7 +479,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     private fun refreshStatusCache() {
         val plat = platform ?: run { statusCache = emptyMap(); return }
         viewModelScope.launch(Dispatchers.IO) {
-            val snapshot = BuiltInCatalog.all.mapNotNull { component ->
+            val snapshot = plat.plugins.components().mapNotNull { component ->
                 plat.plugins.status(component.id)?.let { component.id to it }
             }.toMap()
             withContext(Dispatchers.Main) { statusCache = snapshot }

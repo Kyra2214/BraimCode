@@ -15,9 +15,9 @@ A API separa `RemoteCatalogFinding` por componente do resultado aceito. Isso per
 1. Uma camada de transporte obtém um documento remoto usando as políticas de rede do ambiente.
 2. Essa camada converte o documento em `RemoteCatalogSnapshot` e `RemoteComponentManifest`.
 3. `RemotePluginCatalog.importSnapshot` valida fonte, HTTPS, duplicidade e SHA-256.
-4. O chamador combina `components()` com uma política local e, somente após autorização, cria ou atualiza o catálogo do `PluginManager`.
+4. `SandboxPlatform.importRemotePluginSnapshot` importa explicitamente o snapshot validado; o catálogo composto do `PluginManager` passa a expor os componentes aceitos para busca e instalação pelo fluxo protegido.
 5. A instalação continua sujeita às dependências, validação pós-instalação e persistência existentes.
 
 ## Estado da entrega
 
-A camada e seus testes foram implementados. A validação automática do módulo `:app` permanece pendente neste ambiente porque o Android SDK não está instalado nem definido por `ANDROID_HOME` ou `local.properties`. A validação do módulo `:brain` continua independente e já passa com JDK 17. A etapa não deve ser considerada concluída até o teste `:app:test` ser executado em um ambiente com SDK Android configurado.
+A camada, a ligação ao `PluginManager` e os testes do fluxo foram implementados. A integração deliberadamente não faz rede implícita: ainda falta uma camada de transporte e autorização local acionada pela UI. A validação automática do módulo `:app` permanece pendente neste ambiente porque o Android SDK não está instalado nem definido por `ANDROID_HOME` ou `local.properties`; a etapa não deve ser considerada concluída até o teste `:app:test` ser executado em ambiente Android configurado.

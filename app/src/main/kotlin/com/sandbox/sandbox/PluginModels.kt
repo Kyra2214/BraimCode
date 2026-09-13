@@ -498,11 +498,14 @@ object BuiltInCatalog {
 class PluginManager(
     private val executor: SandboxCommandExecutor,
     private val repository: ComponentRepository,
-    private val catalog: List<SandboxComponent> = BuiltInCatalog.all
+    private val catalog: List<SandboxComponent> = BuiltInCatalog.all,
+    private val catalogProvider: (() -> List<SandboxComponent>)? = null
 ) {
     private val lock = Any()
 
-    fun components(): List<SandboxComponent> = catalog
+    private fun currentCatalog(): List<SandboxComponent> = catalogProvider?.invoke() ?: catalog
+
+    fun components(): List<SandboxComponent> = currentCatalog()
 
     fun status(id: String): InstalledComponent? = synchronized(lock) { repository.get(id) }
 
@@ -513,7 +516,7 @@ class PluginManager(
     }
 
     private fun installInternal(id: String, visiting: LinkedHashSet<String>): InstalledComponent {
-        val component = catalog.firstOrNull { it.id == id } ?: error("Componente desconhecido: $id")
+        val component = currentCatalog().firstOrNull { it.id == id } ?: error("Componente desconhecido: $id")
         val existing = repository.get(id)
         if (existing?.state == InstallationState.INSTALLED && validate(component)) return existing
 
@@ -608,7 +611,7 @@ class PluginManager(
     }
 
     fun remove(id: String): InstalledComponent? = synchronized(lock) {
-        val component = catalog.firstOrNull { it.id == id } ?: return@synchronized null
+        val component = currentCatalog().firstOrNull { it.id == id } ?: return@synchronized null
         val existing = repository.get(id) ?: return@synchronized null
         if (existing.state != InstallationState.INSTALLED) return@synchronized existing
 
@@ -704,39 +707,41 @@ class PluginManager(
 class SearchablePluginManager(
     executor: SandboxCommandExecutor,
     private val repository: ComponentRepository,
-    private val catalog: List<SandboxComponent> = BuiltInCatalog.all
+    private val catalog: List<SandboxComponent> = BuiltInCatalog.all,
+    catalogProvider: (() -> List<SandboxComponent>)? = null
 ) {
-    private val delegate = PluginManager(executor, repository, catalog)
+    private val delegate = PluginManager(executor, repository, catalog, catalogProvider)
 
-    fun components(): List<SandboxComponent> = catalog
+    fun components(): List<SandboxComponent> = delegate.components()
     fun status(id: String): InstalledComponent? = delegate.status(id)
     fun installed(): List<InstalledComponent> = delegate.installed()
     fun install(id: String): InstalledComponent = delegate.install(id)
     fun remove(id: String): InstalledComponent? = delegate.remove(id)
     fun validate(component: SandboxComponent): Boolean = delegate.validate(component)
 
-    fun search(query: String, items: List<SandboxComponent> = catalog): List<SandboxComponent> {
-        if (query.isBlank()) return items
-        return items.filter { component ->
+    fun search(query: String, items: List<SandboxComponent>? = null): List<SandboxComponent> {
+        val source = items ?: components()
+        if (query.isBlank()) return source
+        return source.filter { component ->
             component.name.contains(query, ignoreCase = true) ||
                 component.description.contains(query, ignoreCase = true) ||
                 component.id.contains(query, ignoreCase = true)
         }
     }
 
-    fun filterByKind(kind: ComponentKind, items: List<SandboxComponent> = catalog): List<SandboxComponent> =
-        items.filter { it.kind == kind }
+    fun filterByKind(kind: ComponentKind, items: List<SandboxComponent>? = null): List<SandboxComponent> =
+        (items ?: components()).filter { it.kind == kind }
 
-    fun filterByInstalled(installed: Boolean, items: List<SandboxComponent> = catalog): List<SandboxComponent> {
+    fun filterByInstalled(installed: Boolean, items: List<SandboxComponent>? = null): List<SandboxComponent> {
         val installedIds = repository.all()
             .filter { it.state == InstallationState.INSTALLED }
             .map { it.componentId }
             .toSet()
-        return items.filter { (it.id in installedIds) == installed }
+        return (items ?: components()).filter { (it.id in installedIds) == installed }
     }
 
-    fun filterByDependencies(hasDependencies: Boolean, items: List<SandboxComponent> = catalog): List<SandboxComponent> =
-        items.filter { it.dependencies.isNotEmpty() == hasDependencies }
+    fun filterByDependencies(hasDependencies: Boolean, items: List<SandboxComponent>? = null): List<SandboxComponent> =
+        (items ?: components()).filter { it.dependencies.isNotEmpty() == hasDependencies }
 
     fun query(text: String = "", kind: ComponentKind? = null, installedOnly: Boolean? = null): List<SandboxComponent> {
         var result = search(text)

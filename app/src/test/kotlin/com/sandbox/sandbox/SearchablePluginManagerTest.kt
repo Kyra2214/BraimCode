@@ -105,4 +105,32 @@ class SearchablePluginManagerTest {
         assertFalse(result.validationStatus)
         assertEquals("erro simulado", result.error)
     }
+
+    @Test fun acceptedRemoteComponentsBecomeSearchableAndInstallable() {
+        val bytes = "remote-artifact".toByteArray()
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(bytes).joinToString("") { "%02x".format(it) }
+        val remote = RemoteComponentManifest(
+            component = SandboxComponent("remote-tool", "Remote Tool", "Ferramenta remota", ComponentKind.TOOL),
+            sourceId = "trusted",
+            manifestUrl = "https://plugins.example.org/catalog.json",
+            artifactSha256 = digest,
+            artifactBytes = bytes,
+            officialSource = true
+        )
+        val remoteCatalog = RemotePluginCatalog(setOf("trusted"))
+        remoteCatalog.importSnapshot(
+            RemoteCatalogSnapshot("trusted", "https://plugins.example.org/catalog.json", listOf(remote), 1L)
+        )
+        val repo = JsonComponentRepository(tempComponentsFile())
+        val mgr = SearchablePluginManager(
+            FakeExecutor(succeed = true),
+            repo,
+            catalog,
+            catalogProvider = { catalog + remoteCatalog.components() }
+        )
+
+        assertEquals(listOf("remote-tool"), mgr.search("remote").map { it.id })
+        assertEquals(InstallationState.INSTALLED, mgr.install("remote-tool").state)
+    }
 }

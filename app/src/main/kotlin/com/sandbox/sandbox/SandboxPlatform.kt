@@ -10,9 +10,11 @@ class SandboxPlatform(
     componentStateFile: File,
     serviceStateDir: File,
     policy: SandboxSecurityPolicy = SandboxSecurityPolicy(),
-    networkPolicy: NetworkPolicy = NetworkPolicy()
+    networkPolicy: NetworkPolicy = NetworkPolicy(),
+    trustedRemotePluginSourceIds: Set<String> = emptySet()
 ) {
     private val securedExecutor = SecureCommandExecutor(ManagedRuntimeExecutor(runtime), policy)
+    private val remotePluginCatalog = RemotePluginCatalog(trustedRemotePluginSourceIds)
     // Fase 1 Expandida: persistência em JSON (mais robusta que TSV) com
     // busca e filtros. `componentStateFile` (legado TSV) é migrado
     // automaticamente na primeira leitura, se existir.
@@ -20,7 +22,7 @@ class SandboxPlatform(
     val plugins = SearchablePluginManager(
         securedExecutor,
         JsonComponentRepository(componentJsonFile, legacyTsvFile = componentStateFile)
-    )
+    ) { (BuiltInCatalog.all + remotePluginCatalog.components()).distinctBy { it.id } }
     val workspace = WorkspaceManager(workspaceRoot)
     val services = ServiceManager(securedExecutor, serviceStateDir, NetworkPolicyBroker(networkPolicy))
     val git = GitManager(securedExecutor)
@@ -32,5 +34,10 @@ class SandboxPlatform(
     val securityScanner = SecurityProjectScanner()
     val securityScenarios = SecurityScenarioCatalog.baseline
     val securityPolicy: SandboxSecurityPolicy = policy
+
+    /** Importa um snapshot já coletado; não realiza rede, instalação ou execução. */
+    fun importRemotePluginSnapshot(snapshot: RemoteCatalogSnapshot): RemoteCatalogResult =
+        remotePluginCatalog.importSnapshot(snapshot)
+
     fun close() = runtime.shutdown()
 }

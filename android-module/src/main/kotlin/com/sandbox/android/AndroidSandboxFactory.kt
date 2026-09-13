@@ -87,9 +87,13 @@ class AndroidSandboxFactory(private val context: Context) {
             "As três camadas RootFS ainda não foram baixadas. Prepare o sandbox novamente."
         }
         if (forceReExtract && extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
-        val needsReExtract = !extractedRootfsDir.exists() || extractedRootfsDir.list().isNullOrEmpty() || extractionMarker.readTextOrNull() != EXTRACTOR_VERSION
+        val needsReExtract = !extractedRootfsDir.exists() ||
+            extractedRootfsDir.list().isNullOrEmpty() ||
+            extractionMarker.readTextOrNull() != EXTRACTOR_VERSION ||
+            !hasRequiredRootfsEntries()
         if (needsReExtract) {
             if (extractedRootfsDir.exists()) extractedRootfsDir.deleteRecursively()
+            extractionMarker.delete()
             val totalArchiveBytes = downloadedArchives.sumOf { it.length() }.coerceAtLeast(1L)
             var completedArchiveBytes = 0L
             downloadedArchives.forEachIndexed { index, archive ->
@@ -253,6 +257,11 @@ class AndroidSandboxFactory(private val context: Context) {
                 "\nToque em Resetar sandbox e baixe o rootfs novamente."
         }
     }
+
+    private fun hasRequiredRootfsEntries(): Boolean =
+        File(extractedRootfsDir, "home/sandbox").isDirectory &&
+            describeInterpreterChain(File(extractedRootfsDir, "bin/bash")).startsWith("OK") &&
+            describeInterpreterChain(File(extractedRootfsDir, "lib/ld-linux-aarch64.so.1")).startsWith("OK")
 
     private fun describeInterpreterChain(start: File, maxHops: Int = 10): String {
         var current = start.toPath().toAbsolutePath().normalize()

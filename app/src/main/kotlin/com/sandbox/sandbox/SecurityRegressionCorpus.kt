@@ -4,11 +4,7 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-/**
- * Corpus local e persistente para regressão do Security Test Lab.
- * A simulação é determinística e sintética: não abre rede, não executa payloads
- * adversariais e não depende de um alvo externo.
- */
+/** Corpus local persistente para regressão do Security Test Lab. */
 class SecurityRegressionCorpus(private val file: File) {
     data class Entry(
         val scenarioId: String,
@@ -25,23 +21,21 @@ class SecurityRegressionCorpus(private val file: File) {
             "secret.redaction", "path.traversal", "command.injection", "network.ssrf", "capability.bypass", "evidence.tampering" -> true
             else -> scenario.expectedBlocked
         }
-        val output = "synthetic:${scenario.id}:blocked=$blocked"
-        SecurityProbeResult(scenario.id, completed = true, blocked = blocked, output = output)
+        SecurityProbeResult(scenario.id, completed = true, blocked = blocked, output = "synthetic:${scenario.id}:blocked=$blocked")
     }
 
     fun record(report: SecurityTestReport) {
         val entries = report.scenarios.map { scenario ->
             val evidence = report.evidence.firstOrNull { it.scenarioId == scenario.id }
-            val result = report.evidence.firstOrNull { it.scenarioId == scenario.id }
-            val digest = evidence?.digestSha256 ?: sha256("missing:${scenario.id}")
-            Entry(scenario.id, scenario.expectedBlocked, !report.findings.any { it.scenarioId == scenario.id && it.title == "Resultado inesperado" }, digest, System.currentTimeMillis())
+            val observedBlocked = !report.findings.any { it.scenarioId == scenario.id && it.title == "Resultado inesperado" }
+            Entry(scenario.id, scenario.expectedBlocked, observedBlocked, evidence?.digestSha256 ?: sha256("missing:${scenario.id}"), System.currentTimeMillis())
         }
         append(entries)
     }
 
     fun entries(): List<Entry> = if (!file.isFile) emptyList() else file.readLines(StandardCharsets.UTF_8).mapNotNull { line ->
         val p = line.split('|', limit = 5)
-        if (p.size != 5) null else runCatching { Entry(p[0], p[1].toBooleanStrict(), p[2].toBooleanStrict(), p[3], p[4].toLong()) }.getOrNull()
+        if (p.size != 5) null else runCatching { Entry(p[0], p[1] == "true", p[2] == "true", p[3], p[4].toLong()) }.getOrNull()
     }
 
     fun digest(): String = sha256(if (file.isFile) file.readText(StandardCharsets.UTF_8) else "")

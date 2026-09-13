@@ -322,7 +322,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     fun refreshToolchains() {
         val plat = platform ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val statuses = com.sandbox.sandbox.BuiltInToolchains.all.associate { it.id to plat.toolchains.status(it.id) }
+            val statuses = com.sandbox.sandbox.BuiltInToolchains.all.associate { it.id to plat.toolchains.refreshStatus(it.id) }
             withContext(Dispatchers.Main) { toolchainStatuses = statuses }
         }
     }

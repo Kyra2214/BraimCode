@@ -176,8 +176,13 @@ class ManagedSandboxRuntime(
     }
 
     private fun stopProcess(process: Process): Boolean {
+        val descendants = process.toHandle().descendants().toList()
+        if (launcher.processGroupManaged) ProcessTreeTerminator.signalGroup(process.pid(), "TERM")
+        descendants.asReversed().forEach { it.destroy() }
         process.destroy()
         if (runCatching { process.waitFor(250, TimeUnit.MILLISECONDS) }.getOrDefault(false)) return false
+        if (launcher.processGroupManaged) ProcessTreeTerminator.signalGroup(process.pid(), "KILL")
+        descendants.asReversed().forEach { it.destroyForcibly() }
         process.destroyForcibly()
         runCatching { process.waitFor(1, TimeUnit.SECONDS) }
         return true
@@ -214,4 +219,12 @@ class ManagedSandboxRuntime(
     }
 
     private fun Thread.joinQuietly() = runCatching { join(2_000) }
+}
+
+private object ProcessTreeTerminator {
+    fun signalGroup(pid: Long, signal: String) {
+        if (pid <= 0) return
+        val kill = listOf("/system/bin/kill", "/usr/bin/kill", "/bin/kill").firstOrNull { java.io.File(it).canExecute() } ?: return
+        runCatching { ProcessBuilder(kill, "-$signal", "--", "-$pid").start().waitFor(1, TimeUnit.SECONDS) }
+    }
 }

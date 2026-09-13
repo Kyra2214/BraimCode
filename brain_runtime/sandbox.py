@@ -1,8 +1,9 @@
 from __future__ import annotations
-import hashlib, os, resource, signal, shutil, subprocess, time
+import hashlib, os, resource, shutil, subprocess, time
 from dataclasses import dataclass
 from pathlib import Path
 from .host_controls import CgroupController, DistributedLeaseStore, Lease
+from .process_tree import terminate_process_group
 
 @dataclass(frozen=True)
 class SandboxJob:
@@ -152,15 +153,15 @@ class SandboxExecutor:
                     controller.attach(process.pid)
                 except (OSError, PermissionError) as error:
                     if job.isolation_required:
-                        os.killpg(process.pid, signal.SIGKILL); process.communicate()
+                        terminate_process_group(process); process.communicate()
                         return SandboxJobResult(job.job_id, "REJECTED", None, "", "", diagnostics=(f"cgroup isolation unavailable: {error}",), run_id=job.run_id, session_id=job.session_id)
             deadline = started + job.timeout_seconds
             while True:
                 if job.cancel_event is not None and getattr(job.cancel_event, "is_set", lambda: False)():
-                    os.killpg(process.pid, signal.SIGKILL); stdout, stderr = process.communicate()
+                    terminate_process_group(process); stdout, stderr = process.communicate()
                     return SandboxJobResult(job.job_id, "CANCELLED", process.returncode, _clip(stdout, job.max_stdout_bytes), _clip(stderr, job.max_stderr_bytes), diagnostics=("cancelled by caller",), run_id=job.run_id, session_id=job.session_id)
                 if time.monotonic() >= deadline:
-                    os.killpg(process.pid, signal.SIGKILL); stdout, stderr = process.communicate()
+                    terminate_process_group(process); stdout, stderr = process.communicate()
                     return SandboxJobResult(job.job_id, "TIMEOUT", process.returncode, _clip(stdout, job.max_stdout_bytes), _clip(stderr, job.max_stderr_bytes), diagnostics=("execution deadline exceeded",), run_id=job.run_id, session_id=job.session_id)
                 try: stdout, stderr = process.communicate(timeout=min(.1, max(.01, deadline - time.monotonic()))); break
                 except subprocess.TimeoutExpired: continue

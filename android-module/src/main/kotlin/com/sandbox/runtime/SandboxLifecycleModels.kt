@@ -64,6 +64,9 @@ interface ExecutionLogRepository {
 interface SandboxProcessLauncher {
     fun launch(command: List<String>, workingDir: String): Process
 
+    /** True when the launcher starts the workload in its own POSIX process group. */
+    val processGroupManaged: Boolean get() = false
+
     /**
      * Limites de RLIMIT que este launcher já embutiu no comando lançado
      * (ver ProotResourceLimits.kt). Default `NONE` para não quebrar

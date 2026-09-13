@@ -19,6 +19,8 @@ class ProotProcessLauncher(
     override val resourceLimits: ProotResourceLimits = ProotResourceLimits.DEFAULT
 ) : SandboxProcessLauncher {
 
+    override val processGroupManaged: Boolean = findSetsid() != null
+
     init {
         require(File(prootExecutable).isFile) { "Binário proot não encontrado em $prootExecutable" }
         require(rootfsDir.isDirectory) { "Rootfs não encontrado em ${rootfsDir.path}" }
@@ -27,7 +29,9 @@ class ProotProcessLauncher(
     }
 
     override fun launch(command: List<String>, workingDir: String): Process {
+        val setsid = findSetsid()
         val args = buildList {
+            setsid?.let { add(it) }
             add(prootExecutable)
             add("-r"); add(rootfsDir.absolutePath)
             add("-w"); add(workingDir)
@@ -56,6 +60,9 @@ class ProotProcessLauncher(
             if (disableSeccompAcceleration) environment()["PROOT_NO_SECCOMP"] = "1"
         }.start()
     }
+
+    private fun findSetsid(): String? = listOf("/system/bin/setsid", "/usr/bin/setsid", "/bin/setsid")
+        .firstOrNull { File(it).canExecute() }
 
     private fun shellEscape(arg: String): String = if (arg.matches(Regex("^[A-Za-z0-9_\\-./=]+$"))) arg
     else "'" + arg.replace("'", "'\\''") + "'"

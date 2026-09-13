@@ -5,8 +5,10 @@
 > - `ROADMAP_BRAIM_CONSOLIDADO.md` (Fases A–H, arquitetura do Brain: Policy/Eventos/Memória/Skills/Workflows/APIs/Execução)
 > - `docs/FASE01_AMBIENTE_ANDROID.md`, `FASE02_CICLO_ANDROID.md`, `FASE03_APPROVAL_RESUME.md`, `FASES05_12_OPERACAO.md` (integração Brain ↔ Sandbox no Android)
 >
-> Critério de status usado aqui: ✅ implementado + testado · 🟡 parcial/esqueleto · ❌ só existe como design/documentação.
+> Critério de status usado aqui: ✅ implementado + testado + **acionado por um caminho real do app/runtime, não só pelo próprio teste** · 🟡 parcial/esqueleto ou implementado-mas-isolado · ❌ só existe como design/documentação.
 > Regra herdada de todos os três originais: **nenhuma fase é considerada concluída sem implementação real, testes automatizados e comportamento documentado** — integração externa (SDK, device físico, infra do host) é dependência de implantação, não feature simulada.
+>
+> **Correção de 2026-09-12:** uma auditoria com varredura de instanciação real (não só leitura de código) encontrou várias linhas marcadas ✅ que passavam em teste unitário mas nunca eram chamadas por nenhum caminho que o usuário final aciona. O critério acima ganhou a cláusula em negrito por causa disso. Ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md` para o detalhamento completo e as correções aplicadas nas Fases 2, 3, 5 e 6 abaixo.
 
 ---
 
@@ -32,28 +34,32 @@ RootFS Ubuntu 24.04, download/extração, `proot`, runtime de execução de coma
 ---
 
 ## Fase 2 — Persistência, Skills, Workflows e APIs dinâmicas
-**Status: ✅ Python concluído · 🟡 Kotlin parcialmente concluído · 🟡 Plugins do Sandbox parcial**
+**Status: ✅ Python concluído e integrado ao próprio runtime Python · 🟡 Kotlin implementado e testado, mas isolado (não consumido por `:app`/`:android-module`) · 🟡 Plugins do Sandbox parcial**
 
 | Item | Python (`brain_runtime/`) | Kotlin (`brain/`) |
 |---|---|---|
-| D — Memória persistente | ✅ SQLite/WAL, dedup, retenção, provenance | ✅ `FileExperienceMemory` persistente integrada ao `BrainExecutionCoordinator`; experiências de sucesso, falha e correção após retry são registradas e recuperáveis após reinício |
-| E — Skills | ✅ registry com licença, provenance, assinatura, quarentena, revogação | ✅ `SkillRegistry` com manifesto, proveniência, confiança, hash, revogação e consulta por capability; loader de prompts resolve Skill relacionada |
-| F — Workflows | ✅ estado persistente, leases, retry/backoff, compensação | ✅ `WorkflowEngine` com dependências, detecção de ciclos, autorização, retry, persistência e idempotência |
-| G — APIs dinâmicas | ✅ quota, cooldown, probes, fallback equivalente, discovery | ✅ `ResilientApiCatalog` com quota por janela de minuto/dia, reservas, reconciliação, cooldown e waterfall; `ApiDiscoveryEngine` cobre normalização, proveniência, deduplicação, confiança e revisão segura |
+| D — Memória persistente | ✅ SQLite/WAL, dedup, retenção, provenance — usado pelo `runtime.py`/`pipeline.py` reais | 🟡 `FileExperienceMemory` integrada ao `BrainExecutionCoordinator` **dentro do `:brain`**, mas nenhum dos dois é instanciado por `:app`/`:android-module` fora de teste |
+| E — Skills | ✅ registry com licença, provenance, assinatura, quarentena, revogação — usado pelo pipeline real | 🟡 `SkillRegistry` completo e testado, mas sem nenhum chamador fora do próprio módulo |
+| F — Workflows | ✅ estado persistente, leases, retry/backoff, compensação — usado pelo pipeline real | 🟡 `WorkflowEngine` completo e testado, mesma ressalva de isolamento |
+| G — APIs dinâmicas | ✅ quota, cooldown, probes, fallback equivalente, discovery — usado pelo pipeline real | 🟡 `ResilientApiCatalog` e `ApiDiscoveryEngine` completos e testados, mesma ressalva de isolamento |
+
+> Em todas as linhas Kotlin acima, "implementado" significa: compila, tem teste próprio no `:brain`. Não significa que o app Android execute esse código hoje — ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md` para o rastreamento de instanciação que sustenta essa distinção.
 
 Do outro roadmap, entram aqui também:
-- **Sandbox Fase 1 — Plugins e ferramentas**: 🟡 parcial — `PluginModels.kt`, `PluginsScreen.kt` existem com testes, mas é instalação/gerenciamento básico.
-- **Sandbox Fase 2 — Sistema completo de plugins**: 🟡 `RemotePluginCatalog` implementa catálogo remoto fornecido pelo chamador, allowlist de fontes HTTPS, SHA-256, deduplicação e rejeição fail-closed; transporte remoto e integração final com o `PluginManager` ainda dependem de implantação e autorização local.
+- **Sandbox Fase 1 — Plugins e ferramentas**: 🟡 parcial — `PluginModels.kt`, `PluginsScreen.kt` existem com testes e **são de fato usados pela aba Plugins/Ferramentas do app**; é instalação/gerenciamento básico, mas esse é o único bloco desta fase realmente acionado pela UI.
+- **Sandbox Fase 2 — Sistema completo de plugins**: 🟡 `RemotePluginCatalog` implementa catálogo remoto, allowlist de fontes HTTPS, SHA-256, deduplicação e rejeição fail-closed, com teste próprio — mas o `PluginManager` que a UI realmente usa consulta só o `BuiltInCatalog` (fixo, local); `RemotePluginCatalog` não é chamado por ele. Transporte remoto, autorização local e essa ligação final ainda estão pendentes.
 
 ---
 
 ## Fase 3 — Ciclo Android unificado e execução real
-**Status: 🟡 Bridge funciona · Ambiente de desenvolvimento parcial**
+**Status: 🟡 Bridge implementada e testada em isolamento · ❌ não ligada ao app real · Ambiente de desenvolvimento parcial**
 
-- **Ciclo Android (antiga Fase 2 de integração)**: ✅ `BrainSandboxExecutionBridge` como entrada única — Router, Policy, sessão Sandbox, capability e validação de workspace em ordem fixa, sem executor alternativo.
-- **Retomada de aprovações (antiga Fase 3 de integração)**: ✅ `ExecutionBinding` imutável, digest verificado, retomada reusa `run_id`/`task_id`/`step_id`, reconstrução via `ApprovalStore` após reinício.
-- **Sandbox Fase 3 — Ambiente de desenvolvimento**: 🟡 parcial — `Workspace.kt` (63 linhas) e `GitManager.kt` (19 linhas) existem mas são enxutos; não há um módulo de Terminal dedicado (uso é via runtime do Sandbox diretamente).
-- **H — Execução real (Brain, Kotlin)**: 🟡 tecnicamente já roda (via bridge acima), mas o roadmap original (`ROADMAP_BRAIM_CONSOLIDADO.md`) previa manter o executor **congelado** até D–G estabilizarem no Kotlin — ou seja, existe uma dívida arquitetural aqui: a execução avançou antes da base (memória/skills/workflows/APIs) amadurecer no lado Kotlin.
+> **Correção de 2026-09-12:** a auditoria anterior marcava o Ciclo Android como ✅ com base em passar nos próprios testes unitários. Uma varredura de instanciação (quem chama quem, fora do próprio arquivo/teste) mostrou que `BrainSandboxExecutionBridge`, `CicloExecucaoPlano` e `BrainExecutionCoordinator` **nunca são instanciados por `MainActivity` ou `SandboxViewModel`** — só pelos próprios testes. Rebaixado de ✅ para 🟡 (implementado) / ❌ (integrado). Ver `AUDITORIA_PESADA.md` e `PLANO_DE_ACAO.md`.
+
+- **Ciclo Android (antiga Fase 2 de integração)**: 🟡 implementado e testado isoladamente — `BrainSandboxExecutionBridge` foi desenhado como entrada única (Router, Policy, sessão Sandbox, capability e validação de workspace em ordem fixa), mas ❌ **não é chamado por nenhum caminho real do app** (`SandboxViewModel`/`SandboxPlatform` não o referenciam).
+- **Retomada de aprovações (antiga Fase 3 de integração)**: ✅ `ExecutionBinding` imutável, digest verificado, retomada reusa `run_id`/`task_id`/`step_id`, reconstrução via `ApprovalStore` após reinício — implementado e coberto por teste (mas herda a mesma ressalva acima: não é acionado pelo app real, só por teste).
+- **Sandbox Fase 3 — Ambiente de desenvolvimento**: 🟡 parcial — `Workspace.kt`, `GitManager.kt` e `ServiceManager`/`TestLab` existem, compilam e são instanciados por `SandboxPlatform`, mas ❌ **nenhum tem tela ou botão na UI** (`MainActivity` só expõe Validação/Plugins/Ferramentas); não há módulo de Terminal dedicado.
+- **H — Execução real (Brain, Kotlin)**: ❌ não roda no app — o roadmap original (`ROADMAP_BRAIM_CONSOLIDADO.md`) previa manter o executor **congelado** até D–G estabilizarem no Kotlin; na prática, a base (memória/skills/workflows/APIs) chegou a existir no Kotlin (Fase 2 abaixo), mas o executor nunca chegou a ser ligado ao app — a dívida arquitetural citada aqui virou uma ilha desconectada em vez de um executor precoce.
 
 ---
 
@@ -68,18 +74,18 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 ---
 
 ## Fase 5 — Toolchains, Rede e Serviços
-**Status: ❌ não implementado**
+**Status: ❌ não implementado como feature acessível · 🟡 domínio implementado e isolado**
 
-- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e `ToolchainManager` cobrem detecção, instalação explícita, validação, persistência e remoção allowlisted para Java, Python, Node, C/C++, Rust e Go; SDK/NDK Android, rollback transacional e cache ainda pendentes.
-- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default e o `ServiceManager` agora exige request/regra para serviços com porta; firewall, namespaces, egress real e cgroups de rede ainda pendentes.
+- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e `ToolchainManager` cobrem detecção, instalação explícita, validação, persistência e remoção allowlisted; têm teste próprio, mas **não são instanciados por `SandboxPlatform` nem por nenhuma tela** — hoje não há nenhum caminho de código que os alcance fora do teste. SDK/NDK Android, rollback transacional e cache ainda pendentes por cima disso.
+- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default; `ServiceManager` os usa de fato e é instanciado por `SandboxPlatform` — mas `SandboxPlatform.services` **não é chamado por nenhuma tela do app**, então a decisão de rede nunca chega a ser exercitada fora de teste. Firewall, namespaces, egress real e cgroups de rede ainda pendentes.
 
 ---
 
 ## Fase 6 — Security Test Lab (validação adversarial)
-**Status: 🟡 domínio de avaliação implementado · ❌ executor adversarial completo**
+**Status: 🟡 domínio de avaliação implementado e testado · ❌ não ligado a nada (nem UI, nem readiness gate) · ❌ executor adversarial completo**
 
-- **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` (31 linhas) já roda um pipeline básico de dependências → build → testes → lint, mas isso é um test runner, não um "Test Lab" completo.
-- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários/probes, `SecurityProjectScanner` faz análise lexical read-only com redaction e `SecurityAssessmentEngine` combina ambos no readiness gate; executor adversarial, análise estrutural, corpus persistente e integração de delivery ainda pendentes.
+- **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` roda um pipeline básico de dependências → build → testes → lint (é um test runner, não um "Test Lab" completo); `SandboxPlatform` o instancia, mas **a UI nunca o chama**.
+- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários/probes, `SecurityProjectScanner` faz análise lexical read-only com redaction e `SecurityAssessmentEngine` combina ambos — mas nenhuma das três classes é instanciada em lugar nenhum fora do próprio arquivo e do teste; nem `SandboxPlatform` as conhece. `SecurityScenarioCatalog`, criado numa sessão anterior para alimentar cenários baseline, também não é referenciado por nenhuma delas. Executor adversarial, análise estrutural, corpus persistente e integração de delivery seguem pendentes, mas agora por trás de uma pendência mais básica: nada disso está plugado em nada.
 
 ---
 
@@ -158,9 +164,10 @@ Uma execução relevante deve permitir responder: por que essa estratégia foi e
 
 ## Resumo executivo — o que falta, sem duplicar
 
-1. **Brain no Kotlin** já possui memória persistente integrada ao coordenador, catálogo de Skills, engine de Workflows e discovery avançado de APIs; a integração com fontes de transporte reais permanece dependência de implantação.
-2. **Sandbox Mobile** ainda não tem: catálogo remoto de plugins (Fase 2), gerenciamento de toolchains (Fase 5), rede/serviços (Fase 6), e um Security Test Lab de verdade com attack simulation (Fase 6 deste documento / P4).
+1. **Brain no Kotlin** já possui memória persistente integrada ao coordenador, catálogo de Skills, engine de Workflows e discovery avançado de APIs — mas nada disso é chamado pelo app Android; é uma biblioteca completa e isolada. A integração com `:app`/`:android-module` é a pendência nº 1 do projeto hoje, antes até de qualquer fonte de transporte externa.
+2. **Sandbox Mobile** ainda não tem, *acessível pela UI*: catálogo remoto de plugins (Fase 2 — implementado, não ligado ao `PluginManager`), gerenciamento de toolchains (Fase 5 — implementado, não instanciado por `SandboxPlatform`), rede/serviços (Fase 6 — implementado e instanciado, mas sem tela) e um Security Test Lab de verdade com attack simulation (Fase 6 deste documento / P4 — implementado, não instanciado em lugar nenhum).
 3. **Validação final em produção** (device físico, RootFS real, assinatura de release, infra distribuída) continua em aberto — é o gate para chamar o projeto de "Fase 8 / 100% completo".
+4. O plano de ação com a ordem recomendada de integração (ou arquivamento) de cada peça acima está em `PLANO_DE_ACAO.md`.
 
 
 ## Registro da entrega — 2026-09-12 — Cinco frentes
@@ -176,3 +183,7 @@ Ambiente preparado com JDK 17, Android SDK API 34, Build Tools 34.0.0 e platform
 ### 2026-09-12 — Download da mini-LLM local
 
 A interface de validação agora oferece o download opcional da SmolLM2 135M Instruct GGUF Q4_K_M. O manifesto `app/src/main/res/raw/local_model_manifest.json` declara URL HTTPS, licença Apache-2.0, tamanho e SHA-256; `SandboxResourceManager` foi generalizado para recursos verificáveis e `AndroidSandboxFactory` mantém os modelos em `filesDir/sandbox/models`. O download possui retomada, arquivo parcial e verificação de hash. A execução do GGUF ainda depende da integração futura de `llama.cpp`/runtime nativo autorizado e não é iniciada automaticamente.
+
+### 2026-09-12 — Auditoria de instanciação real e correção de status inflado
+
+Rastreada, classe por classe, a instanciação real (fora do próprio arquivo e de testes) de todo `brain/src/main`, `android-module/src/main` e `app/src/main`. Resultado: `:brain` inteiro (Policy/Router/Skills/Workflows/Memory/Discovery/Events) não é chamado por `:app`/`:android-module`; dentro do próprio `app`, `WorkspaceManager`, `GitManager`, `ServiceManager` e `TestLab` são instanciados por `SandboxPlatform` mas não têm nenhuma tela que os acione; `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector`, `SecurityScenarioCatalog` e `RemotePluginCatalog` não são instanciados em lugar nenhum fora do próprio arquivo/teste. As Fases 2, 3, 5 e 6 deste documento, `AUDITORIA_PESADA.md` e `README.md` foram corrigidos para refletir isso. Nenhuma linha foi rebaixada por regressão de código — o código não mudou nesta sessão, só a precisão do status documentado. Plano de ação com decisão por componente (integrar vs. arquivar) em `PLANO_DE_ACAO.md`.

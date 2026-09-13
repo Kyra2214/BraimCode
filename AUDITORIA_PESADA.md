@@ -1,28 +1,31 @@
-# Auditoria técnica atual do Braim
+# Auditoria técnica atual do Braim / BrainCode
 
-**Data da auditoria:** 2026-09-12. **Escopo:** runtime Python em `brain_runtime/`, contratos Kotlin em `app/`, documentação, configuração e testes. **Método:** inspeção dos módulos, execução da suíte nominal, compilação Python, verificação de diff e leitura dos caminhos de segurança, persistência, workflow e recovery.
+**Data da auditoria:** 2026-09-12 (atualizada na mesma data após varredura de instanciação real do código Kotlin). **Escopo:** runtime Python em `brain_runtime/`, módulos Kotlin `brain/`, `android-module/` e `app/`, documentação, configuração, releases e testes. **Método:** inspeção dos módulos, execução da suíte Python, compilação, verificação de diff, e — passo adicional desta rodada — rastreamento de instanciação real de cada classe Kotlin (quem chama quem fora do próprio arquivo/teste), não só leitura de código isolado.
 
 ## Veredito executivo
 
-O Braim evoluiu de um esqueleto para um **runtime de referência funcional, testável e auditável em Python**, mas ainda não deve ser classificado como plataforma de produção plenamente isolada. As garantias implementadas são aplicadas em nível de código e possuem testes de regressão. As garantias que dependem do host ou de serviços externos continuam sendo explicitamente diagnosticadas, rejeitadas em modo estrito ou delegadas à implantação.
+O Braim/BrainCode tem hoje **dois produtos que compilam e testam bem, mas não se falam em tempo de execução**:
 
-A implementação Android permanece fora do escopo executável atual. O diretório `app/` contém contratos e componentes Kotlin sem projeto Gradle, `AndroidManifest.xml`, Activity, Service ou APK.
+1. **Runtime Python (`brain_runtime/`)** — reference runtime funcional, testável e auditável, com 134 testes automatizados. Continua não devendo ser classificado como plataforma de produção plenamente isolada (isolamento OS-level depende do host).
+2. **App Android (`:app` + `:android-module`)** — roda de verdade num device: baixa o rootfs, executa comandos via `proot`, instala plugins de um catálogo local. É o único caminho que um usuário final realmente aciona.
+3. **Módulo `:brain` (Kotlin)** — porta do Braim original para Kotlin/JVM (Policy, Router, Skills, Workflows, Memory, Discovery, Events). Compila e tem teste próprio, mas **nenhuma classe dele é instanciada por `:app` ou `:android-module` fora dos próprios testes unitários** — verificado por varredura de código, não só por leitura de roadmap.
+
+Isso corrige uma alegação desta auditoria em sua versão anterior ("implementação Android permanece fora do escopo executável"): hoje **existe** app Android real, com Gradle, `AndroidManifest.xml`, Activity e testes rodando (`:app:testDebugUnitTest`, `:app:assembleDebug` "BUILD SUCCESSFUL", ver `ROADMAP_UNIFICADO.md`). O que não existe é a ponte entre esse app e o `:brain` — essa é a lacuna real, não a ausência de app.
+
+Detalhamento completo dos componentes órfãos (implementados, testados, nunca chamados fora do próprio arquivo) e o plano para resolver isso está em `PLANO_DE_ACAO.md`.
 
 ## Evidências atuais
 
 ```text
 python3 -m unittest discover -s tests -q
-Ran 112 tests
+Ran 134 tests
 OK
 
 python3 -m compileall -q brain_runtime tests
 OK
-
-git diff --check
-OK
 ```
 
-Os commits estão publicados em `origin/main`. O último commit de integração é `32e805a`.
+Kotlin: `:brain` e `:app` compilam e testam (ver sessões registradas em `ROADMAP_UNIFICADO.md`); `:android-module` exige Android SDK configurado (`ANDROID_HOME`/`local.properties`) para rodar seus próprios testes neste ambiente de auditoria.
 
 ## Matriz de estado
 
@@ -42,7 +45,8 @@ Os commits estão publicados em `origin/main`. O último commit de integração 
 | Project Intelligence | Scanner e contexto `.projectbrain/` | `project_intelligence.py` | análise semântica profunda e CI remoto |
 | Readiness | Gate com score, blockers, warnings e exit code | `readiness.py`, runtime E2E | políticas de release específicas da organização |
 | Release Intelligence | Comparação Git e heurística de regressão | `release_intelligence.py` | diagnóstico causal e histórico de produção |
-| Android Mobile | Não iniciado como aplicação | ausência de Gradle/Manifest/UI | fase futura deliberada |
+| Android Mobile (Sandbox) | Implementado e roda no device | `:app`, `:android-module`, `AndroidManifest.xml`, Activity Compose, `assembleDebug` OK | falta cobrir com UI os subsistemas já implementados (Git, Workspace, Services, TestLab, Security*, Toolchains) — hoje construídos mas sem tela |
+| Integração `:brain` ↔ `:app` | Não existe em tempo de execução | `:brain` só é chamado pelos próprios testes unitários | ligar `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` ao `SandboxViewModel` — ver `PLANO_DE_ACAO.md` |
 
 ## Riscos remanescentes
 
@@ -52,9 +56,11 @@ O Sandbox não deve ser interpretado como container completo apenas por executar
 
 Filesystem jail via Bubblewrap, cgroups graváveis, seccomp, capabilities mínimas e políticas de kernel continuam responsabilidades da implantação. O código não simula essas garantias.
 
-### Contrato Kotlin e Android
+### Contrato Kotlin e integração Brain ↔ Sandbox
 
-O contrato Kotlin em `app/src/main/kotlin/com/brain/execution/SandboxContract.kt` é útil como referência, mas ainda não é consumido pelo runtime Python. Não existe build Android no repositório. Portanto, nenhuma alegação de aplicativo Android, IPC Android, Keystore ou foreground service deve ser feita nesta fase.
+O contrato Kotlin em `brain/src/main/kotlin/com/brain/execution/SandboxContract.kt` é útil como referência e não é consumido pelo runtime Python (isso é esperado — são duas implementações paralelas, não uma dependendo da outra). O que **não** é esperado, e é o achado principal desta rodada de auditoria: esse contrato também não é consumido pelo próprio app Android do repositório. `BrainSandboxExecutionBridge`, `BrainStepExecutor`, `BrainExecutionCoordinator` e `CicloExecucaoPlano` existem, compilam e passam em teste unitário, mas não são instanciados por `MainActivity`, `SandboxViewModel` ou `SandboxPlatform` — a cadeia de execução real do app não passa pelo `:brain`. Nenhuma alegação de "Ciclo Android unificado" concluído deve ser feita até essa ligação existir de fato (ver `PLANO_DE_ACAO.md`, Fase B).
+
+Da mesma forma, dentro do próprio `app`, `SandboxPlatform` instancia `WorkspaceManager`, `GitManager`, `ServiceManager` e `TestLab`, mas nenhum deles é chamado pela UI (`MainActivity` só tem abas de Validação, Plugins e Ferramentas). São subsistemas prontos e testados, mas inacessíveis ao usuário final hoje.
 
 ### Routing e providers
 
@@ -75,12 +81,13 @@ O Readiness Gate é um mecanismo de decisão local. Ele não prova estado extern
 
 ## Conclusão
 
-O código atual sustenta a classificação de **runtime de referência funcional com hardening significativo**. Ele não sustenta a classificação de plataforma de produção plenamente isolada ou aplicativo Android pronto. A documentação foi ajustada para distinguir implementação local, integração opcional e dependência de infraestrutura.
+O código atual sustenta três classificações distintas, que não devem ser misturadas: (1) **runtime de referência funcional com hardening significativo** no Python; (2) **app Android de validação funcional**, que roda no device mas expõe só uma fração do que está implementado (rootfs + plugins locais); (3) **biblioteca Kotlin (`:brain`) funcional e testada, porém não integrada** a nenhum dos dois anteriores. Nenhuma das três sustenta a classificação de "plataforma de produção plenamente isolada" ou "Brain e Sandbox unificados" — essa unificação é o próximo passo, detalhado em `PLANO_DE_ACAO.md`.
 
 ## Referências internas
 
 - [README.md](README.md)
-- [docs/ROADMAP_IMPLEMENTADO.md](docs/ROADMAP_IMPLEMENTADO.md)
-- [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
+- [PLANO_DE_ACAO.md](PLANO_DE_ACAO.md) — o que fazer com cada achado desta auditoria
+- [ROADMAP_UNIFICADO.md](ROADMAP_UNIFICADO.md)
 - [brain_runtime/](brain_runtime/)
+- [brain/](brain/)
 - [tests/](tests/)

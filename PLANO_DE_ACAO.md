@@ -29,12 +29,12 @@ Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app 
 |---|---|---|---|---|
 | `BrainSandboxExecutionBridge` + `CicloExecucaoPlano` + `BrainExecutionCoordinator` | `android-module`, `brain` | **Primeira fatia ligada à UI**: `SandboxViewModel` aciona `BrainSandboxController.healthCheck()` depois que o runtime real está pronto; execução Android completa ainda precisa de testes no ambiente com SDK | Expandir de `sandbox.health` para planos de usuário e ligar aprovações/retomada à UI | Mover pra `experimental/`, deixar claro que é protótipo |
 | Todo o `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) | `brain/src/main` | Zero chamada fora do próprio módulo | Definir um primeiro caso de uso real (ex.: rodar 1 skill via UI) como prova de integração | Rebaixar no roadmap pra "biblioteca standalone, integração não iniciada" |
-| `WorkspaceManager`, `GitManager`, `ServiceManager`, `TestLab` | `app/sandbox` | Construídos em `SandboxPlatform`, nunca chamados pela UI | Criar abas/telas que os exponham (baixo esforço — backend já pronto) | Remover a instanciação em `SandboxPlatform` até terem uso |
-| `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner` | `app/sandbox` | Nem instanciados fora do próprio arquivo/teste | Plugar no fluxo de `TestLab`/readiness | Arquivar até haver um gate real que os consuma |
-| `ToolchainManager`/`ToolchainDetector` | `app/sandbox` | Idem | Expor na aba Ferramentas | Arquivar |
-| `SecurityScenarioCatalog` | `app/sandbox` | Criado, nunca referenciado | Conectar ao `SecurityTestLab` | Remover (dead code literal) |
+| `WorkspaceManager`, `GitManager`, `ServiceManager`, `TestLab` | `app/sandbox` | Instanciados pela fachada e acionados na aba Operações; fluxo básico implementado | Expandir operações Git e adicionar terminal dedicado | — |
+| `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner` | `app/sandbox` | Instanciados pela fachada e avaliação acionável na aba Operações | Completar executor adversarial, corpus e readiness gate | — |
+| `ToolchainManager`/`ToolchainDetector` | `app/sandbox` | Instanciados pela fachada e acionados na aba Operações | Adicionar SDK/NDK, rollback transacional e cache | — |
+| `SecurityScenarioCatalog` | `app/sandbox` | Conectado à avaliação de segurança como catálogo baseline | Expandir cenários e evidências | — |
 | `RemotePluginCatalog` | `app/sandbox` | `PluginManager` real só usa `BuiltInCatalog` | Fazer `PluginManager` consultar o catálogo remoto como fonte adicional | Arquivar até ter transporte remoto real |
-| `GitOperation` (enum) | `GitManager.kt` | Não usado nem pelo próprio arquivo | Refatorar `GitManager` pra usar o enum | Remover (é a menor decisão do lote) |
+| `GitOperation` (enum) | `GitManager.kt` | Não usado nem pelo próprio arquivo | — | Removido nesta rodada |
 | `ObservableDelivery`, `InMemoryExperienceMemory`, `DefaultPromptGenerator`, `HttpProviderClient` | `brain` | Zero uso, zero teste | — (dependem da decisão sobre `:brain` acima) | — |
 | `reference/braincode-python/` | raiz | Snapshot congelado, nada importa dele | — | Mover pra fora do repo de build ou marcar com `.buildignore`/README já existe, mas deixar isso explícito no `README.md` principal |
 | `__pycache__/*.pyc` no zip | `tests/`, `brain_runtime/` | Contradiz o próprio `.gitignore` | — | Apagar antes do próximo commit/export |

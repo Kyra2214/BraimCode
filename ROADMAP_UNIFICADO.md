@@ -58,7 +58,7 @@ Do outro roadmap, entram aqui também:
 
 - **Ciclo Android (antiga Fase 2 de integração)**: 🟡 a operação `sandbox.health` é chamada pelo app via `BrainSandboxController` e passa pela Bridge em ordem fixa (Router, Policy, sessão Sandbox, capability e validação de workspace); planos de usuário e demais capacidades ainda não são chamados por caminhos reais.
 - **Retomada de aprovações (antiga Fase 3 de integração)**: ✅ `ExecutionBinding` imutável, digest verificado, retomada reusa `run_id`/`task_id`/`step_id`, reconstrução via `ApprovalStore` após reinício — implementado e coberto por teste (mas herda a mesma ressalva acima: não é acionado pelo app real, só por teste).
-- **Sandbox Fase 3 — Ambiente de desenvolvimento**: 🟡 parcial — `Workspace.kt`, `GitManager.kt` e `ServiceManager`/`TestLab` existem, compilam e são instanciados por `SandboxPlatform`, mas ❌ **nenhum tem tela ou botão na UI** (`MainActivity` só expõe Validação/Plugins/Ferramentas); não há módulo de Terminal dedicado.
+- **Sandbox Fase 3 — Ambiente de desenvolvimento**: 🟡 parcial — `Workspace.kt`, `GitManager.kt` e `ServiceManager`/`TestLab` são instanciados por `SandboxPlatform` e acionados na aba **Operações** para projetos, Git status, SQLite e TestLab. Ainda faltam terminal dedicado, operações Git completas e validação Android em dispositivo.
 - **H — Execução real (Brain, Kotlin)**: ❌ não roda no app — o roadmap original (`ROADMAP_BRAIM_CONSOLIDADO.md`) previa manter o executor **congelado** até D–G estabilizarem no Kotlin; na prática, a base (memória/skills/workflows/APIs) chegou a existir no Kotlin (Fase 2 abaixo), mas o executor nunca chegou a ser ligado ao app — a dívida arquitetural citada aqui virou uma ilha desconectada em vez de um executor precoce.
 
 ---
@@ -69,23 +69,23 @@ Do outro roadmap, entram aqui também:
 Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening já feito, majoritariamente em Python):
 - Fase 5 Quota persistente ✅ · Fase 6 Fallback rigoroso ✅ · Fase 7 EventStore de produção ✅ · Fase 8 Memory SQLite ✅ · Fase 9 QA/correction ✅ · Fase 10 Execução paralela ✅ · Fase 11 Isolamento forte (probe `unshare`/Bubblewrap/cgroups, fail-closed) ✅.
 - Fase 12 Delivery observável (Kotlin) ✅ — `ObservableDelivery` com SHA-256 de artefatos e recibo completo.
-- **Sandbox Fase 4 — Segurança e isolamento** (controle, limites, diagnóstico, recuperação): 🟡 o hardening pesado está no Python; não há módulo Kotlin equivalente dedicado no lado Sandbox Mobile.
+- **Sandbox Fase 4 — Segurança e isolamento** (controle, limites, diagnóstico, recuperação): 🟡 a execução Kotlin usa política deny-by-default, limites, diagnóstico e recuperação compartilhados; a avaliação de segurança está acionável na aba **Operações**. Ainda faltam controles OS-level equivalentes ao hardening Python e validação em host Android real.
 
 ---
 
 ## Fase 5 — Toolchains, Rede e Serviços
 **Status: ❌ não implementado como feature acessível · 🟡 domínio implementado e isolado**
 
-- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e `ToolchainManager` cobrem detecção, instalação explícita, validação, persistência e remoção allowlisted; têm teste próprio, mas **não são instanciados por `SandboxPlatform` nem por nenhuma tela** — hoje não há nenhum caminho de código que os alcance fora do teste. SDK/NDK Android, rollback transacional e cache ainda pendentes por cima disso.
-- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default; `ServiceManager` os usa de fato e é instanciado por `SandboxPlatform` — mas `SandboxPlatform.services` **não é chamado por nenhuma tela do app**, então a decisão de rede nunca chega a ser exercitada fora de teste. Firewall, namespaces, egress real e cgroups de rede ainda pendentes.
+- **Sandbox Fase 5 — Toolchains avançados** (Android, Java, Python, Node, C/C++, Rust, Go): 🟡 `ToolchainProfile`, `ToolchainDetector` e `ToolchainManager` são instanciados por `SandboxPlatform` e acionados na aba **Operações** para detecção e instalação allowlisted. SDK/NDK Android, rollback transacional, cache e validação real continuam pendentes.
+- **Sandbox Fase 6 — Rede e serviços**: 🟡 `NetworkPolicy`, `NetworkRule` e `NetworkPolicyBroker` fornecem decisão deny-by-default e o `ServiceManager` é acionado pela aba **Operações** para o ciclo SQLite. Firewall, namespaces, egress real e cgroups de rede continuam pendentes.
 
 ---
 
 ## Fase 6 — Security Test Lab (validação adversarial)
 **Status: 🟡 domínio de avaliação implementado e testado · ❌ não ligado a nada (nem UI, nem readiness gate) · ❌ executor adversarial completo**
 
-- **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` roda um pipeline básico de dependências → build → testes → lint (é um test runner, não um "Test Lab" completo); `SandboxPlatform` o instancia, mas **a UI nunca o chama**.
-- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab` avalia cenários/probes, `SecurityProjectScanner` faz análise lexical read-only com redaction e `SecurityAssessmentEngine` combina ambos — mas nenhuma das três classes é instanciada em lugar nenhum fora do próprio arquivo e do teste; nem `SandboxPlatform` as conhece. `SecurityScenarioCatalog`, criado numa sessão anterior para alimentar cenários baseline, também não é referenciado por nenhuma delas. Executor adversarial, análise estrutural, corpus persistente e integração de delivery seguem pendentes, mas agora por trás de uma pendência mais básica: nada disso está plugado em nada.
+- **Sandbox Fase 7 — Test Lab**: 🟡 `TestLab.kt` roda um pipeline básico de dependências → build → testes → lint e é acionado pela aba **Operações**; ainda não é um laboratório adversarial completo.
+- **P4 — Security Test Lab** (`ProjectScanner → Attack Simulation → Sandbox → Policy/QA/Detection → Evidence Engine → Fix/Verify/Learn → Regression Corpus → ReadinessGate`): 🟡 `SecurityTestLab`, `SecurityProjectScanner`, `SecurityAssessmentEngine` e cenários baseline estão conectados ao `SandboxPlatform` e a avaliação é acionável na UI. Executor adversarial, análise estrutural, corpus persistente e integração de delivery/readiness gate continuam pendentes.
 
 ---
 

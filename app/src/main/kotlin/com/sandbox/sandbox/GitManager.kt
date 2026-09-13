@@ -2,8 +2,6 @@ package com.sandbox.sandbox
 
 import com.sandbox.runtime.ExecutionLog
 
-enum class GitOperation { CLONE, PULL, PUSH, BRANCH, CHECKOUT, COMMIT, DIFF, STATUS }
-
 class GitManager(private val executor: SandboxCommandExecutor) {
     fun clone(url: String, destination: String, timeoutSeconds: Long = 600): ExecutionLog = run(listOf("git", "clone", url, destination), "/home/sandbox", timeoutSeconds)
     fun pull(projectPath: String): ExecutionLog = run(listOf("git", "pull", "--ff-only"), projectPath)

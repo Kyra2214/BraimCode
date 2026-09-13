@@ -2,7 +2,7 @@
 
 ## Escopo executado
 
-Esta entrega percorre as cinco frentes pendentes identificadas no `ROADMAP_UNIFICADO.md`. O objetivo foi transformar cada frente em uma base executável, testável ou explicitamente preparada para integração, sem declarar como concluídas capacidades que dependem de Android SDK, JDK 17, dispositivo físico ou infraestrutura OS-level.
+Esta entrega percorre as cinco frentes pendentes identificadas no `ROADMAP_UNIFICADO.md`. O objetivo foi transformar cada frente em uma base executável, testável ou explicitamente preparada para integração, sem declarar como concluídas capacidades que dependem de dispositivo físico ou infraestrutura OS-level.
 
 ## Fase 1 — Brain e LLM local
 
@@ -12,7 +12,7 @@ Testes adicionados cobrem resposta válida, indisponibilidade do provider e JSON
 
 ## Fase 2 — Toolchain Android
 
-O catálogo declarativo agora inclui o perfil `android`, com detecção por `sdkmanager` e pacotes allowlisted para SDK, platform-tools e build-tools. O perfil não instala nada automaticamente: continua sujeito a Policy, autorização, readiness, licenças e disponibilidade do host. SDK/NDK, cache, rollback transacional e licenças ainda exigem validação no ambiente Android de implantação.
+O catálogo declarativo agora inclui o perfil `android`, com detecção por `sdkmanager` e pacotes allowlisted para SDK, platform-tools e build-tools. O perfil não instala nada automaticamente: continua sujeito a Policy, autorização, readiness, licenças e disponibilidade do host. SDK/NDK, cache, rollback transacional e licenças foram validados no host de build; o comportamento em device continua dependente da implantação Android.
 
 ## Fase 3 — Security Test Lab
 
@@ -20,7 +20,7 @@ Foi criado `SecurityScenarioCatalog` com seis cenários baseline bloqueantes: re
 
 ## Fase 4 — Android e release
 
-A base de código e o roadmap foram mantidos honestos quanto ao limite de implantação: a validação de `:app` depende de Android SDK e a toolchain Gradle exige JDK 17. Permanecem como checklist de release a compilação em JDK 17, teste em emulador/dispositivo, RootFS/proot real, assinatura do APK e validação de lifecycle.
+A base de código e o roadmap foram mantidos honestos quanto ao limite de implantação: a compilação e os testes Gradle foram validados com Android SDK e JDK 17. Permanecem como checklist de release o teste em emulador/dispositivo, RootFS/proot real, assinatura do APK e validação de lifecycle.
 
 ## Fase 5 — Infraestrutura de produção
 
@@ -31,31 +31,33 @@ A implementação local continua deny-by-default e não simula cgroups, Bubblewr
 | Verificação | Resultado |
 |---|---|
 | `python3 -m unittest discover -s tests -q` | **134 testes aprovados** |
-| `./gradlew :brain:test` | Bloqueado: o projeto exige JDK 17 e o ambiente possui JDK 21 |
-| Android `:app` | Bloqueado até `ANDROID_HOME`/SDK configurado |
+| `./gradlew :brain:test --no-daemon --rerun-tasks` | **Aprovado** |
+| `./gradlew :android-module:test :app:test :app:assembleDebug --no-daemon --rerun-tasks` | **Aprovado — BUILD SUCCESSFUL** |
+| Android SDK/JDK | **JDK 17 e SDK 34 configurados e usados** |
+| APK Debug | **Gerado**, SHA-256 `e51adf29e818ec073dc89cea247ae6c50f1652a6673995cb6a21ac355bb3b93e` |
 | Working tree antes da entrega | Limpo, branch `main` alinhada ao remoto |
 | Segurança | Sem secrets reais, rede externa ou execução adversarial implícita |
 
 ## Pendências que continuam abertas
 
-A entrega não substitui a validação de produção. Continuam abertas a integração de transporte real do LLM local, download/licenciamento de SDK/NDK, executor OS-level de probes, corpus persistente de regressão, cgroups/Bubblewrap/firewall, backend distribuído, assinatura de release e validação em dispositivo físico.
+A entrega não substitui a validação de produção. Continuam abertas a integração de transporte real do LLM local, executor OS-level de probes, corpus persistente de regressão, cgroups/Bubblewrap/firewall, backend distribuído, assinatura de release e validação em dispositivo físico.
 
 ## Critério para chamar as cinco fases de prontas
 
-Cada bloqueio externo deve ser convertido em evidência de implantação: build com JDK 17, testes Android, execução do RootFS em dispositivo/emulador, relatório do Security Test Lab com todas as probes baseline, readiness sem blockers, assinatura verificável e teste de recovery com backend escolhido. Até lá, o status correto é **base implementada, validação de implantação pendente**.
+Cada bloqueio externo deve ser convertido em evidência de implantação: execução do RootFS em dispositivo/emulador, relatório do Security Test Lab com todas as probes baseline, readiness sem blockers, assinatura verificável e teste de recovery com backend escolhido. Build JDK 17, testes Android e empacotamento Debug já possuem evidência no host de build. O status correto é **base implementada, validação de implantação física e release pendente**.
 
 
 ## Validação Android adicional — 2026-09-12
 
-O ambiente foi preparado com **JDK 17** e **Android SDK API 34** em `/usr/lib/android-sdk`, incluindo Build Tools 34.0.0 e platform-tools. A primeira compilação revelou duas incompatibilidades reais: `Files.readString` não está disponível no caminho Android usado pelo scanner e `requireNotNull` produzia `IllegalArgumentException`, contrariando o contrato do teste de autorização. O scanner passou a usar `File.readText()`, a detecção de chave privada tornou-se case-insensitive e o `ServiceManager` passou a lançar `IllegalStateException` para autorização ausente.
+O ambiente foi preparado com **JDK 17** e **Android SDK API 34** em `/home/ubuntu/Android/Sdk`, incluindo Build Tools 34.0.0, platform-tools e NDK 26.3. A validação no clone limpo mais recente também corrigiu o helper de `riskClass` do teste de plano e declarou diretamente `implementation(project(":brain"))` no app.
 
 A validação final passou:
 
 ```text
-./gradlew :app:testDebugUnitTest --no-daemon       BUILD SUCCESSFUL
-./gradlew :app:assembleDebug --no-daemon           BUILD SUCCESSFUL
+./gradlew :brain:test --no-daemon --rerun-tasks                         BUILD SUCCESSFUL
+./gradlew :android-module:test :app:test :app:assembleDebug --no-daemon --rerun-tasks  BUILD SUCCESSFUL
 APK: app/build/outputs/apk/debug/app-debug.apk
-SHA-256: d4bcfbc1a961218e0115f70e2080ea0c8d5ec6a77add147aa6888e5f34eb0247
+SHA-256: e51adf29e818ec073dc89cea247ae6c50f1652a6673995cb6a21ac355bb3b93e
 Tamanho: 17 MiB
 ```
 

@@ -4,7 +4,7 @@ O Braim é um runtime experimental para execução de tarefas com Policy, approv
 
 > **Estado de segurança:** o projeto possui hardening significativo e 134 testes Python aprovados, mas ainda depende de infraestrutura do host para isolamento OS-level completo. Não deve ser interpretado como container ou ambiente de produção isolado sem uma implantação adequada.
 
-> **Estado de integração (2026-09-13):** o app Android (`:app`) usa o rootfs/Sandbox e possui caminhos reais para `sandbox.health`, planos com aprovação/retomada, TestLab, Security, Toolchains, Workspace, Git, Services, Skills, Workflows, Memory e Discovery na aba **Operações**. Essas operações compartilham `SandboxPlatform`/`BrainIntegrationFacade` e estados persistentes locais. Permanecem como pendências o transporte remoto de plugins, APIs/Events avançados, o `BrainExecutionCoordinator` completo e os gates de validação Android/produção — ver `AUDITORIA_PESADA.md`, `PLANO_DE_ACAO.md` e `docs/RELEASE_READINESS.md`.
+> **Estado de integração (2026-09-13):** o app Android (`:app`) usa o rootfs/Sandbox e possui caminhos reais para `sandbox.health`, planos com aprovação/retomada, TestLab, Security, Toolchains, Workspace, Git, Services, Skills, Workflows, Memory e Discovery na aba **Operações**. Essas operações compartilham `SandboxPlatform`/`BrainIntegrationFacade` e estados persistentes locais. O host de build foi validado com JDK 17/SDK 34, os testes Gradle passaram e o APK Debug foi gerado. Permanecem como pendências o transporte remoto de plugins, APIs/Events avançados, o `BrainExecutionCoordinator` completo e os gates de device/release — ver `AUDITORIA_PESADA.md`, `PLANO_DE_ACAO.md`, `docs/RELEASE_READINESS.md` e `docs/VALIDACAO_ANDROID_2026-09-13.md`.
 
 ## Executar testes
 
@@ -59,7 +59,7 @@ Quando configurado, o runtime atualiza `.projectbrain/`, emite `ProjectScanned` 
 
 ## Kotlin e Android
 
-O repositório agora também contém o projeto Gradle do Sandbox Mobile integrado ao BrainCode. O módulo `:brain` é Kotlin/JVM puro para Policy, Router, Planner, Prompt, QA e contratos; `:android-module` fornece a sessão de agente, resolução de capabilities e runtime Sandbox; `:app` contém o cliente Android Compose e os recursos do RootFS. **A operação `sandbox.health`, planos com aprovação/retomada, TestLab, Security, Toolchains, Workspace, Git, Services, Skills, Workflows, Memory e Discovery já possuem caminhos acionáveis na UI; transporte remoto de plugins, APIs/Events avançados e validação Android/produção continuam pendentes** — o plano de integração está em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
+O repositório agora também contém o projeto Gradle do Sandbox Mobile integrado ao BrainCode. O módulo `:brain` é Kotlin/JVM puro para Policy, Router, Planner, Prompt, QA e contratos; `:android-module` fornece a sessão de agente, resolução de capabilities e runtime Sandbox; `:app` contém o cliente Android Compose e os recursos do RootFS. **A operação `sandbox.health`, planos com aprovação/retomada, TestLab, Security, Toolchains, Workspace, Git, Services, Skills, Workflows, Memory e Discovery já possuem caminhos acionáveis na UI; o build/teste Android no host foi validado, enquanto transporte remoto de plugins, APIs/Events avançados, teste em device e release de produção continuam pendentes** — o plano de integração está em [`PLANO_DE_ACAO.md`](PLANO_DE_ACAO.md).
 
 Validações locais disponíveis:
 
@@ -68,7 +68,7 @@ Validações locais disponíveis:
 python3 -m unittest discover -s tests -q
 ```
 
-Os testes de `:android-module` exigem Android SDK configurado via `ANDROID_HOME` ou `local.properties`; sem esse SDK, o Gradle não consegue configurar a biblioteca Android.
+Os testes de `:android-module` exigem Android SDK configurado via `ANDROID_HOME` ou `local.properties`; com JDK 17 e SDK 34 configurados, `:brain:test`, `:android-module:test`, `:app:test` e `:app:assembleDebug` foram executados com sucesso. O resultado detalhado está em [`docs/VALIDACAO_ANDROID_2026-09-13.md`](docs/VALIDACAO_ANDROID_2026-09-13.md).
 
 ## Documentação técnica
 

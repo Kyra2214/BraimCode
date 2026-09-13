@@ -16,4 +16,4 @@ A implementação fornece o contrato, a validação e a decisão segura, mas ain
 
 ## Testes
 
-Os testes cobrem deny-by-default, autorização por regra, escopo por serviço/porta, regra sem hosts e rejeição de loopback, portas inválidas e protocolos desconhecidos. A validação do módulo Android exige Android SDK configurado.
+Os testes cobrem deny-by-default, autorização por regra, escopo por serviço/porta, regra sem hosts e rejeição de loopback, portas inválidas e protocolos desconhecidos. O módulo Android foi validado com JDK 17 e Android SDK 34; a execução em device/emulador continua sendo um gate separado.

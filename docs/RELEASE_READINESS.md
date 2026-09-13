@@ -23,7 +23,7 @@ migrados byte-a-byte e aprovados pelo preflight de distribuição. Não existe
 pendência de reconstrução ou re-homologação desses artefatos. Os bloqueios
 restantes abaixo pertencem exclusivamente à implantação do app e do host:
 
-- **Android/device:** SDK, JDK 17, `adb` e emulador ou device ARM64;
+- **Android/device:** SDK e JDK 17 já validados no host de build; `adb` e emulador ou device ARM64 continuam pendentes;
 - **Assinatura:** autoridade de chaves e verificação do APK de produção;
 - **Host:** cgroups, Bubblewrap, firewall/namespaces e serviços distribuídos.
 
@@ -34,7 +34,7 @@ repositório.
 
 | Gate | Evidência exigida | Estado neste ambiente |
 |---|---|---|
-| Build Android | `:app:testDebugUnitTest`, `:android-module:test` e `:app:assembleDebug` com JDK 17 e Android SDK configurados | Pendente: SDK/JDK não configurados no clone atual |
+| Build Android | `:brain:test`, `:android-module:test`, `:app:test` e `:app:assembleDebug` com JDK 17 e Android SDK configurados | **Aprovado no clone limpo; BUILD SUCCESSFUL** |
 | Device/emulador ARM64 | `scripts/e2e-smoke.sh` executado via `adb` | Pendente: nenhum device/emulador conectado |
 | RootFS/proot real | Preparar sandbox, extrair RootFS, executar `bash`, health check, reset e repetir para os perfis aplicáveis | **Homologado no Sandbox de origem**; os três artefatos foram migrados byte-a-byte e não serão reconstruídos. Revalidação no app/dispositivo local permanece um teste de implantação, não uma nova homologação do release |
 | Ciclo de vida | Evidência de prepare, running, cancelamento, diagnóstico, reset e recuperação após interrupção | Pendente: depende do gate Android |

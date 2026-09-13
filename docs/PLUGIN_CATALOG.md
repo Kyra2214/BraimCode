@@ -20,4 +20,4 @@ A API separa `RemoteCatalogFinding` por componente do resultado aceito. Isso per
 
 ## Estado da entrega
 
-A camada, a ligação ao `PluginManager` e os testes do fluxo foram implementados. A integração deliberadamente não faz rede implícita: ainda falta uma camada de transporte e autorização local acionada pela UI. A validação automática do módulo `:app` permanece pendente neste ambiente porque o Android SDK não está instalado nem definido por `ANDROID_HOME` ou `local.properties`; a etapa não deve ser considerada concluída até o teste `:app:test` ser executado em ambiente Android configurado.
+A camada, a ligação ao `PluginManager` e os testes do fluxo foram implementados. A integração deliberadamente não faz rede implícita: ainda falta uma camada de transporte e autorização local acionada pela UI. O teste `:app:test` e o empacotamento `:app:assembleDebug` foram executados com Android SDK 34 e JDK 17 no clone limpo; a validação em device/emulador e a operação de transporte real continuam pendentes.

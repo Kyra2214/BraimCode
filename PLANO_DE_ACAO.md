@@ -48,7 +48,7 @@ Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app 
 
 O botão **Verificar pelo Brain**, na tela de Validação, agora percorre o caminho real `SandboxViewModel → BrainSandboxController → BrainSandboxExecutionBridge → CicloExecucaoPlano → PolicyBroker → AgentSandboxSession → CapabilityResolver → ManagedSandboxRuntime`. O caso de uso atual é deliberadamente pequeno: executar `sandbox.health` com autorização deny-by-default e exibir o resultado aprovado ou reprovado na UI. Isso prova a ligação fora de teste, mas não representa a unificação completa: o comando livre existente, plugins, Workspace, Git, Services, TestLab, Security* e Toolchains ainda têm caminhos próprios ou não estão expostos.
 
-Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e a suíte Python passou com 134 testes. A validação dos módulos Android permanece pendente neste ambiente por ausência de Android SDK configurado.
+Validação desta fatia: `./gradlew :brain:test`, `./gradlew :android-module:test :app:test :app:assembleDebug --no-daemon --rerun-tasks` e a suíte Python com 134 testes passaram com JDK 17 e Android SDK 34. A validação em device/emulador e os gates de produção permanecem pendentes.
 
 ---
 

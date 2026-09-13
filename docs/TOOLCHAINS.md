@@ -10,7 +10,7 @@
 
 ## Perfis incluídos
 
-A base inicial cobre Java, Python, Node.js, C/C++, Rust e Go. Android permanece como tipo suportado pelo modelo, mas exige um perfil específico com SDK/NDK e licenças declaradas antes de ser habilitado no catálogo padrão.
+A base inicial cobre Java, Python, Node.js, C/C++, Rust e Go. Android possui perfil específico com SDK/NDK e licenças declaradas. O host de build foi validado com JDK 17, SDK 34, Build Tools 34.0.0, platform-tools e NDK 26.3.11579264; isso não substitui o teste em device.
 
 ## Segurança
 
@@ -18,4 +18,4 @@ Os IDs de perfis e pacotes aceitam somente caracteres de catálogo. O detector n
 
 ## Validação
 
-Foram adicionados testes para detecção bem-sucedida, diagnóstico de ausência, geração de plano com pacotes declarados e rejeição de metacaracteres em pacotes. A execução do módulo `:app` depende de Android SDK configurado; quando o SDK não estiver disponível, a etapa deve permanecer marcada como parcial no roadmap.
+Foram adicionados testes para detecção bem-sucedida, diagnóstico de ausência, geração de plano com pacotes declarados e rejeição de metacaracteres em pacotes. No host configurado, `:brain:test`, `:android-module:test`, `:app:test` e `:app:assembleDebug` passaram em conjunto com 134 testes Python. Quando o SDK não estiver disponível em outro host, a etapa deve permanecer marcada como parcial no roadmap.

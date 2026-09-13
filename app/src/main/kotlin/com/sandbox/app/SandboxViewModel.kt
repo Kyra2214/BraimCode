@@ -62,6 +62,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     private var runtime: ManagedSandboxRuntime? = null
     private var platform: SandboxPlatform? = null
     private var brainController: BrainSandboxController? = null
+    private var brainIntegration: BrainIntegrationFacade? = null
 
     var phase by mutableStateOf<SandboxPhase>(SandboxPhase.NotReady)
         private set
@@ -123,6 +124,14 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         private set
     var workspaceError by mutableStateOf<String?>(null)
         private set
+    var brainSkillSummary by mutableStateOf<List<String>>(emptyList())
+        private set
+    var lastWorkflowStatus by mutableStateOf<String?>(null)
+        private set
+    var memorySuccessRate by mutableStateOf<Double?>(null)
+        private set
+    var discoverySummary by mutableStateOf<String?>(null)
+        private set
 
     fun runDiagnostics() {
         viewModelScope.launch {
@@ -167,6 +176,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     runtime = preparedRuntime,
                     rootfsDir = File(sandboxDir, "rootfs")
                 )
+                brainIntegration = BrainIntegrationFacade(File(sandboxDir, "brain"))
                 platform = SandboxPlatform(
                     runtime = preparedRuntime,
                     workspaceRoot = File(sandboxDir, "workspace"),
@@ -376,12 +386,40 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun refreshBrainCatalogs() {
+        val integration = brainIntegration ?: return
+        brainSkillSummary = integration.enabledSkills().map { "${it.manifest.id} (${it.manifest.capabilities.joinToString()})" }
+        viewModelScope.launch(Dispatchers.IO) {
+            val rate = integration.memoryRate()
+            withContext(Dispatchers.Main) { memorySuccessRate = rate }
+        }
+    }
+
+    fun runBrainWorkflow() {
+        val integration = brainIntegration ?: return
+        if (phase != SandboxPhase.Ready) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { integration.runHealthWorkflow("workflow-${System.currentTimeMillis()}") }.getOrNull()
+            result?.let { integration.recordExperience(it.runId, it.status.name == "COMPLETED") }
+            withContext(Dispatchers.Main) { lastWorkflowStatus = result?.status?.name ?: "FAILED" }
+        }
+    }
+
+    fun runDiscovery() {
+        val integration = brainIntegration ?: return
+        discoverySummary = runCatching {
+            val result = integration.discoverBuiltInCandidate()
+            "${result.radar.accepted} candidato(s) aceito(s), ${result.radar.rejected} rejeitado(s), ${result.workspace.windows.size} janela(s)"
+        }.getOrElse { "Discovery falhou: ${it.message}" }
+    }
+
     fun resetSandbox() {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 runtime?.reset { factory.purgeAll() }
                 runtime = null
                 brainController = null
+                brainIntegration = null
                 factory.clearPersistentSession()
             }
             platform = null
@@ -402,6 +440,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lastGitStatus = null
             sqliteServiceStatus = null
             workspaceError = null
+            brainSkillSummary = emptyList()
+            lastWorkflowStatus = null
+            memorySuccessRate = null
+            discoverySummary = null
             localModelProgress = null
             localModelReady = false
             localModelError = null

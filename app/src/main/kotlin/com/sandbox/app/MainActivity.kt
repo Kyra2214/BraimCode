@@ -155,6 +155,20 @@ private fun OperationsScreen(viewModel: SandboxViewModel) {
         }
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Brain: Skills, Workflows, Memory e Discovery", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { viewModel.refreshBrainCatalogs() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Catálogos") }
+                    Button(onClick = { viewModel.runBrainWorkflow() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Workflow") }
+                    OutlinedButton(onClick = { viewModel.runDiscovery() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Discovery") }
+                }
+                viewModel.brainSkillSummary.forEach { Text("Skill: $it", style = MaterialTheme.typography.bodySmall) }
+                viewModel.lastWorkflowStatus?.let { Text("Workflow: $it") }
+                viewModel.memorySuccessRate?.let { Text("Memory success rate: ${(it * 100).toInt()}%", style = MaterialTheme.typography.bodySmall) }
+                viewModel.discoverySummary?.let { Text("Discovery: $it", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Toolchains catalogadas", style = MaterialTheme.typography.titleMedium)
                 OutlinedButton(onClick = { viewModel.refreshToolchains() }, enabled = viewModel.phase == SandboxPhase.Ready) { Text("Atualizar status") }
                 BuiltInToolchains.all.forEach { profile ->

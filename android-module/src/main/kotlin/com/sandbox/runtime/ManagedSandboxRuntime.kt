@@ -25,7 +25,7 @@ class ManagedSandboxRuntime(
         stateRef.set(SandboxState.READY)
     }
 
-    fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox"): ExecutionLog {
+    fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox", networkAllowed: Boolean = false): ExecutionLog {
         require(command.isNotEmpty()) { "command não pode ser vazio" }
         require(timeoutSeconds > 0) { "timeoutSeconds deve ser > 0" }
         val id = FileExecutionLogRepository.newId()
@@ -34,7 +34,7 @@ class ManagedSandboxRuntime(
             check(stateRef.get() == SandboxState.READY) { "Sandbox não está pronto: ${stateRef.get()}" }
             check(active.get() == null) { "Já existe uma execução em andamento" }
             try {
-                val process = launcher.launch(command, workingDir)
+                val process = launcher.launch(command, workingDir, networkAllowed)
                 val a = ActiveExecution(id, process)
                 active.set(a)
                 stateRef.set(SandboxState.RUNNING)

@@ -28,10 +28,17 @@ class ProotProcessLauncher(
         listOf("dev", "proc", "sys", "tmp").forEach { File(rootfsDir, it).mkdirs() }
     }
 
-    override fun launch(command: List<String>, workingDir: String): Process {
+    override fun launch(command: List<String>, workingDir: String): Process = launch(command, workingDir, networkAllowed = false)
+
+    override fun launch(command: List<String>, workingDir: String, networkAllowed: Boolean): Process {
         val setsid = findSetsid()
+        val unshare = if (networkAllowed) null else findUnshare()
+        if (!networkAllowed && unshare == null) {
+            throw UnsupportedOperationException("bloqueio de rede exige unshare(CLONE_NEWNET); proot sozinho não isola sockets")
+        }
         val args = buildList {
             setsid?.let { add(it) }
+            unshare?.let { add(it); add("-n"); add("--") }
             add(prootExecutable)
             add("-r"); add(rootfsDir.absolutePath)
             add("-w"); add(workingDir)
@@ -62,6 +69,9 @@ class ProotProcessLauncher(
     }
 
     private fun findSetsid(): String? = listOf("/system/bin/setsid", "/usr/bin/setsid", "/bin/setsid")
+        .firstOrNull { File(it).canExecute() }
+
+    private fun findUnshare(): String? = listOf("/system/bin/unshare", "/usr/bin/unshare", "/bin/unshare")
         .firstOrNull { File(it).canExecute() }
 
     private fun shellEscape(arg: String): String = if (arg.matches(Regex("^[A-Za-z0-9_\\-./=]+$"))) arg

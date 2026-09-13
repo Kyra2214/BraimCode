@@ -64,6 +64,14 @@ interface ExecutionLogRepository {
 interface SandboxProcessLauncher {
     fun launch(command: List<String>, workingDir: String): Process
 
+    /**
+     * Variante com política de rede. Launchers antigos continuam compatíveis;
+     * launchers reais devem sobrescrever para aplicar isolamento ou falhar
+     * fechado quando [networkAllowed] for false.
+     */
+    fun launch(command: List<String>, workingDir: String, networkAllowed: Boolean): Process =
+        launch(command, workingDir)
+
     /** True when the launcher starts the workload in its own POSIX process group. */
     val processGroupManaged: Boolean get() = false
 

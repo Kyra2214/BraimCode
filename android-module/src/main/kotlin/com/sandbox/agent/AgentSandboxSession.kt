@@ -74,7 +74,7 @@ class AgentSandboxSession(
         synchronized(lock) {
             checkGate()?.let { return CommandOutcome.Refused(it) }
             if (comando.isEmpty()) return CommandOutcome.Refused("comando vazio")
-            val log = runtime.execute(comando, timeoutSeconds = timeoutSeconds, workingDir = workspaceGuestPath)
+            val log = runtime.execute(comando, timeoutSeconds = timeoutSeconds, workingDir = workspaceGuestPath, networkAllowed = authorization.networkAllowed)
             cpuMillisUsed += log.durationMs
             outputBytesUsed += log.stdout.toByteArray().size + log.stderr.toByteArray().size
             enforceBudgetAfter()

@@ -57,7 +57,7 @@ class CicloExecucaoPlanoTest {
         val root = createTempDir(prefix = "ciclo-")
         try {
             val plano = PlanoExecucao(objetivo = "dizer oi", passos = listOf(passo("hello")))
-            val resultado = ciclo(root).executar(plano, runId = "run-1", actor = "agent-1")
+            val resultado = ciclo(root).autorizarEExecutar(plano, runId = "run-1", actor = "agent-1")
 
             assertTrue(resultado.aprovado)
             val passoResultado = resultado.passos.single()
@@ -78,7 +78,7 @@ class CicloExecucaoPlanoTest {
                     passo("segundo", dependeDe = listOf("primeiro"))
                 )
             )
-            val resultado = ciclo(root, allowedCapabilities = listOf("sandbox.hello")).executar(plano, runId = "run-1", actor = "agent-1")
+            val resultado = ciclo(root, allowedCapabilities = listOf("sandbox.hello")).autorizarEExecutar(plano, runId = "run-1", actor = "agent-1")
 
             assertTrue(!resultado.aprovado)
             val (primeiro, segundo) = resultado.passos
@@ -99,7 +99,7 @@ class CicloExecucaoPlanoTest {
                     passo("com-papel", dependeDe = listOf("sem-papel"), papel = PapelPipeline.EXECUCAO_CODIGO)
                 )
             )
-            val resultado = ciclo(root).executar(plano, runId = "run-1", actor = "agent-1")
+            val resultado = ciclo(root).autorizarEExecutar(plano, runId = "run-1", actor = "agent-1")
 
             assertTrue(resultado.aprovado)
             val (semPapel, comPapel) = resultado.passos
@@ -116,7 +116,7 @@ class CicloExecucaoPlanoTest {
         try {
             val store = com.brain.policy.FileApprovalStore(File(root, "approvals.jsonl"))
             val plano = PlanoExecucao("operação sensível", listOf(passo("sensitive", capacidade = "sandbox.hello", riskClass = com.brain.execution.RiskClass.HIGH)))
-            val pending = ciclo(root, approvalStore = store).executar(plano, "run-approval", "agent-1")
+            val pending = ciclo(root, approvalStore = store).autorizarEExecutar(plano, "run-approval", "agent-1")
             val approvalId = pending.passos.single().approvalId
             assertEquals(StatusPasso.AGUARDANDO_APROVACAO, pending.passos.single().status)
             assertNotNull(approvalId)

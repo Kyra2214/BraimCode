@@ -52,11 +52,11 @@ class BrainSandboxController(
                 )
             )
         )
-        return bridge.execute(plano, runId = runId, actor = actor)
+        return bridge.authorizeAndExecute(plano, runId = runId, actor = actor)
     }
 
     fun executePlan(plano: PlanoExecucao, runId: String = "plan-${System.currentTimeMillis()}"): ResultadoCiclo =
-        bridge.execute(plano, runId = runId, actor = actor)
+        bridge.authorizeAndExecute(plano, runId = runId, actor = actor)
 
     fun resumePlan(plano: PlanoExecucao, runId: String, approvalId: String): ResultadoCiclo =
         bridge.resume(plano, runId = runId, actor = actor, approvalId = approvalId)

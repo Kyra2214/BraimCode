@@ -1,15 +1,9 @@
 package com.sandbox.agent
 
+import com.brain.planner.AuthorizedPlan
 import com.brain.planner.PassoPlano
 import com.brain.planner.PlanoExecucao
-import com.brain.policy.Decision
-import com.brain.policy.ApprovalRequired
-import com.brain.policy.ApprovalRequest
-import com.brain.policy.ApprovalStore
-import com.brain.policy.ExecutionAuthorization
-import com.brain.policy.PolicyBroker
-import com.brain.policy.PolicyContext
-import com.brain.policy.PolicyDecision
+import com.brain.policy.*
 import com.brain.qa.EvidenciaComando
 import com.brain.qa.ExecutorValidacaoProjeto
 import com.brain.qa.ResultadoValidacao
@@ -17,6 +11,7 @@ import com.brain.router.AIRouter
 import com.brain.router.ApiCatalog
 import com.brain.router.RoutingDecision
 import com.brain.router.RoutingProfile
+
 
 enum class StatusPasso { APROVADO, REPROVADO, NEGADO_PELA_POLICY, AGUARDANDO_APROVACAO, BLOQUEADO_POR_DEPENDENCIA }
 
@@ -39,39 +34,7 @@ data class ResultadoCiclo(
     val aprovado: Boolean get() = passos.isNotEmpty() && passos.all { it.status == StatusPasso.APROVADO }
 }
 
-/**
- * Etapa 6 do plano de integração Brain+Sandbox
- * (docs/PLANO_INTEGRACAO_BRAIN_SANDBOX.md): o primeiro ciclo real ligando
- * Policy (Etapa 2) + Sessão (Etapa 3) + CapabilityResolver (Etapa 4, já
- * embutido em [AgentSandboxSession.rodarCapacidade]) + Router (Etapa 5)
- * num fluxo único, com o Validator revisando cada passo antes do próximo
- * rodar — a "virada" que o plano descrevia como faltante.
- *
- * Por passo, nesta ordem: Router escolhe provider (só quando o passo
- * declara [PassoPlano.papel]) -> Policy autoriza -> Sandbox abre sessão ->
- * capacidade roda -> Validator roda contra o workspace da sessão. O ciclo
- * percorre [PlanoExecucao.ordemDeExecucao] (já topologicamente ordenada) e
- * aborta assim que um passo não fecha (política nega/pergunta, ou
- * validação reprova) — os passos restantes ficam BLOQUEADO_POR_DEPENDENCIA,
- * nunca chegam a rodar.
- *
- * Limitações conscientes desta etapa:
- * - O Router só registra a escolha (via [RoutingDecision] no resultado); a
- *   chamada de rede pro provider/modelo escolhido ainda não existe — quem
- *   executa de fato é sempre [AgentSandboxSession.rodarCapacidade], dentro
- *   do Sandbox. Ligar o Router a uma chamada de API real fica para depois.
- * - Validação roda no processo do host (JVM), não dentro do proot — mesma
- *   limitação já documentada em [ExecutorValidacaoProjeto]; aqui só se
- *   aponta o executor pro [AgentSandboxSession.workspaceHostPath].
- * - "Corrigir e tentar de novo" (o Critic reescrevendo um passo REPROVADO)
- *   não está implementado — [executar] só reporta o resultado; decidir se
- *   tenta de novo é do chamador (mesma divisão de responsabilidade que
- *   [com.brain.router.AIRouter.proximaAlternativa] já assume na Etapa 5).
- * - Decision.ASK só é reportada como AGUARDANDO_APROVACAO; não há
- *   mecanismo de espera/retomada de aprovação humana aqui.
- * - Todos os passos compartilham o mesmo `actor`/`runId` e correm em
- *   série — sem paralelismo entre ramos independentes do plano ainda.
- */
+/** Executa somente planos que já carregam autorizações por passo emitidas pelo Brain. */
 class CicloExecucaoPlano(
     private val policyBroker: PolicyBroker,
     private val sandbox: Sandbox,
@@ -81,107 +44,66 @@ class CicloExecucaoPlano(
     private val profiles: List<RoutingProfile> = emptyList(),
     private val approvalStore: ApprovalStore? = null
 ) {
-
     private val approvedSteps = mutableSetOf<String>()
 
-    fun executar(plano: PlanoExecucao, runId: String, actor: String): ResultadoCiclo {
+    /** Fronteira Agent/Sandbox: não aceita PlanoExecucao cru. */
+    fun executar(autorizado: AuthorizedPlan, runId: String, actor: String): ResultadoCiclo {
+        val plano = autorizado.plan
         val resultados = mutableListOf<ResultadoPasso>()
         val concluidos = mutableSetOf<String>()
         var abortado = false
-
         for (passo in plano.ordemDeExecucao) {
             if (abortado) {
-                resultados += ResultadoPasso(
-                    passoId = passo.id,
-                    status = StatusPasso.BLOQUEADO_POR_DEPENDENCIA,
-                    motivo = "ciclo abortado por um passo anterior não ter fechado"
-                )
+                resultados += ResultadoPasso(passo.id, StatusPasso.BLOQUEADO_POR_DEPENDENCIA, motivo = "ciclo abortado por passo anterior")
                 continue
             }
-
-            val dependenciaFaltando = passo.dependeDe.firstOrNull { it !in concluidos }
-            if (dependenciaFaltando != null) {
-                resultados += ResultadoPasso(
-                    passoId = passo.id,
-                    status = StatusPasso.BLOQUEADO_POR_DEPENDENCIA,
-                    motivo = "depende de '$dependenciaFaltando', que não foi concluído com sucesso"
-                )
+            val dependencia = passo.dependeDe.firstOrNull { it !in concluidos }
+            if (dependencia != null) {
+                resultados += ResultadoPasso(passo.id, StatusPasso.BLOQUEADO_POR_DEPENDENCIA, motivo = "depende de '$dependencia'")
                 continue
             }
-
-            val resultado = processarPasso(passo, runId, actor)
+            val resultado = processarPasso(passo, autorizado.authorizations.getValue(passo.id), autorizado.decisions[passo.id])
             resultados += resultado
             if (resultado.status == StatusPasso.APROVADO) concluidos += passo.id else abortado = true
         }
-
         return ResultadoCiclo(plano.objetivo, runId, resultados)
     }
 
-    /** Retoma um plano após consumir uma aprovação persistida, uma única vez. */
+    /** Autoriza todos os passos antes de emitir o wrapper aceito pelo Agent. */
+    fun autorizarEExecutar(plano: PlanoExecucao, runId: String, actor: String): ResultadoCiclo {
+        val authorizations = linkedMapOf<String, ExecutionAuthorization>()
+        val decisions = linkedMapOf<String, PolicyDecision>()
+        for (passo in plano.ordemDeExecucao) {
+            val highRisk = passo.riskClass == com.brain.execution.RiskClass.HIGH || passo.riskClass == com.brain.execution.RiskClass.CRITICAL
+            val contexto = PolicyContext(runId, passo.id, actor, riskClass = passo.riskClass, approval = if (highRisk && passo.id !in approvedSteps) ApprovalRequired.USER else ApprovalRequired.NONE)
+            val decision = policyBroker.authorize(actor, passo.capacidade, passo.id, contexto)
+            if (decision.decision != Decision.ALLOW) {
+                val approvalId = if (decision.decision == Decision.ASK) approvalStore?.create(ApprovalRequest(runId, passo.id, passo.capacidade, passo.id, java.time.Instant.parse(decision.expiresAt)))?.request?.id else null
+                return ResultadoCiclo(plano.objetivo, runId, listOf(ResultadoPasso(passo.id, if (decision.decision == Decision.ASK) StatusPasso.AGUARDANDO_APROVACAO else StatusPasso.NEGADO_PELA_POLICY, decisaoPolicy = decision, motivo = decision.reason, approvalId = approvalId)))
+            }
+            authorizations[passo.id] = ExecutionAuthorization.fromDecision(decision)
+                ?: return ResultadoCiclo(plano.objetivo, runId, listOf(ResultadoPasso(passo.id, StatusPasso.NEGADO_PELA_POLICY, decisaoPolicy = decision, motivo = "autorização inválida")))
+            decisions[passo.id] = decision
+        }
+        return executar(AuthorizedPlan.issue(plano, authorizations, decisions), runId, actor)
+    }
+
     fun retomar(plano: PlanoExecucao, runId: String, actor: String, approvalId: String): ResultadoCiclo {
         val approval = approvalStore?.consume(approvalId)
             ?: return ResultadoCiclo(plano.objetivo, runId, listOf(ResultadoPasso("approval", StatusPasso.NEGADO_PELA_POLICY, motivo = "aprovação inexistente, já consumida ou expirada", approvalId = approvalId)))
         require(approval.request.runId == runId) { "aprovação pertence a outro runId" }
         approvedSteps += approval.request.taskId
-        return try { executar(plano, runId, actor) } finally { approvedSteps -= approval.request.taskId }
+        return try { autorizarEExecutar(plano, runId, actor) } finally { approvedSteps -= approval.request.taskId }
     }
 
-    private fun processarPasso(passo: PassoPlano, runId: String, actor: String): ResultadoPasso {
+    private fun processarPasso(passo: PassoPlano, authorization: ExecutionAuthorization, decision: PolicyDecision?): ResultadoPasso {
         val decisaoRouter = passo.papel?.let { router.decidir(it, catalog, profiles) }
-
-        val requiresApproval = passo.riskClass == com.brain.execution.RiskClass.HIGH || passo.riskClass == com.brain.execution.RiskClass.CRITICAL
-        val contexto = PolicyContext(
-            runId = runId,
-            taskId = passo.id,
-            actor = actor,
-            riskClass = passo.riskClass,
-            approval = if (requiresApproval && passo.id !in approvedSteps) ApprovalRequired.USER else ApprovalRequired.NONE
-        )
-        val decisaoPolicy = policyBroker.authorize(actor, passo.capacidade, resource = passo.id, contexto)
-        val autorizacao = ExecutionAuthorization.fromDecision(decisaoPolicy)
-            ?: return ResultadoPasso(
-                passoId = passo.id,
-                status = if (decisaoPolicy.decision == Decision.ASK) StatusPasso.AGUARDANDO_APROVACAO else StatusPasso.NEGADO_PELA_POLICY,
-                decisaoPolicy = decisaoPolicy,
-                decisaoRouter = decisaoRouter,
-                motivo = decisaoPolicy.reason,
-                approvalId = if (decisaoPolicy.decision == Decision.ASK) {
-                    approvalStore?.create(
-                        ApprovalRequest(
-                            runId = runId,
-                            taskId = passo.id,
-                            capability = passo.capacidade,
-                            resource = passo.id,
-                            expiresAt = java.time.Instant.parse(decisaoPolicy.expiresAt)
-                        )
-                    )?.request?.id
-                } else null
-            )
-
-        sandbox.abrirSessao(autorizacao).use { sessao ->
+        sandbox.abrirSessao(authorization).use { sessao ->
             val execucao = sessao.rodarCapacidade(passo.parametros)
-            if (execucao is AgentSandboxSession.CommandOutcome.Refused) {
-                return ResultadoPasso(
-                    passoId = passo.id,
-                    status = StatusPasso.REPROVADO,
-                    decisaoPolicy = decisaoPolicy,
-                    decisaoRouter = decisaoRouter,
-                    execucao = execucao,
-                    motivo = execucao.reason
-                )
-            }
-
+            if (execucao is AgentSandboxSession.CommandOutcome.Refused) return ResultadoPasso(passo.id, StatusPasso.REPROVADO, decisaoPolicy = decision, decisaoRouter = decisaoRouter, execucao = execucao, motivo = execucao.reason)
             val evidencias = validador.validar(sessao.workspaceHostPath)
             val reprovado = evidencias.any { it.resultado == ResultadoValidacao.FALHOU }
-            return ResultadoPasso(
-                passoId = passo.id,
-                status = if (reprovado) StatusPasso.REPROVADO else StatusPasso.APROVADO,
-                decisaoPolicy = decisaoPolicy,
-                decisaoRouter = decisaoRouter,
-                execucao = execucao,
-                evidencias = evidencias,
-                motivo = if (reprovado) "validação encontrou ao menos uma evidência FALHOU" else null
-            )
+            return ResultadoPasso(passo.id, if (reprovado) StatusPasso.REPROVADO else StatusPasso.APROVADO, decisaoPolicy = decision, decisaoRouter = decisaoRouter, execucao = execucao, evidencias = evidencias, motivo = if (reprovado) "validação encontrou evidência FALHOU" else null)
         }
     }
 }

@@ -32,9 +32,9 @@ class ProotProcessLauncher(
 
     override fun launch(command: List<String>, workingDir: String, networkAllowed: Boolean): Process {
         val setsid = findSetsid()
-        val unshare = if (networkAllowed) null else findUnshare()
-        if (!networkAllowed && unshare == null) {
-            throw UnsupportedOperationException("bloqueio de rede exige unshare(CLONE_NEWNET); proot sozinho não isola sockets")
+        val unshare = if (networkAllowed) findUnshare() else null
+        if (networkAllowed && unshare == null) {
+            throw UnsupportedOperationException("isolamento de rede exige unshare(CLONE_NEWNET); proot sozinho não isola sockets")
         }
         val args = buildList {
             setsid?.let { add(it) }

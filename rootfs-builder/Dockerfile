@@ -100,6 +100,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN python3 -m pip install --break-system-packages --no-cache-dir ruff black mypy \
     && rm -rf /root/.cache/pip
 
+# Alguns pacotes Debian podem deixar um .dist-info inválido (por exemplo,
+# com `name` minúsculo), fazendo o pip emitir warnings em qualquer comando.
+# Remove somente metadata inválida e reinstala o pacote com metadata padrão.
+RUN find /usr/lib /usr/local/lib -type d -name 'charset_normalizer-*.dist-info' -print0 2>/dev/null \
+    | while IFS= read -r -d '' metadata; do \
+        if ! grep -q '^Name:' "$metadata/METADATA" 2>/dev/null; then rm -rf "$metadata"; fi; \
+      done \
+    && python3 -m pip install --break-system-packages --no-cache-dir --force-reinstall charset-normalizer \
+    && rm -rf /root/.cache/pip
+
 # Ferramentas JavaScript disponíveis para qualquer agente sem instalação
 # adicional no meio da tarefa.
 RUN npm install --global --no-audit --no-fund eslint prettier yarn pnpm \

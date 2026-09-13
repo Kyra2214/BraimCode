@@ -51,6 +51,6 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
 - [x] Ligar `RemotePluginCatalog` ao `PluginManager` real por catálogo composto; snapshots aceitos passam a aparecer na busca e podem ser instalados pelo mesmo fluxo protegido.
 - [ ] Adicionar transporte remoto e autorização local acionada pela UI para coletar/importar snapshots; a API atual permanece explícita e sem rede implícita.
-- [ ] Remover o enum `GitOperation` (não usado nem pelo próprio `GitManager`) ou passar a usá-lo.
-- [ ] Remover `__pycache__/*.pyc` do pacote (contradiz o próprio `.gitignore`).
-- [ ] Deixar explícito no `README.md` que `reference/braincode-python/` é histórico e não faz parte do build ativo (feito nesta rodada — conferir se persiste em futuros merges).
+- [x] Remover o enum `GitOperation` não utilizado do `GitManager`.
+- [x] Verificar e remover `__pycache__/*.pyc` do pacote; nenhuma ocorrência permanece.
+- [x] Deixar explícito no `README.md` que `reference/braincode-python/` é histórico e não faz parte do build ativo.

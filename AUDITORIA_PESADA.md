@@ -4,7 +4,7 @@
 
 ## Veredito executivo
 
-O Braim/BrainCode tem hoje **dois produtos que compilam e testam bem, mas não se falam em tempo de execução**:
+O Braim/BrainCode tem hoje **três camadas executáveis, com integração parcial entre o app Android e o Brain Kotlin**:
 
 1. **Runtime Python (`brain_runtime/`)** — reference runtime funcional, testável e auditável, com 134 testes automatizados. Continua não devendo ser classificado como plataforma de produção plenamente isolada (isolamento OS-level depende do host).
 2. **App Android (`:app` + `:android-module`)** — roda de verdade num device: baixa o rootfs, executa comandos via `proot`, instala plugins de um catálogo local. É o único caminho que um usuário final realmente aciona.
@@ -45,7 +45,7 @@ Kotlin: `:brain` e `:app` compilam e testam (ver sessões registradas em `ROADMA
 | Project Intelligence | Scanner e contexto `.projectbrain/` | `project_intelligence.py` | análise semântica profunda e CI remoto |
 | Readiness | Gate com score, blockers, warnings e exit code | `readiness.py`, runtime E2E | políticas de release específicas da organização |
 | Release Intelligence | Comparação Git e heurística de regressão | `release_intelligence.py` | diagnóstico causal e histórico de produção |
-| Android Mobile (Sandbox) | Implementado e roda no device | `:app`, `:android-module`, `AndroidManifest.xml`, Activity Compose, `assembleDebug` OK | falta cobrir com UI os subsistemas já implementados (Git, Workspace, Services, TestLab, Security*, Toolchains) — hoje construídos mas sem tela |
+| Android Mobile (Sandbox) | Implementado e acionável pela UI | `:app`, `:android-module`, `AndroidManifest.xml`, Activity Compose, aba Operações | validação em device/emulador, RootFS/proot real, assinatura e gates de produção |
 | Integração `:brain` ↔ `:app` | Primeira fatia real (`sandbox.health`) | `SandboxViewModel` → `BrainSandboxController` → `BrainSandboxExecutionBridge` | integrar planos de usuário, aprovação/retomada e demais subsistemas — ver `PLANO_DE_ACAO.md` |
 
 ## Riscos remanescentes
@@ -60,7 +60,7 @@ Filesystem jail via Bubblewrap, cgroups graváveis, seccomp, capabilities mínim
 
 O contrato Kotlin em `brain/src/main/kotlin/com/brain/execution/SandboxContract.kt` é útil como referência e não é consumido pelo runtime Python (isso é esperado — são duas implementações paralelas, não uma dependendo da outra). A primeira operação real agora instancia `BrainSandboxController` após o preparo do runtime e percorre `BrainSandboxExecutionBridge`/`CicloExecucaoPlano` para `sandbox.health`. Isso ainda não constitui um "Ciclo Android unificado": planos de usuário, aprovação/retomada e os demais componentes do `:brain` não são acionados pelo app (ver `PLANO_DE_ACAO.md`, Fase B).
 
-Da mesma forma, dentro do próprio `app`, `SandboxPlatform` instancia `WorkspaceManager`, `GitManager`, `ServiceManager` e `TestLab`, mas nenhum deles é chamado pela UI (`MainActivity` só tem abas de Validação, Plugins e Ferramentas). São subsistemas prontos e testados, mas inacessíveis ao usuário final hoje.
+Dentro do próprio `app`, `SandboxPlatform` instancia `WorkspaceManager`, `GitManager`, `ServiceManager`, `TestLab`, segurança e toolchains; a aba **Operações** aciona os fluxos básicos de Workspace, Git status, SQLite, TestLab, avaliação de segurança e toolchains. Operações Git completas, terminal dedicado, executor adversarial e validação em device continuam pendentes.
 
 ### Routing e providers
 

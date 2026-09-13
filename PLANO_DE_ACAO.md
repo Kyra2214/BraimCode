@@ -12,10 +12,10 @@ O repositório contém **dois produtos que não se falam**: o Sandbox Mobile (ro
 
 Objetivo: nenhum documento do repo deve alegar integração que não existe. Isso é pré-requisito pra qualquer decisão de arquitetura, porque hoje `ROADMAP_UNIFICADO.md` e `AUDITORIA_PESADA.md` estão desalinhados com o código.
 
-- [ ] Corrigir `README.md`: contagem de testes (116 → 134), remover os 3 links quebrados (`docs/PLANO_INTEGRACAO_BRAIN_SANDBOX.md`, `docs/ROADMAP_IMPLEMENTADO.md`, `docs/IMPLEMENTATION_STATUS.md`), adicionar seção "Estado real de integração".
-- [ ] Reescrever `AUDITORIA_PESADA.md`: tirar a alegação de que "Android Mobile: não iniciado" (hoje há 3 módulos Gradle reais), atualizar contagem de testes, documentar o achado central (Brain isolado do app).
-- [ ] Corrigir `ROADMAP_UNIFICADO.md`: rebaixar a Fase 3 ("Ciclo Android unificado") de ✅/🟡 para refletir que a ponte existe mas não é chamada por ninguém fora de teste; mesma correção pontual nos itens que citam `BrainSandboxExecutionBridge`, `ObservableDelivery`, `SecurityScenarioCatalog`, `RemotePluginCatalog`, `ToolchainManager` como prontos.
-- [ ] Atualizar `TAREFAS_PENDENTES.md` com as pendências novas listadas na Fase B abaixo.
+- [x] Corrigir `README.md`: contagem de testes, estado real de integração e referência aos gates Android/produção.
+- [x] Reescrever `AUDITORIA_PESADA.md`: atualizar o estado Android, a contagem de testes e o achado central sobre a integração parcial Brain ↔ app.
+- [x] Corrigir `ROADMAP_UNIFICADO.md`: distinguir caminhos acionados pela UI de componentes ainda parciais ou dependentes de infraestrutura.
+- [x] Atualizar `TAREFAS_PENDENTES.md` com as pendências novas listadas na Fase B abaixo.
 
 *(Estas quatro edições já estão aplicadas neste pacote — ver arquivos atualizados.)*
 

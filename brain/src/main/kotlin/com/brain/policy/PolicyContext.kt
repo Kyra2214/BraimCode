@@ -12,22 +12,8 @@ enum class Decision { ALLOW, ASK, DENY }
  */
 enum class ApprovalRequired { NONE, USER, ADMIN }
 
-/**
- * Alias local para o RiskClass do contrato de execução — a Policy e o
- * Sandbox compartilham a mesma classificação de risco, não duplicam enums.
- */
 typealias RiskClass = com.brain.execution.RiskClass
 
-/**
- * O que o solicitante (Brain/Agente) declara antes de pedir autorização.
- * O PolicyBroker nunca confia nesses valores como fato consumado — ele os
- * valida e decide com base neles (deny-by-default).
- *
- * @property budget valores livres de orçamento (ex.: "cpu_ms", "output_bytes")
- *   — mapeamento genérico igual ao Python; a conversão para o
- *   [com.brain.execution.ResourceBudget] estruturado do contrato de
- *   execução acontece em [ExecutionAuthorization], não aqui.
- */
 data class PolicyContext(
     val runId: String,
     val taskId: String,
@@ -49,10 +35,12 @@ data class PolicyContext(
 }
 
 /**
- * Registro imutável de uma decisão de autorização. Nunca é reescrito depois
- * de emitido — uma nova decisão é sempre uma nova instância, com novo
- * [decisionId]. Espelha PolicyDecision em
- * reference/braincode-python/brain_runtime/models.py.
+ * Registro imutável de uma decisão de autorização.
+ *
+ * [authorizationToken] é emitido exclusivamente pelo PolicyBroker. Isso é
+ * importante porque PolicyDecision é uma data class e, portanto, possui
+ * copy(): alterar capability/resource via copy() não pode produzir uma nova
+ * autorização válida, pois o token continua vinculado aos valores originais.
  */
 data class PolicyDecision(
     val decisionId: String,
@@ -69,7 +57,8 @@ data class PolicyDecision(
     val budget: Map<String, Long>,
     val expiresAt: String,
     val reason: String,
-    val resource: String = ""
+    val resource: String = "",
+    val authorizationToken: AuthorizationToken? = null
 ) {
     val isExpired: Boolean
         get() = java.time.Instant.now().isAfter(java.time.Instant.parse(expiresAt))

@@ -124,7 +124,9 @@ fun SandboxValidationScreen(viewModel: SandboxViewModel) {
         LocalModelSection(viewModel)
         ChatboxSection(viewModel)
         val phase = viewModel.phase
-        if (phase is SandboxPhase.Ready || phase is SandboxPhase.Running) CommandSection(viewModel)
+        // Terminal livre é superfície de alto risco: permanece disponível
+        // apenas em build debug para desenvolvimento, nunca na release.
+        if (BuildConfig.DEBUG && (phase is SandboxPhase.Ready || phase is SandboxPhase.Running)) CommandSection(viewModel)
         viewModel.lastResult?.let { ResultSection(it, viewModel.lastExecution) }
         viewModel.diagnosticsReport?.let { DiagnosticsSection(it) }
         viewModel.selfCheckReport?.let { SelfCheckReportSection(it) }

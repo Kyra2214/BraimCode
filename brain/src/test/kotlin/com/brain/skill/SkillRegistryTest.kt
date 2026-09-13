@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class SkillRegistryTest {
     private fun skill(enabled: Boolean = true, trust: TrustLevel = TrustLevel.CORE, source: String = "builtin") = SkillManifest(
@@ -35,5 +36,16 @@ class SkillRegistryTest {
         registry.revoke("code.analysis", "conteúdo inseguro")
         assertFalse(registry.isUsable("code.analysis"))
         assertTrue(registry.get("code.analysis")!!.revoked)
+    }
+
+    @Test(expected = SecurityException::class)
+    fun `revogação persiste após reinicialização do registry`() {
+        val file = File.createTempFile("skill-revocations-", ".tsv")
+        try {
+            val first = SkillRegistry(revocationFile = file)
+            first.register(skill())
+            first.revoke("code.analysis", "conteúdo inseguro")
+            SkillRegistry(revocationFile = file).register(skill())
+        } finally { file.delete() }
     }
 }

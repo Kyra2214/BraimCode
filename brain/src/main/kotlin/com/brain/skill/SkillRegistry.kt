@@ -5,6 +5,7 @@ import java.security.KeyFactory
 import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
+import java.io.File
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -40,9 +41,20 @@ data class SkillRecord(
  * Catálogo declarativo de Skills. Registrar uma Skill nunca concede autorização;
  * as permissões continuam sendo decididas pelo PolicyBroker no momento da execução.
  */
-class SkillRegistry(private val trustedSigningKeys: Map<String, ByteArray> = emptyMap()) {
+class SkillRegistry(
+    private val trustedSigningKeys: Map<String, ByteArray> = emptyMap(),
+    private val revocationFile: File? = null
+) {
     private val records = ConcurrentHashMap<String, SkillRecord>()
+    private val persistedRevocations = ConcurrentHashMap<String, String>()
     private val lock = Any()
+
+    init {
+        revocationFile?.takeIf { it.isFile }?.forEachLine { line ->
+            val separator = line.indexOf('\t')
+            if (separator > 0) persistedRevocations[line.substring(0, separator)] = line.substring(separator + 1)
+        }
+    }
 
     fun register(manifest: SkillManifest, content: String? = null): SkillRecord = synchronized(lock) {
         validate(manifest)
@@ -54,7 +66,7 @@ class SkillRegistry(private val trustedSigningKeys: Map<String, ByteArray> = emp
             throw SecurityException("Skill externa ativa exige assinatura Ed25519 verificável")
         }
         val existing = records[manifest.id]
-        if (existing?.revoked == true) throw SecurityException("Skill revogada: ${manifest.id}")
+        if (existing?.revoked == true || manifest.id in persistedRevocations) throw SecurityException("Skill revogada: ${manifest.id}")
         val record = SkillRecord(manifest.copy(contentHash = manifest.contentHash ?: calculated), Instant.now())
         records[manifest.id] = record
         record
@@ -64,6 +76,11 @@ class SkillRegistry(private val trustedSigningKeys: Map<String, ByteArray> = emp
         val current = records[id] ?: throw NoSuchElementException("Skill não encontrada: $id")
         val revoked = current.copy(revoked = true, revocationReason = reason)
         records[id] = revoked
+        persistedRevocations[id] = reason
+        revocationFile?.let { file ->
+            file.parentFile?.mkdirs()
+            file.appendText("$id\t$reason\n")
+        }
         revoked
     }
 

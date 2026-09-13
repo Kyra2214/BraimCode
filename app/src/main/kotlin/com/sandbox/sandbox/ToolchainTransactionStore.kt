@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-/** Persistência local de transações/cache de toolchains. Sem rede e sem dependência de servidor. */
+/** Persistência local de transações/cache de toolchains. Sem rede e sem servidor. */
 class ToolchainTransactionStore(private val directory: File) {
     init { directory.mkdirs() }
 
@@ -12,17 +12,22 @@ class ToolchainTransactionStore(private val directory: File) {
         val profileId: String,
         val state: ToolchainState,
         val versionOutput: String,
+        /** Pacotes que já estavam instalados, no formato pkg=versão. */
         val installedPackages: List<String>,
         val transactionId: String,
         val createdAt: Long
     )
 
-    fun saveBeforeInstall(profile: ToolchainProfile, previous: ToolchainStatus): Snapshot {
+    fun saveBeforeInstall(
+        profile: ToolchainProfile,
+        previous: ToolchainStatus,
+        installedPackagesBefore: List<String>
+    ): Snapshot {
         val snapshot = Snapshot(
             profile.id,
             previous.state,
             previous.versionOutput,
-            profile.packages,
+            installedPackagesBefore.distinct().sorted(),
             transactionId(profile.id, previous.updatedAt),
             System.currentTimeMillis()
         )
@@ -30,8 +35,11 @@ class ToolchainTransactionStore(private val directory: File) {
         return snapshot
     }
 
-    fun loadSnapshot(profileId: String): Snapshot? = read(snapshotFile(profileId))?.let(::decode)
+    /** Compatibilidade: snapshot vazio significa que nenhum pacote pré-existente foi observado. */
+    fun saveBeforeInstall(profile: ToolchainProfile, previous: ToolchainStatus): Snapshot =
+        saveBeforeInstall(profile, previous, emptyList())
 
+    fun loadSnapshot(profileId: String): Snapshot? = read(snapshotFile(profileId))?.let(::decode)
     fun clearSnapshot(profileId: String) { snapshotFile(profileId).delete() }
 
     fun cache(status: ToolchainStatus) {

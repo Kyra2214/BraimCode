@@ -1,6 +1,6 @@
 # Rootfs Builder — Sandbox Mobile
 
-Este diretório contém tudo que é necessário para construir o rootfs
+Este diretório contém tudo o que é necessário para construir o rootfs
 completo (**Ubuntu 24.04**) que será baixado e executado dentro do app via
 `proot`.
 
@@ -36,39 +36,69 @@ Isso vai:
    `../output/rootfs-ubuntu-<versão>.tar.gz`.
 3. Gerar o hash SHA-256 em `../output/rootfs-ubuntu-<versão>.tar.gz.sha256`.
 4. Gerar `../output/rootfs_manifest.json` já preenchido (URL, tamanho,
-   hash, distro) apontando para uma release em `Kyra2214/SandBox` —
-   decisão de hospedagem registrada em `docs/roadmap-sandbox-fase0.md`,
-   item 0.2.
+   hash, distro) apontando para uma release em `Kyra2214/BrainCode`.
 
 ## Resultado — release publicada
 
 O `.tar.gz` gerado precisa ficar acessível por HTTP (nunca vai dentro do
-APK). Optamos por GitHub Releases do próprio repositório do projeto
-(https://github.com/Kyra2214/SandBox), porque o CDN deles já suporta o
-header `Range`, que é o que `SandboxResourceManager` usa pra retomar
-downloads interrompidos.
+APK). A distribuição agora pertence ao próprio repositório do projeto:
+`Kyra2214/BrainCode`. O CDN dos GitHub Releases suporta o header `Range`,
+que é o que `SandboxResourceManager` usa para retomar downloads interrompidos.
 
-O build da versão `0.2.0` foi concluído e a release foi publicada em
-`rootfs-v0.2.0`. O comando usado foi:
+Para uma NOVA build, o procedimento é:
 
 ```bash
-gh release create rootfs-v0.2.0 \
-  ../output/rootfs-ubuntu-0.2.0.tar.gz \
-  --repo Kyra2214/SandBox \
-  --title "Rootfs 0.2.0 (Ubuntu 24.04)" \
-  --notes "Rootfs completo (Ubuntu 24.04) para o Sandbox Mobile, arch arm64-v8a"
+gh release create rootfs-v<versão> \
+  ../output/rootfs-ubuntu-<versão>.tar.gz \
+  ../output/rootfs-ubuntu-<versão>.tar.gz.sha256 \
+  --repo Kyra2214/BrainCode \
+  --title "Rootfs <versão> (Ubuntu 24.04)"
 ```
 
-Esse comando é o procedimento para uma versão futura. Sem `gh` CLI instalado, o mesmo dá pra fazer pela interface web: Releases
-→ "Draft a new release" → tag `rootfs-v0.2.0` → arrastar o `.tar.gz`
-como asset → publicar.
+O manifesto deve apontar para a release publicada e o app valida o SHA-256
+antes de considerar o RootFS pronto para uso.
 
-O manifesto já foi copiado para `app/src/main/res/raw/rootfs_manifest.json`.
-O hash SHA-256 é o mesmo padrão de validação de integridade usado no app
-(baixa → confere hash → só então considera pronto pra uso).
+## IMPORTANTE — migração dos RootFS já validados
 
-O histórico `../output/rootfs-build-info.txt` já registra o SHA-256 e o
-tamanho reais da release publicada.
+Os RootFS da primeira fase já foram construídos, testados e publicados no
+`Kyra2214/SandBox`. **Eles não devem ser reconstruídos para esta migração.**
+
+A migração é exclusivamente byte-a-byte:
+
+```text
+SandBox release validado
+        │
+        ├── download do asset original
+        ├── verificação de tamanho
+        ├── verificação de SHA-256
+        │
+        ▼
+BrainCode release equivalente
+        │
+        └── mesmo .tar.gz + mesmo .sha256
+```
+
+Use:
+
+```bash
+cd rootfs-builder
+bash migrate-sandbox-releases.sh
+```
+
+O script migra exatamente estes três releases:
+
+| Origem | Destino | Arquivo |
+|---|---|---|
+| `rootfs-v0.3.3` | `rootfs-v0.3.3` | `rootfs-ubuntu-0.3.3.tar.gz` |
+| `rootfs-agent-v0.4.1` | `rootfs-agent-v0.4.1` | `rootfs-agent-extra-0.4.1.tar.gz` |
+| `rootfs-agent-android-v0.5.0` | `rootfs-agent-android-v0.5.0` | `rootfs-agent-android-0.5.0.tar.gz` |
+
+Os tamanhos e hashes esperados estão registrados em
+`docs/SANDBOX_RELEASE_MIGRATION.md`. Se qualquer verificação falhar, o
+script interrompe a migração. Não há rebuild automático.
+
+O script também atualiza os manifests para as URLs do BrainCode somente após
+publicar/verificar os assets.
 
 ## Ferramentas para agentes
 
@@ -102,9 +132,8 @@ comprovada — isso é decisão de fase futura (Fase 1+), não da fundação.
 
 ## Próximo passo (Fase 0.2 e 0.3 do roadmap)
 
-Este builder só resolve o item 0.1 do roadmap (`docs/roadmap-sandbox-fase0.md`).
-O reteste manual em device real com a nova base continua sendo a próxima
-verificação operacional, descrita em `output/rootfs-build-info.txt`.
+Este builder resolve a fabricação de novas versões. Para os artefatos da
+primeira fase já validados, a operação correta é a migração documentada acima.
 
 ## RootFS Agent Android/API 0.5.0
 

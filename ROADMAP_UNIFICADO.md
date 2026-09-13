@@ -15,6 +15,8 @@
 
 RootFS Ubuntu 24.04, download/extração, `proot`, runtime de execução de comandos, timeout, cancelamento, lifecycle, persistência de execução, logs/observabilidade, reset, tela de validação, empacotamento Android, testes da fundação.
 
+- **Distribuição dos releases RootFS validados**: ✅ concluída — os artefatos `rootfs-v0.3.3`, `rootfs-agent-v0.4.1` e `rootfs-agent-android-v0.5.0` foram migrados byte-a-byte de `Kyra2214/SandBox` para releases equivalentes em `Kyra2214/BrainCode`; tamanhos e SHA-256 foram verificados antes e depois, os manifests apontam para o BrainCode e a documentação específica está em `docs/SANDBOX_RELEASE_0.3.3.md`, `docs/SANDBOX_RELEASE_AGENT_EXTRA_0.4.1.md` e `docs/SANDBOX_RELEASE_AGENT_ANDROID_0.5.0.md`.
+
 ---
 
 ## Fase 1 — Brain mínimo funcional (Python) + Ambiente Android

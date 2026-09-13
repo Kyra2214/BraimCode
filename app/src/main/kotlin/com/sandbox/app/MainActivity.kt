@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -323,7 +324,14 @@ private fun StatusSection(viewModel: SandboxViewModel) {
 @Composable
 private fun CommandSection(viewModel: SandboxViewModel) {
     val running = viewModel.phase is SandboxPhase.Running
-    Text("Comandos comuns de projeto:", style = MaterialTheme.typography.labelMedium)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Comandos comuns de projeto:", style = MaterialTheme.typography.labelMedium)
+        TextButton(onClick = { viewModel.clearTerminal() }, enabled = !running) { Text("Limpar") }
+    }
     QuickCommandsRow(enabled = !running, onPick = { viewModel.commandInput = it })
     OutlinedTextField(
         value = viewModel.commandInput,

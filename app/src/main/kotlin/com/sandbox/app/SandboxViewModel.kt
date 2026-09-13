@@ -113,6 +113,11 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         private set
     var lastExecution by mutableStateOf<ExecutionLog?>(null)
         private set
+    fun clearTerminal() {
+        commandInput = ""
+        lastResult = null
+        lastExecution = null
+    }
     var diagnosticsReport by mutableStateOf<String?>(null)
         private set
     var lastBrainCycle by mutableStateOf<ResultadoCiclo?>(null)

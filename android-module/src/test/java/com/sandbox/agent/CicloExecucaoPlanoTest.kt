@@ -26,8 +26,9 @@ class CicloExecucaoPlanoTest {
         id: String,
         capacidade: String = "sandbox.hello",
         dependeDe: List<String> = emptyList(),
-        papel: PapelPipeline? = null
-    ) = PassoPlano(id = id, capacidade = capacidade, criterioSucesso = "passo $id ok", dependeDe = dependeDe, papel = papel)
+        papel: PapelPipeline? = null,
+        riskClass: com.brain.execution.RiskClass = com.brain.execution.RiskClass.LOW
+    ) = PassoPlano(id = id, capacidade = capacidade, criterioSucesso = "passo $id ok", dependeDe = dependeDe, papel = papel, riskClass = riskClass)
 
     private fun ciclo(
         root: File,

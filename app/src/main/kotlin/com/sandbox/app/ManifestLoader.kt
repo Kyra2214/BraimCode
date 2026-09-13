@@ -33,7 +33,7 @@ object ManifestLoader {
             signatureUrl = obj.optString("signatureUrl", ""),
             signatureKeyId = obj.optString("signatureKeyId", ""),
             signatureAlgorithm = obj.optString("signatureAlgorithm", ""),
-            signatureRequired = obj.optBoolean("signatureRequired", false)
+            signatureRequired = obj.optBoolean("signatureRequired", true)
         )
         check(!manifest.url.contains(PLACEHOLDER_MARKER)) {
             "Manifesto do rootfs ainda não configurado: URL inválida para ${manifest.version}."

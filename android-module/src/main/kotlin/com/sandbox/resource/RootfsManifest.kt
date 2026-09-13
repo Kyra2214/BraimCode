@@ -17,5 +17,5 @@ data class RootfsManifest(
     val signatureUrl: String = "",
     val signatureKeyId: String = "",
     val signatureAlgorithm: String = "",
-    val signatureRequired: Boolean = false
+    val signatureRequired: Boolean = true
 ) : DownloadManifest

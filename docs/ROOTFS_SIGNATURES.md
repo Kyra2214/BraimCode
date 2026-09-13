@@ -39,7 +39,7 @@ export COSIGN_PUBLIC_KEY=/secure/keys/rootfs-cosign.pub
 
 `RootfsManifest` passou a transportar os metadados de assinatura. `SandboxResourceManager` continua verificando primeiro o SHA-256 e, para manifests que exigem assinatura, exige um `RootfsSignatureVerifier` configurado. O projeto inclui `Ed25519RootfsSignatureVerifier` como implementação para assinaturas detached Ed25519 codificadas em Base64 e chaves públicas X.509.
 
-O comportamento é fail-closed: um manifesto novo com `signatureRequired: true` não é aceito sem um verificador configurado e sem assinatura válida. Manifests legados sem o campo permanecem compatíveis para permitir a migração controlada dos artefatos já homologados.
+O comportamento é fail-closed: a ausência de `signatureRequired` agora equivale a `true`, portanto nenhum manifesto novo é aceito sem um verificador configurado e sem assinatura Ed25519 válida. Artefatos legados precisam ser reemitidos com assinatura antes de serem aceitos por esta versão do aplicativo.
 
 ## Limites
 

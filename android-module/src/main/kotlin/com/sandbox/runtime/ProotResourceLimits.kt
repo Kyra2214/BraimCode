@@ -102,13 +102,26 @@ data class ProotResourceLimits(
         const val MARKER = "__resource_limit_verification__"
 
         /**
-         * Mesmos padrões do `SandboxJob` no caminho de referência Python
+         * Baseado nos padrões do `SandboxJob` no caminho de referência Python
          * (`brain_runtime/sandbox.py`: `memory_mb=512`, `max_processes=32`,
          * `max_open_files=64`, `max_disk_bytes=100MB`, `RLIMIT_CPU=60`) —
-         * exceto `maxProcesses`, que fica `null` (ver docstring da classe).
+         * exceto `maxProcesses` (ver docstring da classe) e `maxMemoryBytes`.
+         *
+         * `maxMemoryBytes` foi elevado de 512MB para 4GB porque `ulimit -v`
+         * mapeia para `RLIMIT_AS`, que limita **espaço de endereçamento
+         * virtual reservado**, não RSS/memória física de fato usada. JVM e
+         * Go reservam de forma legítima centenas de MB de endereço virtual
+         * no boot (arenas de heap, tabelas de sumário do page allocator,
+         * guard pages de stack) mesmo processando cargas pequenas — a 512MB
+         * isso já falha antes do primeiro `java --version` ou `go version`
+         * ("Could not reserve enough space for ...", "failed to reserve page
+         * summary memory"), mesmo já reduzindo `-Xmx`. 4GB dá margem para
+         * esses runtimes sem deixar de aplicar teto nenhum (`ulimit -v
+         * unlimited` seguiria ausente); RSS real de processos individuais
+         * ainda fica naturalmente contido pela memória física do aparelho.
          */
         val DEFAULT = ProotResourceLimits(
-            maxMemoryBytes = 512L * 1024 * 1024,
+            maxMemoryBytes = 4L * 1024 * 1024 * 1024,
             maxCpuSeconds = 60,
             maxProcesses = null,
             maxOpenFiles = 64,

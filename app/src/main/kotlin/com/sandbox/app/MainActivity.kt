@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -102,6 +103,7 @@ fun SandboxValidationScreen(viewModel: SandboxViewModel) {
         if (phase is SandboxPhase.Ready || phase is SandboxPhase.Running) CommandSection(viewModel)
         viewModel.lastResult?.let { ResultSection(it, viewModel.lastExecution) }
         viewModel.diagnosticsReport?.let { DiagnosticsSection(it) }
+        viewModel.selfCheckReport?.let { SelfCheckReportSection(it) }
     }
 }
 
@@ -246,6 +248,38 @@ private fun DiagnosticsSection(report: String) {
 }
 
 @Composable
+private fun SelfCheckReportSection(report: com.sandbox.sandbox.SelfCheckReport) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val markdown = report.toMarkdown()
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Teste geral (relatório .md):", style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = {
+                    clipboard.setText(AnnotatedString(markdown))
+                    Toast.makeText(context, "Markdown copiado", Toast.LENGTH_SHORT).show()
+                }) { Text("Copiar") }
+            }
+            Text(
+                "${report.totalOk}/${report.totalItems} OK" +
+                    (if (report.totalWarnings > 0) ", ${report.totalWarnings} aviso(s)" else "") +
+                    (if (report.totalFailed > 0) ", ${report.totalFailed} falha(s)" else ""),
+                color = if (report.allOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text("Toque e segure o texto pra selecionar só um trecho.", style = MaterialTheme.typography.labelSmall)
+            SelectionContainer {
+                Text(markdown, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
 private fun StatusSection(viewModel: SandboxViewModel) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -294,6 +328,15 @@ private fun StatusSection(viewModel: SandboxViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { viewModel.resetSandbox() }) { Text("Resetar sandbox") }
                         OutlinedButton(onClick = { viewModel.runDiagnostics() }) { Text("Diagnóstico") }
+                    }
+                    Button(onClick = { viewModel.runFullSelfCheck() }, enabled = !viewModel.selfCheckRunning) {
+                        Text("Teste geral")
+                    }
+                    viewModel.selfCheckStage?.let {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text(it, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     Button(onClick = { viewModel.runBrainHealthCheck() }) {
                         Text("Verificar pelo Brain")

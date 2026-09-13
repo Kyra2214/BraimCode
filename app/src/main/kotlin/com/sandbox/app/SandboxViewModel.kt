@@ -24,6 +24,10 @@ import com.sandbox.sandbox.SecurityAssessment
 import com.sandbox.sandbox.PluginOperationRecord
 import com.sandbox.sandbox.PluginSnapshot
 import com.sandbox.sandbox.ToolchainStatus
+import com.sandbox.sandbox.SelfCheckReport
+import com.sandbox.sandbox.SelfCheckSection
+import com.sandbox.sandbox.SelfCheckItem
+import com.sandbox.sandbox.SelfCheckStatus
 import com.brain.planner.PlanoExecucao
 import com.sandbox.sandbox.Project
 import com.sandbox.sandbox.ServiceStatus
@@ -151,6 +155,113 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         private set
     var deliverySummary by mutableStateOf<String?>(null)
         private set
+
+    // --- Teste geral (self-check) ---
+    // Roda em etapas sequenciais (nunca em paralelo — o runtime só permite uma
+    // execução ativa por vez) pra permitir progresso visível item a item numa
+    // rootfs grande, em vez de travar a UI num único bloco. Cada etapa reusa
+    // um caminho já existente e já testado (ToolchainManager.refreshStatus,
+    // PluginManager.validate, inspectExtractedRootfs) com os timeouts que já
+    // estavam em produção — nenhum timeout novo foi inventado pra isso.
+    var selfCheckReport by mutableStateOf<SelfCheckReport?>(null)
+        private set
+    var selfCheckRunning by mutableStateOf(false)
+        private set
+    var selfCheckStage by mutableStateOf<String?>(null)
+        private set
+
+    /**
+     * "Teste geral": percorre toolchains, plugins/ferramentas instalados e a
+     * mini-LLM local, e confere o rootfs extraído no disco — produzindo um
+     * mini-relatório em Markdown. Serve pra ter certeza, depois de um rootfs
+     * de ~4GB, de que tudo que deveria estar instalado está mesmo funcional
+     * (não só presente no catálogo).
+     */
+    fun runFullSelfCheck() {
+        val plat = platform ?: return
+        if (selfCheckRunning || phase != SandboxPhase.Ready) return
+        viewModelScope.launch {
+            selfCheckRunning = true
+            phase = SandboxPhase.Running
+            try {
+                selfCheckStage = "Verificando toolchains (Java, Python, Node, C/C++, Rust, Go, Android SDK)..."
+                val toolchainItems = withContext(Dispatchers.IO) {
+                    com.sandbox.sandbox.BuiltInToolchains.all.map { profile ->
+                        val status = runCatching { plat.toolchains.refreshStatus(profile.id) }
+                            .getOrElse { error ->
+                                ToolchainStatus(profile.id, com.sandbox.sandbox.ToolchainState.FAILED, error = error.message ?: error.javaClass.simpleName)
+                            }
+                        withContext(Dispatchers.Main) { toolchainStatuses = toolchainStatuses + (profile.id to status) }
+                        // Android SDK/NDK é instalação opt-in por decisão de produto (peso em GB) — NOT_INSTALLED
+                        // aqui é o estado esperado por padrão, não uma falha do rootfs. As demais toolchains
+                        // (Java/Python/Node/C++/Rust/Go) vêm pré-instaladas no rootfs base, então NOT_INSTALLED
+                        // nelas é sinal real de problema na imagem.
+                        val optIn = profile.id == "android"
+                        val itemStatus = when (status.state) {
+                            com.sandbox.sandbox.ToolchainState.INSTALLED -> SelfCheckStatus.OK
+                            com.sandbox.sandbox.ToolchainState.NOT_INSTALLED -> if (optIn) SelfCheckStatus.WARNING else SelfCheckStatus.FAILED
+                            else -> SelfCheckStatus.FAILED
+                        }
+                        val detail = when {
+                            status.state == com.sandbox.sandbox.ToolchainState.INSTALLED -> status.versionOutput.lineSequence().firstOrNull()?.take(120) ?: "instalado"
+                            optIn && status.state == com.sandbox.sandbox.ToolchainState.NOT_INSTALLED -> "opcional — instale na aba Operações se precisar"
+                            else -> (status.error ?: "não encontrado").take(200)
+                        }
+                        SelfCheckItem(profile.displayName, itemStatus, detail)
+                    }
+                }
+
+                selfCheckStage = "Verificando plugins e ferramentas instalados..."
+                val pluginItems = withContext(Dispatchers.IO) {
+                    plat.plugins.components().mapNotNull { component ->
+                        val cached = plat.plugins.status(component.id)
+                        if (cached == null || cached.state != InstallationState.INSTALLED) return@mapNotNull null
+                        val stillWorks = runCatching { plat.plugins.validate(component) }.getOrDefault(false)
+                        SelfCheckItem(
+                            name = component.name,
+                            status = if (stillWorks) SelfCheckStatus.OK else SelfCheckStatus.FAILED,
+                            detail = if (stillWorks) (cached.version ?: "instalado") else "marcado como instalado, mas o comando de validação falhou agora"
+                        )
+                    }
+                }
+
+                selfCheckStage = "Verificando mini-LLM local..."
+                val llmItem = when {
+                    localModelReady -> SelfCheckItem("SmolLM2 135M Instruct (mini-LLM local)", SelfCheckStatus.OK, "baixada e verificada por SHA-256")
+                    localModelError != null -> SelfCheckItem("SmolLM2 135M Instruct (mini-LLM local)", SelfCheckStatus.WARNING, "download com falha: ${localModelError}")
+                    else -> SelfCheckItem("SmolLM2 135M Instruct (mini-LLM local)", SelfCheckStatus.WARNING, "ainda não baixada (download é opcional, sob demanda)")
+                }
+
+                selfCheckStage = "Conferindo arquivos do rootfs extraído no disco..."
+                val rootfsText = withContext(Dispatchers.IO) {
+                    runCatching { factory.inspectExtractedRootfs() }.getOrElse { "Falha ao inspecionar rootfs: ${it.message}" }
+                }
+                val hasMissingPath = rootfsText.contains("AUSENTE")
+                val totalMatch = Regex("Total: (\\d+) arquivos, (\\d+) pastas, (\\d+) symlinks, (\\d+) MB").find(rootfsText)
+                val sizeDetail = totalMatch?.let { "${it.groupValues[1]} arquivos, ${it.groupValues[2]} pastas, ${it.groupValues[4]} MB no disco" }
+                    ?: "tamanho não determinado — veja o botão Diagnóstico"
+                val rootfsItem = SelfCheckItem(
+                    name = "Rootfs extraído (caminhos essenciais)",
+                    status = if (hasMissingPath) SelfCheckStatus.FAILED else SelfCheckStatus.OK,
+                    detail = sizeDetail + if (hasMissingPath) " — há caminho(s) essencial(is) ausente(s), veja o botão Diagnóstico" else ""
+                )
+
+                selfCheckReport = SelfCheckReport(
+                    generatedAt = System.currentTimeMillis(),
+                    sections = listOf(
+                        SelfCheckSection("Toolchains", toolchainItems),
+                        SelfCheckSection("Plugins e ferramentas instalados", pluginItems),
+                        SelfCheckSection("Mini-LLM local", listOf(llmItem)),
+                        SelfCheckSection("Rootfs no disco", listOf(rootfsItem))
+                    )
+                )
+            } finally {
+                selfCheckStage = null
+                selfCheckRunning = false
+                phase = SandboxPhase.Ready
+            }
+        }
+    }
 
     fun runDiagnostics() {
         viewModelScope.launch {
@@ -504,6 +615,9 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             localModelProgress = null
             localModelReady = false
             localModelError = null
+            selfCheckReport = null
+            selfCheckStage = null
+            selfCheckRunning = false
             phase = SandboxPhase.NotReady
         }
     }

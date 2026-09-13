@@ -105,8 +105,29 @@ class SandboxResourceManager(
         }
         output.close()
 
-        if (!partialFile.renameTo(targetFile)) {
-            throw IllegalStateException("Não foi possível mover .part para o arquivo final")
+        // File.renameTo() usa rename(2) cru: no Linux ele falha (retorna
+        // false, sem detalhe do motivo) tanto quando origem e destino estão
+        // em filesystems diferentes (EXDEV — comum quando targetFile fica
+        // em armazenamento externo/adotável montado via FUSE) quanto, em
+        // algumas implementações de JVM, quando o destino já existe. Files.move
+        // com REPLACE_EXISTING cobre o caso de destino existente; a
+        // tentativa ATOMIC_MOVE cobre o caminho comum (mesmo filesystem) sem
+        // custo extra, e o fallback sem ATOMIC_MOVE deixa o NIO copiar +
+        // apagar quando os arquivos estão em filesystems diferentes, algo
+        // que rename(2)/renameTo nunca conseguem fazer.
+        runCatching {
+            java.nio.file.Files.move(
+                partialFile.toPath(), targetFile.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE
+            )
+        }.recoverCatching {
+            java.nio.file.Files.move(
+                partialFile.toPath(), targetFile.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        }.getOrElse {
+            throw IllegalStateException("Não foi possível mover .part para o arquivo final: ${it.message}", it)
         }
     }
 

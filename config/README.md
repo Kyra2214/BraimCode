@@ -2,6 +2,14 @@
 
 Configuration is not secret storage.
 
+## Estado atual
+
+Os diretórios `providers/`, `routing/`, `policy/`, `execution/` e `research/`
+contêm somente `.gitkeep` neste repositório. São **placeholders de layout**, não
+configurações prontas nem evidência de que uma integração externa esteja
+habilitada. Os defaults efetivos são definidos pelo código e pelos contratos
+do runtime até que uma configuração declarativa seja adicionada e validada.
+
 - `providers/`: provider metadata/configuration references only
 - `routing/`: future routing preferences and strategies
 - `policy/`: policy defaults and profiles

@@ -51,9 +51,9 @@ Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e
 
 ## Fase C — Higiene imediata (baixo risco, pode ir junto com a Fase A)
 
-- [ ] Remover `__pycache__/` e `*.pyc` do pacote antes de qualquer commit/export novo.
-- [ ] Confirmar que `config/providers|routing|research|policy|execution/` (hoje só `.gitkeep`) estão documentados como placeholders vazios, não como "configuração pronta".
-- [ ] Registrar explicitamente no `README.md` que `reference/braincode-python/` é arquivo histórico, não faz parte do build (`:brain`/`brain_runtime` atual é o que vale).
+- [x] Remover `__pycache__/` e `*.pyc` do pacote antes de qualquer commit/export novo; a árvore atual está limpa.
+- [x] Confirmar que `config/providers|routing|research|policy|execution/` (somente `.gitkeep`) são placeholders vazios, não "configuração pronta"; isso está documentado em `config/README.md`.
+- [x] Registrar explicitamente no `README.md` que `reference/braincode-python/` é arquivo histórico, não faz parte do build (`:brain`/`brain_runtime` atual é o que vale).
 
 ---
 

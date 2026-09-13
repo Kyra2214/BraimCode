@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping, Protocol
 import hashlib
 import json
 import re
@@ -34,6 +34,39 @@ class SkillManifest:
     signature_verified: bool = False
 
 
+class SkillTrustAuthority(Protocol):
+    """Autoridade externa que confirma identidade e conteúdo de uma Skill."""
+
+    def verify_manifest(self, manifest: SkillManifest) -> bool: ...
+    def verify_content(self, manifest: SkillManifest, content_hash: str) -> bool: ...
+
+
+class StaticSkillTrustAuthority:
+    """Allowlist de hashes/proveniência mantida fora do manifesto da Skill.
+
+    A autoridade deve ser carregada de um canal confiável pelo chamador. Os
+    metadados da própria Skill nunca são usados para criar uma aprovação.
+    """
+
+    def __init__(self, records: Mapping[tuple[str, str], Mapping[str, object]]):
+        self._records = {(str(skill_id), str(version)): dict(record) for (skill_id, version), record in records.items()}
+
+    def verify_manifest(self, manifest: SkillManifest) -> bool:
+        record = self._records.get((manifest.id, manifest.version))
+        if not record or record.get("content_hash") != manifest.content_hash:
+            return False
+        for field in ("source_commit", "source_url"):
+            if field in record and record[field] != getattr(manifest, field):
+                return False
+        if "provenance" in record and tuple(record["provenance"]) != tuple(manifest.provenance):
+            return False
+        return True
+
+    def verify_content(self, manifest: SkillManifest, content_hash: str) -> bool:
+        record = self._records.get((manifest.id, manifest.version))
+        return bool(record and record.get("content_hash") == content_hash and self.verify_manifest(manifest))
+
+
 class SkillRegistry:
     def __init__(
         self,
@@ -42,6 +75,8 @@ class SkillRegistry:
         *,
         allowed_licenses: Iterable[str] | None = None,
         require_manifest_signature: bool = False,
+        trust_authority: SkillTrustAuthority | None = None,
+        require_authority: bool = False,
     ):
         self._trusted = set(trusted_levels)
         self._skills: dict[str, SkillManifest] = {}
@@ -51,6 +86,8 @@ class SkillRegistry:
         self.quarantine_path = Path(quarantine_path) if quarantine_path else None
         self.allowed_licenses = frozenset(allowed_licenses or {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MPL-2.0", "LGPL-2.1-only", "LGPL-3.0-only", "GPL-2.0-only", "GPL-3.0-only", "Proprietary", "Commercial"})
         self.require_manifest_signature = require_manifest_signature
+        self.trust_authority = trust_authority
+        self.require_authority = require_authority
         if self.quarantine_path and self.quarantine_path.exists():
             for line in self.quarantine_path.read_text(encoding="utf-8").splitlines():
                 try:
@@ -84,6 +121,9 @@ class SkillRegistry:
             raise PermissionError("skill license is not allowlisted")
         if self.require_manifest_signature and not (manifest.signature and manifest.signature_key_id and manifest.signature_verified):
             raise PermissionError("skill manifest signature is required")
+        if self.require_authority:
+            if self.trust_authority is None or not self.trust_authority.verify_manifest(manifest):
+                raise PermissionError("skill trust authority verification is required")
 
     def register(self, manifest: SkillManifest) -> None:
         with self._lock:
@@ -151,7 +191,12 @@ class SkillRegistry:
         if root == body or root not in body.parents or not body.is_file() or body.is_symlink():
             return False
         try:
-            return not manifest.content_hash or hashlib.sha256(body.read_bytes()).hexdigest() == manifest.content_hash
+            digest = hashlib.sha256(body.read_bytes()).hexdigest()
+            if manifest.content_hash and digest != manifest.content_hash:
+                return False
+            if self.trust_authority and self.require_authority:
+                return self.trust_authority.verify_content(manifest, digest)
+            return True
         except OSError:
             return False
 

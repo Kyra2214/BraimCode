@@ -23,9 +23,18 @@ class SecureCommandExecutor(private val delegate: SandboxCommandExecutor, privat
         require(timeoutSeconds in 1..policy.limits.maxTimeoutSeconds) { "Timeout excede o limite do Sandbox" }
         require(policy.allowedWorkingRoots.any { workingDir == it || workingDir.startsWith("$it/") }) { "Diretório de trabalho não permitido" }
         val executable = command.first().substringAfterLast('/')
-        require(executable !in policy.blockedCommands) { "Comando bloqueado pela política de segurança: $executable" }
-        require(policy.allowNetwork || !command.joinToString(" ").contains(Regex("(?i)curl|wget|nc|ssh|git clone"))) { "Rede bloqueada pela política do Sandbox" }
+        require(executable !in SHELL_INTERPRETERS) { "shell livre não é uma capacidade autorizada" }
+        val normalized = command.joinToString(" ").lowercase()
+        val blocked = policy.blockedCommands.firstOrNull { token ->
+            Regex("(^|[^a-z0-9_/-])${Regex.escape(token.lowercase())}([^a-z0-9_/-]|$)").containsMatchIn(normalized)
+        }
+        require(blocked == null) { "Comando bloqueado pela política de segurança: $blocked" }
+        require(policy.allowNetwork || !normalized.contains(Regex("curl|wget|nc|ssh|git[[:space:]]+clone|/dev/tcp"))) { "Rede bloqueada pela política do Sandbox" }
         return delegate.execute(command, timeoutSeconds, workingDir)
+    }
+
+    private companion object {
+        val SHELL_INTERPRETERS = setOf("sh", "bash", "ash", "dash", "zsh", "fish", "cmd", "powershell")
     }
 }
 

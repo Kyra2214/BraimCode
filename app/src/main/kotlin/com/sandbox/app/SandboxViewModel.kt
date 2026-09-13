@@ -53,6 +53,20 @@ sealed interface SandboxPhase {
 
 data class QuickCommand(val label: String, val command: String)
 
+/** Checagens rápidas e sem efeito colateral (sem instalar/clonar/baixar nada) das
+ *  ferramentas de linha de comando que o rootfs deveria trazer prontas — distintas
+ *  das toolchains de linguagem e do catálogo opt-in de Plugins/Ferramentas. */
+data class CliToolCheck(val label: String, val script: String)
+private val CLI_TOOL_CHECKS: List<CliToolCheck> = listOf(
+    CliToolCheck("git", "git --version"),
+    CliToolCheck("curl", "curl --version | head -n 1"),
+    CliToolCheck("sqlite3", "sqlite3 --version"),
+    CliToolCheck("make", "make --version | head -n 1"),
+    CliToolCheck("zip/unzip", "zip -v | head -n 1 && unzip -v | head -n 1"),
+    CliToolCheck("pip (python3 -m pip)", "python3 -m pip --version"),
+    CliToolCheck("npm", "npm -v")
+)
+
 val QUICK_COMMANDS: List<QuickCommand> = listOf(
     QuickCommand("git --version", "git --version"),
     QuickCommand("git clone", "git clone --depth 1 https://github.com/octocat/Hello-World.git /tmp/hello && ls /tmp/hello"),
@@ -211,7 +225,34 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
 
-                selfCheckStage = "Verificando plugins e ferramentas instalados..."
+                selfCheckStage = "Verificando ferramentas de linha de comando (git, curl, sqlite3, make, zip/unzip, pip, npm)..."
+                val cliItems = withContext(Dispatchers.IO) {
+                    val activeRuntime = runtime
+                    CLI_TOOL_CHECKS.map { check ->
+                        if (activeRuntime == null) {
+                            SelfCheckItem(check.label, SelfCheckStatus.FAILED, "runtime indisponível")
+                        } else {
+                            val execution = runCatching {
+                                activeRuntime.execute(listOf("bash", "-c", check.script), timeoutSeconds = 15, workingDir = "/home/sandbox")
+                            }.getOrNull()
+                            when {
+                                execution == null -> SelfCheckItem(check.label, SelfCheckStatus.FAILED, "falha ao executar a checagem")
+                                execution.succeeded -> SelfCheckItem(
+                                    check.label,
+                                    SelfCheckStatus.OK,
+                                    execution.stdout.lineSequence().firstOrNull { it.isNotBlank() }?.take(120) ?: "instalado"
+                                )
+                                else -> SelfCheckItem(
+                                    check.label,
+                                    SelfCheckStatus.FAILED,
+                                    execution.stderr.ifBlank { execution.stdout }.ifBlank { "comando não encontrado" }.take(160)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                selfCheckStage = "Verificando plugins e ferramentas opcionais instalados..."
                 val pluginItems = withContext(Dispatchers.IO) {
                     plat.plugins.components().mapNotNull { component ->
                         val cached = plat.plugins.status(component.id)
@@ -250,7 +291,8 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     generatedAt = System.currentTimeMillis(),
                     sections = listOf(
                         SelfCheckSection("Toolchains", toolchainItems),
-                        SelfCheckSection("Plugins e ferramentas instalados", pluginItems),
+                        SelfCheckSection("Ferramentas de linha de comando", cliItems),
+                        SelfCheckSection("Plugins opcionais instalados (catálogo)", pluginItems),
                         SelfCheckSection("Mini-LLM local", listOf(llmItem)),
                         SelfCheckSection("Rootfs no disco", listOf(rootfsItem))
                     )

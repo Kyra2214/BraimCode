@@ -25,13 +25,16 @@ class ToolchainModelsTest {
     }
 
     @Test
-    fun `detecta toolchain usando apenas comando do perfil`() {
+    fun `detecta Java com probe de baixa memoria`() {
         val executor = Executor(true)
         val profile = BuiltInToolchains.all.first { it.id == "java" }
         val result = ToolchainDetector(executor).detect(profile)
 
         assertTrue(result.installed)
-        assertEquals(listOf("java", "--version"), executor.lastCommand)
+        assertEquals("bash", executor.lastCommand?.getOrNull(0))
+        assertEquals("-c", executor.lastCommand?.getOrNull(1))
+        assertTrue(executor.lastCommand?.getOrNull(2).orEmpty().contains("-Xmx64m"))
+        assertTrue(executor.lastCommand?.getOrNull(2).orEmpty().contains("exec java --version"))
         assertEquals("tool 1.2.3", result.versionOutput)
     }
 

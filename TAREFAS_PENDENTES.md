@@ -27,17 +27,12 @@ A evidência detalhada está em [`docs/SANDBOX_RELEASE_MIGRATION.md`](docs/SANDB
 
 - [x] Ligar uma primeira operação real da UI ao `:brain`: o botão **Verificar pelo Brain** executa `sandbox.health` através de Policy, sessão autorizada, capability resolver e runtime Sandbox.
 - [x] Expandir o controlador para executar planos, exigir aprovação em passos HIGH/CRITICAL, persistir solicitações em `approvals.jsonl` e permitir consumo único via retomada na aba **Operações**.
-- [ ] Validar `:android-module` e `:app` em ambiente com Android SDK configurado e executar o fluxo em emulador ou device.
-
-As tarefas abaixo permanecem abertas porque não fazem parte da migração copy-only dos artefatos homologados:
+- As validações de SDK, device, assinatura e host foram removidas da lista operacional e estão registradas separadamente como gates externos em `docs/RELEASE_READINESS.md`.
 
 - [x] Validar os RootFS/profiles `0.3.3`, `0.4.1` e `0.5.0` no Sandbox de origem; a migração preservou os artefatos hardened byte-a-byte. A execução no app/device permanece apenas como teste de implantação.
-- [ ] Realizar assinatura de release do APK com a autoridade de chaves de produção.
-- [ ] Completar o catálogo remoto e o gerenciamento de plugins no Sandbox Mobile.
-- [ ] Completar toolchains Android/NDK, rollback transacional e cache.
-- [ ] Completar rede/serviços com controles OS-level, firewall, namespaces e egress real.
-- [ ] Completar o Security Test Lab adversarial com attack simulation, corpus persistente e integração de delivery.
-- [ ] Validar infraestrutura externa de produção, incluindo serviços distribuídos e cgroups/Bubblewrap configurados no host.
+- [ ] Expandir o gerenciamento offline de plugins com versionamento de snapshots, rollback local e histórico de instalações.
+- [ ] Expandir Toolchains locais com rollback transacional e cache de metadados; SDK/NDK de implantação ficam fora desta lista.
+- [ ] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e integração do readiness gate.
 
 Essas pendências são acompanhadas em [`ROADMAP_UNIFICADO.md`](ROADMAP_UNIFICADO.md) e não devem ser usadas como justificativa para reconstruir ou substituir os RootFS 0.3.3, 0.4.1 ou 0.5.0 já homologados.
 
@@ -51,7 +46,10 @@ Levantadas em `AUDITORIA_PESADA.md` por varredura de instanciação real; detalh
 - [x] Instanciar e expor na aba **Operações** `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner`, `ToolchainManager`/`ToolchainDetector` e `SecurityScenarioCatalog`.
 - [x] Ligar `RemotePluginCatalog` ao `PluginManager` real por catálogo composto; snapshots aceitos passam a aparecer na busca e podem ser instalados pelo mesmo fluxo protegido.
 - [x] Integrar `ObservableDelivery` ao app offline; o botão **Recibo local** gera hashes e recibo dos artefatos do workspace sem rede.
-- [ ] Adicionar transporte remoto e autorização local acionada pela UI para coletar/importar snapshots; a API atual permanece explícita e sem rede implícita.
+- Futuro, fora do backlog offline: adicionar transporte remoto e autorização local para coletar/importar snapshots; a API atual permanece explícita e sem rede implícita.
+- [ ] Expor `BrainExecutionCoordinator` para planos offline avançados de múltiplas etapas.
+- [ ] Expor `DefaultPromptGenerator` pela UI para gerar prompts de tarefas e correções usando biblioteca local.
+- [ ] Integrar APIs/Events locais avançados ao fluxo de Operações sem provider externo.
 - [x] Remover o enum `GitOperation` não utilizado do `GitManager`.
 - [x] Verificar e remover `__pycache__/*.pyc` do pacote; nenhuma ocorrência permanece.
 - [x] Deixar explícito no `README.md` que `reference/braincode-python/` é histórico e não faz parte do build ativo.

@@ -90,7 +90,7 @@ Do bloco "Fases 5–12" de integração (que na prática descrevem o hardening j
 ---
 
 ## Fase 7 — Sandbox 100% completo / validação de produção
-**Status: 🟡 releases homologados e preflight aprovado · gates de implantação pendentes — marco final**
+**Status: 🟡 releases homologados e preflight aprovado · backlog local offline aberto; gates externos separados — marco final**
 
 Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime estável, plugins, ferramentas, projetos, workspace, terminal, git, toolchains, serviços, rede, segurança, test lab, logs, diagnóstico, recuperação, persistência, experiência consistente) somados às pendências já documentadas em `VALIDACAO_2026-09-12.md`:
 - Validação em device/emulador físico real.
@@ -99,6 +99,7 @@ Critérios de conclusão herdados da Sandbox Fase 8 (RootFS estável, runtime es
 - Infra externa: Postgres/Redis/etcd no lugar do SQLite, cgroups graváveis, Bubblewrap plenamente configurado, coordenação multi-host — tudo isso é dependência de implantação, não é simulado pelo runtime.
 - O preflight local `scripts/validate-release-readiness.sh` confirma que os três manifests, assets publicados e sidecars SHA-256 estão consistentes. A evidência e a matriz de gates estão em `docs/RELEASE_READINESS.md`.
 - Status consolidado: não há pendência de homologação dos releases RootFS. Permanecem somente os gates de implantação que exigem Android SDK/device, autoridade de assinatura ou infraestrutura do host.
+- Para a execução do produto Android offline, o trabalho restante está no backlog local: plugins com rollback/histórico, toolchains com cache, Security Test Lab offline, `BrainExecutionCoordinator`, `DefaultPromptGenerator` e APIs/Events locais avançados. SDK, device, assinatura e infraestrutura não entram nessa lista de implementação.
 
 ---
 

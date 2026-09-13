@@ -65,18 +65,20 @@ Validação desta fatia: `./gradlew :brain:test --no-daemon` passou com JDK 17 e
 - [x] As três releases RootFS (`0.3.3`, `0.4.1`, `0.5.0`) estão migradas e documentadas corretamente — nenhuma ação necessária aqui.
 - [x] Documentar explicitamente que o app hoje só baixa/consome a `0.3.3` via `rootfs_manifest.json`; `0.4.1` e `0.5.0` existem como releases, mas não têm manifest nem seleção de perfil no app. A evidência está em `docs/SANDBOX_RELEASE_MIGRATION.md` e `TAREFAS_PENDENTES.md`.
 
-### Próxima frente — homologação Android ARM64
+### Backlog local — execução offline sem servidor
 
 - [x] Criar e executar o preflight de release `scripts/validate-release-readiness.sh`, verificando manifests, tamanhos publicados e sidecars SHA-256 dos três RootFS.
-- [ ] Validar `:android-module` e `:app` em ambiente com Android SDK configurado e executar o fluxo em emulador ou device.
 - [x] Validar os releases RootFS/proot dos perfis `0.3.3`, `0.4.1` e `0.5.0` — validação e hardening já realizados no Sandbox de origem; os artefatos foram migrados byte-a-byte para o BrainCode e permanecem imutáveis.
-- [ ] Registrar evidências de health check, extração, execução de comandos, lifecycle e integridade dos artefatos.
-- [ ] Assinar o APK com a autoridade de chaves de produção e verificar a assinatura com `apksigner`.
-- [ ] Validar no host de implantação os controles OS-level e a infraestrutura externa exigida pela Fase 7.
+- [ ] Expandir o gerenciamento offline de plugins com versionamento de snapshots, rollback local e histórico de instalações.
+- [ ] Expandir Toolchains locais com rollback transacional e cache de metadados.
+- [ ] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e readiness gate.
+- [ ] Expor o `BrainExecutionCoordinator` para planos offline avançados de múltiplas etapas.
+- [ ] Expor o `DefaultPromptGenerator` pela UI usando a biblioteca local de prompts.
+- [ ] Integrar APIs/Events locais avançados ao fluxo de Operações sem provider externo.
 
 - [x] Atualizar o status consolidado: releases RootFS homologados e preflight de distribuição aprovado; os bloqueios restantes são exclusivamente build/device Android, assinatura de produção e infraestrutura do host. Esses bloqueios estão registrados em `docs/RELEASE_READINESS.md` e não devem ser simulados como concluídos.
 
-A matriz de evidências e bloqueios está em `docs/RELEASE_READINESS.md`. Neste ambiente, `check_android_env.sh` detectou Java 21, mas nenhum Android SDK configurado; `adb` também não está disponível.
+Os gates externos de SDK, device, assinatura e infraestrutura permanecem apenas como registro em `docs/RELEASE_READINESS.md`; não fazem parte do backlog de implementação offline.
 
 ---
 

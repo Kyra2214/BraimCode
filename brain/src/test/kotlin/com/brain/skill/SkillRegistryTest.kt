@@ -6,11 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SkillRegistryTest {
-    private fun skill(enabled: Boolean = true, trust: TrustLevel = TrustLevel.CORE) = SkillManifest(
+    private fun skill(enabled: Boolean = true, trust: TrustLevel = TrustLevel.CORE, source: String = "builtin") = SkillManifest(
         id = "code.analysis", name = "Code Analysis", version = "1.0.0",
         description = "analisa código", category = "development",
         capabilities = setOf("code_analysis"), trustLevel = trust, enabled = enabled,
-        sourceId = "builtin"
+        sourceId = source
     )
 
     @Test fun `registra e busca por capability`() {
@@ -22,6 +22,11 @@ class SkillRegistryTest {
     @Test(expected = SecurityException::class)
     fun `skill externa não verificada não pode ser ativada`() {
         SkillRegistry().register(skill(trust = TrustLevel.UNTRUSTED))
+    }
+
+    @Test(expected = SecurityException::class)
+    fun `skill externa ativa sem assinatura é rejeitada`() {
+        SkillRegistry().register(skill(source = "remote-catalog"))
     }
 
     @Test fun `revogação impede uso e novo registro`() {

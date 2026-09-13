@@ -1,6 +1,10 @@
 package com.brain.skill
 
 import java.security.MessageDigest
+import java.security.KeyFactory
+import java.security.Signature
+import java.security.spec.X509EncodedKeySpec
+import java.util.Base64
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -17,7 +21,10 @@ data class SkillManifest(
     val enabled: Boolean = true,
     val sourceId: String = "builtin",
     val license: String? = null,
-    val contentHash: String? = null
+    val contentHash: String? = null,
+    val signature: String? = null,
+    val signatureKeyId: String? = null,
+    val signatureAlgorithm: String? = null
 )
 
 enum class TrustLevel { CORE, VERIFIED, COMMUNITY, UNTRUSTED }
@@ -33,7 +40,7 @@ data class SkillRecord(
  * Catálogo declarativo de Skills. Registrar uma Skill nunca concede autorização;
  * as permissões continuam sendo decididas pelo PolicyBroker no momento da execução.
  */
-class SkillRegistry {
+class SkillRegistry(private val trustedSigningKeys: Map<String, ByteArray> = emptyMap()) {
     private val records = ConcurrentHashMap<String, SkillRecord>()
     private val lock = Any()
 
@@ -42,6 +49,9 @@ class SkillRegistry {
         val calculated = content?.let(::sha256)
         if (manifest.contentHash != null && calculated != null && manifest.contentHash != calculated) {
             throw SecurityException("hash da Skill não corresponde ao conteúdo")
+        }
+        if (manifest.enabled && manifest.sourceId != "builtin" && !verifySignature(manifest, calculated ?: manifest.contentHash)) {
+            throw SecurityException("Skill externa ativa exige assinatura Ed25519 verificável")
         }
         val existing = records[manifest.id]
         if (existing?.revoked == true) throw SecurityException("Skill revogada: ${manifest.id}")
@@ -82,4 +92,21 @@ class SkillRegistry {
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+
+    private fun verifySignature(manifest: SkillManifest, contentHash: String?): Boolean {
+        if (contentHash == null || manifest.signature.isNullOrBlank() || manifest.signatureKeyId.isNullOrBlank()) return false
+        if (manifest.signatureAlgorithm != "Ed25519") return false
+        val encodedKey = trustedSigningKeys[manifest.signatureKeyId] ?: return false
+        return runCatching {
+            val key = KeyFactory.getInstance("Ed25519").generatePublic(X509EncodedKeySpec(encodedKey))
+            Signature.getInstance("Ed25519").run {
+                initVerify(key)
+                update(canonicalPayload(manifest, contentHash).toByteArray(Charsets.UTF_8))
+                verify(Base64.getDecoder().decode(manifest.signature))
+            }
+        }.getOrDefault(false)
+    }
+
+    private fun canonicalPayload(manifest: SkillManifest, contentHash: String): String =
+        listOf(manifest.id, manifest.version, manifest.sourceId, contentHash).joinToString("|")
 }

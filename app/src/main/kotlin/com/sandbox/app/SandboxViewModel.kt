@@ -2,6 +2,8 @@ package com.sandbox.app
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -53,6 +55,19 @@ sealed interface SandboxPhase {
 
 data class QuickCommand(val label: String, val command: String)
 
+/** Papel de uma mensagem no chatbox de teste da mini-LLM (ver [SandboxViewModel.sendChatMessage]). */
+enum class ChatRole { USER, ASSISTANT, ERROR }
+data class ChatMessage(val role: ChatRole, val content: String)
+
+/** Estado de UI do teste de uma chave de API (ver [SandboxViewModel.testApiKey]). */
+sealed interface ApiKeyTestUiState {
+    data object Idle : ApiKeyTestUiState
+    data object Testing : ApiKeyTestUiState
+    data class Success(val message: String) : ApiKeyTestUiState
+    data class Failure(val message: String) : ApiKeyTestUiState
+}
+
+
 /** Checagens rápidas e sem efeito colateral (sem instalar/clonar/baixar nada) das
  *  ferramentas de linha de comando que o rootfs deveria trazer prontas — distintas
  *  das toolchains de linguagem e do catálogo opt-in de Plugins/Ferramentas. */
@@ -98,6 +113,19 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var localModelReady by mutableStateOf(false)
         private set
     var localModelError by mutableStateOf<String?>(null)
+    // --- Chatbox de teste da mini-LLM (fora do terminal) ---
+    val chatMessages = mutableStateListOf<ChatMessage>()
+    var chatInput by mutableStateOf("")
+    var chatRunning by mutableStateOf(false)
+        private set
+
+    // --- Chaves de API (aba Ferramentas) ---
+    private val apiKeyStore = ApiKeyStore(application)
+    val apiProviders: List<ApiProvider> = runCatching { ApiKeyCatalogLoader.load(application) }.getOrElse { emptyList() }
+    private val apiKeyInputs = mutableStateMapOf<String, String>()
+    val apiKeyTestState = mutableStateMapOf<String, ApiKeyTestUiState>()
+        private set
+
         private set
 
     // --- Plugins / Ferramentas (Expansão Fase 1) ---
@@ -428,6 +456,91 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             when (result) {
                 is SandboxResourceManager.DownloadResult.Success -> localModelReady = true
                 is SandboxResourceManager.DownloadResult.Failure -> localModelError = result.reason
+            }
+        }
+    }
+
+    /**
+     * Envia uma mensagem no chatbox de teste da mini-LLM. É deliberadamente
+     * separado do terminal (CommandSection): aqui o comando de inferência é
+     * montado internamente (ver [AndroidSandboxFactory.buildLocalModelChatCommand]),
+     * não digitado à mão. Como ainda não empacotamos um motor de inferência
+     * no rootfs, a resposta normalmente será um erro claro explicando isso —
+     * o que já é suficiente pra validar visualmente o fluxo inteiro
+     * (UI → runtime → rootfs) antes de ligar a inferência de verdade.
+     */
+    fun sendChatMessage() {
+        val prompt = chatInput.trim()
+        if (prompt.isEmpty() || chatRunning) return
+        val activeRuntime = runtime
+        if (activeRuntime == null || phase != SandboxPhase.Ready) {
+            chatMessages.add(ChatMessage(ChatRole.ERROR, "Prepare o sandbox na aba Validação antes de testar a mini-LLM."))
+            return
+        }
+        chatMessages.add(ChatMessage(ChatRole.USER, prompt))
+        chatInput = ""
+        chatRunning = true
+        viewModelScope.launch {
+            val response = withContext(Dispatchers.IO) {
+                runCatching {
+                    val manifest = LocalModelManifestLoader.load(getApplication())
+                    val guestModelPath = factory.ensureLocalModelLinkedIntoRootfs(manifest.id)
+                        ?: return@runCatching ChatMessage(
+                            ChatRole.ERROR,
+                            "Baixe a mini-LLM primeiro (cartão \"Mini-LLM local\" na aba Validação)."
+                        )
+                    val command = factory.buildLocalModelChatCommand(guestModelPath, prompt)
+                    val execution = activeRuntime.execute(command = command, timeoutSeconds = 180)
+                    when {
+                        execution.timedOut -> ChatMessage(ChatRole.ERROR, "Tempo esgotado (180s) esperando a mini-LLM responder.")
+                        execution.succeeded -> ChatMessage(ChatRole.ASSISTANT, execution.stdout.ifBlank { "(sem saída)" })
+                        else -> ChatMessage(
+                            ChatRole.ERROR,
+                            execution.stderr.ifBlank { execution.stdout }.ifBlank { "Falhou (exit code ${execution.exitCode})" }
+                        )
+                    }
+                }.getOrElse { ChatMessage(ChatRole.ERROR, "Falha ao rodar a mini-LLM: ${it.message}") }
+            }
+            chatMessages.add(response)
+            chatRunning = false
+        }
+    }
+
+    fun clearChat() {
+        chatMessages.clear()
+    }
+
+    // --- Chaves de API ---
+
+    /** Valor atual do campo de texto da chave (pré-carregado do armazenamento se já houver uma chave salva). */
+    fun apiKeyInput(providerId: String): String =
+        apiKeyInputs.getOrPut(providerId) { apiKeyStore.get(providerId).orEmpty() }
+
+    fun updateApiKeyInput(providerId: String, value: String) {
+        apiKeyInputs[providerId] = value
+    }
+
+    fun hasStoredApiKey(providerId: String): Boolean = !apiKeyStore.get(providerId).isNullOrBlank()
+
+    fun saveApiKey(providerId: String) {
+        val value = apiKeyInputs[providerId]?.trim().orEmpty()
+        apiKeyStore.save(providerId, value)
+        apiKeyTestState[providerId] = ApiKeyTestUiState.Idle
+    }
+
+    /** Testa a chave já salva para este provider com uma chamada real e mínima. */
+    fun testApiKey(providerId: String, model: ApiProviderModel) {
+        val key = apiKeyStore.get(providerId)?.takeIf { it.isNotBlank() }
+        if (key == null) {
+            apiKeyTestState[providerId] = ApiKeyTestUiState.Failure("Cole e salve uma chave antes de testar.")
+            return
+        }
+        apiKeyTestState[providerId] = ApiKeyTestUiState.Testing
+        viewModelScope.launch {
+            val outcome = withContext(Dispatchers.IO) { ApiKeyTester.test(model.endpoint, model.id, key) }
+            apiKeyTestState[providerId] = when (outcome) {
+                is ApiKeyTestOutcome.Success -> ApiKeyTestUiState.Success("Chave OK — HTTP ${outcome.statusCode} em ${outcome.latencyMs} ms")
+                is ApiKeyTestOutcome.Failure -> ApiKeyTestUiState.Failure(outcome.message)
             }
         }
     }

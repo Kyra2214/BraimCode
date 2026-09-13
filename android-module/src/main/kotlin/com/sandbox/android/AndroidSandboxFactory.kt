@@ -80,6 +80,62 @@ class AndroidSandboxFactory(private val context: Context) {
     fun modelFile(modelId: String): File = File(modelDir, "$modelId.gguf")
 
     /**
+     * O .gguf baixado fica em [modelDir], FORA do rootfs (de propósito —
+     * ver o comentário da classe). Só que um processo rodando via proot
+     * (o chatbox de teste da mini-LLM, por exemplo) não enxerga caminhos
+     * fora do rootfs sem um bind explícito. Em vez de mexer no launcher
+     * do proot pra adicionar mais um bind, este método faz um hard link
+     * do arquivo pra dentro do rootfs (mesmo filesystem — não duplica os
+     * ~100 MiB em disco) em /home/sandbox/models/<modelId>.gguf, caminho
+     * já resolvível pelo comando guest. Cai pra cópia se o SO recusar o
+     * link (ex.: partições diferentes).
+     *
+     * Retorna o caminho absoluto GUEST (dentro do rootfs) do modelo, ou
+     * null se o .gguf ainda não foi baixado ou se o rootfs ainda não foi
+     * extraído.
+     */
+    fun ensureLocalModelLinkedIntoRootfs(modelId: String): String? {
+        val source = modelFile(modelId)
+        if (!source.isFile || !extractedRootfsDir.isDirectory) return null
+        val guestRelativePath = "home/sandbox/models/$modelId.gguf"
+        val destination = File(extractedRootfsDir, guestRelativePath)
+        if (!destination.exists() || destination.length() != source.length()) {
+            destination.parentFile?.mkdirs()
+            destination.delete()
+            val linked = runCatching {
+                java.nio.file.Files.createLink(destination.toPath(), source.toPath())
+            }.isSuccess
+            if (!linked) {
+                val copied = runCatching { source.copyTo(destination, overwrite = true) }.isSuccess
+                if (!copied) return null
+            }
+        }
+        return "/$guestRelativePath"
+    }
+
+    /**
+     * Monta o comando que o chatbox de teste manda pro sandbox. Isto é
+     * deliberadamente um CHATBOX DE TESTE, não uma UI final: o app ainda
+     * não empacota um motor de inferência (llama.cpp ou similar) dentro
+     * do rootfs — ver docs/LOCAL_MODEL.md. Por isso o script procura por
+     * um binário conhecido em tempo de execução e, se não achar, devolve
+     * um erro claro em vez de fingir sucesso — isso já é suficiente pra
+     * validar visualmente o caminho completo (UI → runtime → rootfs)
+     * mesmo antes do motor de inferência existir.
+     */
+    fun buildLocalModelChatCommand(modelPathInGuest: String, prompt: String, maxTokens: Int = 200): List<String> {
+        val script = """
+            BIN=${'$'}(command -v llama-cli 2>/dev/null || command -v llama-server 2>/dev/null || command -v llama 2>/dev/null || command -v main 2>/dev/null)
+            if [ -z "${'$'}BIN" ]; then
+              echo "LLAMA_CPP_NAO_ENCONTRADO: nenhum binario de inferencia (llama-cli/llama-server/llama/main) foi encontrado no rootfs. Falta empacotar o motor de inferencia (veja docs/LOCAL_MODEL.md) — este chatbox serve pra testar o fluxo ate aqui." >&2
+              exit 127
+            fi
+            exec "${'$'}BIN" -m "$modelPathInGuest" -p "${'$'}1" -n $maxTokens --temp 0.7
+        """.trimIndent()
+        return listOf("/bin/bash", "-c", script, "chat", prompt)
+    }
+
+    /**
      * True quando o rootfs já foi extraído com sucesso e está íntegro
      * (marcador de versão bate e as entradas essenciais existem). Quando
      * isto é true, os arquivos baixados (rootfs-*.tar.gz) não são mais

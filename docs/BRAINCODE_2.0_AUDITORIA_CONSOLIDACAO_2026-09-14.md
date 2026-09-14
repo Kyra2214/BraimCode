@@ -78,3 +78,7 @@ O `KnowledgeCompiler` foi consolidado sobre `KnowledgeLearningCycle` e `Conserva
 ## Fase 11 — Function Splitter
 
 A lógica já existente do `KeywordPlanner` foi extraída para `FunctionSplitter`/`KeywordFunctionSplitter`. O Planner agora somente solicita funções declarativas e monta `ExecutionPlan`; cada função continua declarando sua capability, dependências, papel, risco e critério de sucesso.
+
+## Fase 12 — Dispatcher
+
+Foi criado `com.brain.dispatch.Dispatcher`, que recebe uma tarefa do `ExecutionPlan`, consulta `CapabilityDiscovery`, escolhe um único candidato e encaminha uma `ActionRequest` ao `ActionGateway`. Ele não redefine estratégia, não autoriza e não executa comandos diretamente.

@@ -186,7 +186,7 @@ class SandboxResourceManager(
             ?: error("hostname RootFS não pôde ser resolvido")
         require(addresses.isNotEmpty() && addresses.none { address ->
             address.isLoopbackAddress || address.isSiteLocalAddress || address.isLinkLocalAddress ||
-                address.isAnyLocalAddress || address.isMulticastAddress || isMappedPrivate(address.address)
+                address.isAnyLocalAddress || address.isMulticastAddress || isMappedPrivate(address.address) || isUla(address.address)
         }) { "destino RootFS inválido ou reservado" }
         return addresses.first()
     }
@@ -199,6 +199,9 @@ class SandboxResourceManager(
         val b = bytes[13].toInt() and 0xff
         return a == 10 || a == 127 || (a == 169 && b == 254) || (a == 172 && b in 16..31) || (a == 192 && b == 168)
     }
+
+    private fun isUla(bytes: ByteArray): Boolean =
+        bytes.size == 16 && ((bytes[0].toInt() and 0xff) in 0xfc..0xfd)
 
     /**
      * Remove o rootfs baixado (usado para reset completo do sandbox).

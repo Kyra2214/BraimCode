@@ -1,7 +1,6 @@
 package com.sandbox.app
 
 import android.content.Context
-import com.sandbox.resource.DownloadManifest
 import com.sandbox.resource.InferenceEngineManifest
 import com.sandbox.resource.SandboxResourceManager
 import com.sandbox.runtime.TarGzExtractor
@@ -22,6 +21,7 @@ class LocalLlmSandboxBridge(private val context: Context) {
         const val ENGINE_ARCHIVE = "llama-engine.tar.gz"
         const val ENGINE_DIR = "opt/llama"
         const val ENGINE_MARKER = ".llama-engine-b10901"
+        const val ENGINE_PATH = "/usr/local/bin/llama-cli"
     }
 
     private val sandboxDir = File(context.filesDir, "sandbox")
@@ -42,7 +42,8 @@ class LocalLlmSandboxBridge(private val context: Context) {
 
         val existing = findLlamaCli()
         if (existing != null && engineMarker.readTextOrNull() == manifest.version) {
-            return@runCatching existing
+            exposeOnGuestPath(existing)
+            return@runCatching guestPath(existing)
         }
 
         engineDir.deleteRecursively()
@@ -51,6 +52,7 @@ class LocalLlmSandboxBridge(private val context: Context) {
         val executable = findLlamaCli()
             ?: error("llama-cli não foi encontrado no pacote ${manifest.version}.")
         executable.setExecutable(true, false)
+        exposeOnGuestPath(executable)
         engineMarker.writeText(manifest.version)
         SandboxResourceManager(engineArchive).purge()
         guestPath(executable)
@@ -82,16 +84,24 @@ class LocalLlmSandboxBridge(private val context: Context) {
         maxTokens: Int = 200
     ): List<String> {
         require(maxTokens in 1..1024)
-        val script = """
-            BIN="$enginePathInGuest"
-            if [ ! -x "${'$'}BIN" ]; then
-              echo "LLAMA_CPP_NAO_ENCONTRADO: motor de inferencia não está executável no sandbox." >&2
-              exit 127
-            fi
-            export LD_LIBRARY_PATH="${'$'}(dirname "${'$'}BIN"):${'$'}LD_LIBRARY_PATH"
-            exec "${'$'}BIN" -m "$modelPathInGuest" -p "${'$'}1" -n $maxTokens -c 1024 -t 2 --temp 0.7
-        """.trimIndent()
-        return listOf("/bin/bash", "-c", script, "chat", prompt)
+        return listOf(
+            enginePathInGuest,
+            "-m", modelPathInGuest,
+            "-p", prompt,
+            "-n", maxTokens.toString(),
+            "-c", "1024",
+            "-t", "2",
+            "--temp", "0.7"
+        )
+    }
+
+    private fun exposeOnGuestPath(executable: File) {
+        val destination = File(rootfsDir, ENGINE_PATH.removePrefix("/"))
+        destination.parentFile?.mkdirs()
+        if (destination.exists() || Files.isSymbolicLink(destination.toPath())) {
+            destination.delete()
+        }
+        Files.createSymbolicLink(destination.toPath(), "/${executable.relativeTo(rootfsDir).invariantSeparatorsPath}")
     }
 
     private fun loadManifest(): InferenceEngineManifest {
@@ -108,6 +118,7 @@ class LocalLlmSandboxBridge(private val context: Context) {
         ).also {
             require(it.url.startsWith("https://")) { "URL do motor deve usar HTTPS" }
             require(it.architecture == "arm64-v8a") { "Motor incompatível com este sandbox: ${it.architecture}" }
+            require(it.sha256.matches(Regex("[0-9a-fA-F]{64}"))) { "SHA-256 do motor inválido" }
         }
     }
 

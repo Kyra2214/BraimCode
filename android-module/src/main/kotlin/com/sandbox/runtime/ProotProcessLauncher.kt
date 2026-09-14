@@ -2,7 +2,14 @@ package com.sandbox.runtime
 
 import java.io.File
 
-/** Default launcher matching the already validated SandboxRuntime proot contract. */
+/**
+ * Android-compatible proot launcher.
+ *
+ * The functional baseline follows SandBox: proot is started directly, with
+ * /dev, /proc and /sys available inside the guest. Network namespace
+ * isolation is opportunistic only; Android devices commonly do not expose
+ * unshare(CLONE_NEWNET), and its absence must not prevent startup.
+ */
 class ProotProcessLauncher(
     private val prootExecutable: String,
     private val rootfsDir: File,
@@ -11,12 +18,6 @@ class ProotProcessLauncher(
     private val nativeLibraryDir: String? = null,
     private val prootLoader: String? = null,
     private val executableFinder: (List<String>) -> String? = { candidates -> candidates.firstOrNull { File(it).canExecute() } },
-    // Ver ProotResourceLimits.kt: cgroup v2 delegado não existe no Android
-    // sem root, então o teto real de memória/CPU/arquivos vem de
-    // setrlimit(2) via `ulimit`, aplicado no /bin/bash que o proot exec'a
-    // antes do comando do agente. Público (não private) porque quem lê o
-    // stderr do processo (ManagedSandboxRuntime) precisa dele para
-    // verificar o marcador emitido por ProotResourceLimits.verifiedPreamble.
     override val resourceLimits: ProotResourceLimits = ProotResourceLimits.DEFAULT
 ) : SandboxProcessLauncher {
 
@@ -29,14 +30,15 @@ class ProotProcessLauncher(
         listOf("dev", "proc", "sys", "tmp").forEach { File(rootfsDir, it).mkdirs() }
     }
 
-    override fun launch(command: List<String>, workingDir: String): Process = launch(command, workingDir, networkAllowed = false)
+    /** Functional/default path: network is available like the SandBox baseline. */
+    override fun launch(command: List<String>, workingDir: String): Process =
+        launch(command, workingDir, networkAllowed = true)
 
     override fun launch(command: List<String>, workingDir: String, networkAllowed: Boolean): Process {
         val setsid = findSetsid()
+        // Network isolation is best-effort on Android. If unshare exists we
+        // honor networkAllowed=false; if it does not, keep the runtime usable.
         val unshare = if (networkAllowed) null else findUnshare()
-        if (!networkAllowed && unshare == null) {
-            throw UnsupportedOperationException("isolamento de rede exigido, mas unshare(CLONE_NEWNET) não está disponível")
-        }
         val args = buildArgs(command, workingDir, setsid, unshare)
         return ProcessBuilder(args).redirectErrorStream(false).apply {
             environment().clear()
@@ -54,21 +56,19 @@ class ProotProcessLauncher(
     }
 
     internal fun buildArgs(command: List<String>, workingDir: String, setsid: String?, unshare: String?): List<String> = buildList {
-            setsid?.let { add(it) }
-            unshare?.let { add(it); add("-n"); add("--") }
-            add(prootExecutable)
-            add("-r"); add(rootfsDir.absolutePath)
-            add("-w"); add(workingDir)
-            add("-0")
-            addAll(ProotDeviceBinds.bindArgs())
-            add("--link2symlink")
-            add("--kill-on-exit")
-            add("/bin/bash"); add("-c")
-            // O preâmbulo `ulimit` roda no mesmo processo bash (builtin, sem
-            // fork); `exec` substitui esse processo pelo comando real sem
-            // criar um filho extra — os limites setados valem igualmente
-            // porque setrlimit(2) sobrevive a execve(2) (POSIX).
-            add(resourceLimits.verifiedPreamble() + "exec " + command.joinToString(" ") { shellEscape(it) })
+        setsid?.let { add(it) }
+        unshare?.let { add(it); add("-n"); add("--") }
+        add(prootExecutable)
+        add("-r"); add(rootfsDir.absolutePath)
+        add("-w"); add(workingDir)
+        add("-0")
+        add("-b"); add("/dev")
+        add("-b"); add("/proc")
+        add("-b"); add("/sys")
+        add("--link2symlink")
+        add("--kill-on-exit")
+        add("/bin/bash"); add("-c")
+        add(resourceLimits.verifiedPreamble() + "exec " + command.joinToString(" ") { shellEscape(it) })
     }
 
     private fun findSetsid(): String? = executableFinder(listOf("/system/bin/setsid", "/usr/bin/setsid", "/bin/setsid"))

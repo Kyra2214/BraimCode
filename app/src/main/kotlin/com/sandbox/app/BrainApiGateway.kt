@@ -20,7 +20,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Ponte interna Brain -> APIs gratuitas -> Brain Local; o usuário não conversa com provider/modelo. */
+/** Ponte interna Brain -> memória -> Brain Local -> APIs gratuitas; o usuário não conversa com provider/modelo. */
 class BrainApiGateway(
     private val providers: List<ApiProvider>,
     private val keyStore: ApiKeyStore,
@@ -39,7 +39,7 @@ class BrainApiGateway(
         val knowledgeValidated: Boolean = false
     )
 
-    /** Fallback local: o Brain escolhe; a execução permanece no runtime Sandbox. */
+    /** O Brain decide usar o modelo local; a execução permanece no runtime Sandbox. */
     private var localExecutor: ((String) -> LocalExecutionResult)? = { prompt ->
         BrainLocalRuntimeExecutor(keyStore.appContext).complete(prompt)
     }
@@ -57,13 +57,36 @@ class BrainApiGateway(
     fun complete(prompt: String, papel: PapelPipeline = PapelPipeline.ESCRITA_DE_PROMPT): GatewayResult {
         require(prompt.isNotBlank()) { "prompt não pode ser vazio" }
 
+        // 1. Memória: se o Brain já conhece a resposta validada, não executa nada externo.
         learning.recall(prompt)?.let { learned ->
             return GatewayResult(learned.answer, "memory", "knowledge:${learned.id}", emptyList(), learned.source, learned.id, true, true)
         }
 
+        val attempts = mutableListOf<String>()
+
+        // 2. Brain Local: primeira fonte de raciocínio/geração quando não há conhecimento memorizado.
+        val local = localExecutor
+        if (local != null) {
+            val result = runCatching { local.invoke(prompt) }.getOrElse {
+                attempts += "brain-local: ${it.message ?: it.javaClass.simpleName}"
+                null
+            }
+            if (result != null && result.text.isNotBlank()) {
+                val knowledge = learning.observeExternal(prompt, result.text, result.source, emptyList(), tagsFor(papel, prompt))
+                val verdict = critic.evaluate(knowledge)
+                val validated = when (verdict.decision) {
+                    KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, result.source) != null
+                    KnowledgeCriticDecision.REJECT -> false
+                    KnowledgeCriticDecision.UNCERTAIN -> false
+                }
+                if (!validated) attempts += "brain-local: Critic ${verdict.decision.name.lowercase()} (${verdict.reason})"
+                return GatewayResult(result.text, "brain-local", "brain-local", attempts, result.source, knowledge.id, false, validated)
+            }
+        } else attempts += "brain-local: Sandbox ainda não conectado"
+
+        // 3. Só se o Brain Local não conseguir responder, consultar APIs externas gratuitas.
         val catalog = ApiCatalogRegistry.current() ?: error("Catálogo de APIs não instalado")
         val dynamic = catalog as? DynamicFreeApiCatalog
-        val attempts = mutableListOf<String>()
         val tried = mutableSetOf<String>()
         fun decide(): RoutingDecision? = router.decidir(papel, catalog, emptyList())
         val decision = decide()
@@ -127,24 +150,6 @@ class BrainApiGateway(
             } else attempts += "$key: HTTP ${response?.statusCode ?: 0}"
         }
 
-        // Sem API gratuita disponível: o próprio Brain cai para o Brain Local.
-        val local = localExecutor
-        if (local != null) {
-            val result = runCatching { local.invoke(prompt) }.getOrElse {
-                attempts += "brain-local: ${it.message ?: it.javaClass.simpleName}"
-                null
-            }
-            if (result != null && result.text.isNotBlank()) {
-                val knowledge = learning.observeExternal(prompt, result.text, result.source, emptyList(), tagsFor(papel, prompt))
-                val verdict = critic.evaluate(knowledge)
-                val validated = when (verdict.decision) {
-                    KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, result.source) != null
-                    KnowledgeCriticDecision.REJECT -> false
-                    KnowledgeCriticDecision.UNCERTAIN -> false
-                }
-                return GatewayResult(result.text, "brain-local", "brain-local", attempts, result.source, knowledge.id, false, validated)
-            }
-        } else attempts += "brain-local: Sandbox ainda não conectado"
         throw IllegalStateException("Brain não conseguiu responder. Tentativas: ${attempts.joinToString(" | ")}")
     }
 

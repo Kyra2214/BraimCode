@@ -31,10 +31,8 @@ class ToolchainModelsTest {
         val result = ToolchainDetector(executor).detect(profile)
 
         assertTrue(result.installed)
-        assertEquals("bash", executor.lastCommand?.getOrNull(0))
-        assertEquals("-c", executor.lastCommand?.getOrNull(1))
-        assertTrue(executor.lastCommand?.getOrNull(2).orEmpty().contains("-Xmx64m"))
-        assertTrue(executor.lastCommand?.getOrNull(2).orEmpty().contains("exec java --version"))
+        assertEquals("java", executor.lastCommand?.getOrNull(0))
+        assertEquals("--version", executor.lastCommand?.getOrNull(1))
         assertEquals("tool 1.2.3", result.versionOutput)
     }
 
@@ -49,14 +47,14 @@ class ToolchainModelsTest {
     }
 
     @Test
-    fun `plano instala somente pacotes declarados e usa shell fixo`() {
+    fun `plano instala somente pacotes declarados sem shell`() {
         val detector = ToolchainDetector(Executor(true))
         val profile = BuiltInToolchains.all.first { it.id == "python" }
         val plan = detector.planInstall(profile)
 
-        assertEquals(listOf("bash", "-c"), plan.command.take(2))
-        assertTrue(plan.command[2].contains("python3 python3-pip"))
-        assertFalse(plan.command[2].contains("apt-get install $"))
+        assertEquals("apt-get", plan.command[0])
+        assertEquals(listOf("python3", "python3-pip"), plan.command.takeLast(2))
+        assertFalse(plan.command.contains("bash"))
     }
 
     @Test(expected = IllegalArgumentException::class)

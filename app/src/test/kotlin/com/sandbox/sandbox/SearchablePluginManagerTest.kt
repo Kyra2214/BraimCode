@@ -113,14 +113,14 @@ class SearchablePluginManagerTest {
         val remote = RemoteComponentManifest(
             component = SandboxComponent("remote-tool", "Remote Tool", "Ferramenta remota", ComponentKind.TOOL),
             sourceId = "trusted",
-            manifestUrl = "https://plugins.example.org/catalog.json",
+            manifestUrl = "https://93.184.216.34/catalog.json",
             artifactSha256 = digest,
             artifactBytes = bytes,
             officialSource = true
         )
         val remoteCatalog = RemotePluginCatalog(setOf("trusted"))
         remoteCatalog.importSnapshot(
-            RemoteCatalogSnapshot("trusted", "https://plugins.example.org/catalog.json", listOf(remote), 1L)
+            RemoteCatalogSnapshot("trusted", "https://93.184.216.34/catalog.json", listOf(remote), 1L)
         )
         val repo = JsonComponentRepository(tempComponentsFile())
         val mgr = SearchablePluginManager(

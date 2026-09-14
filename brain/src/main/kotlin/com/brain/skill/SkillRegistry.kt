@@ -66,7 +66,7 @@ class SkillRegistry(
             throw SecurityException("Skill externa ativa exige assinatura Ed25519 verificável")
         }
         val existing = records[manifest.id]
-        if (existing?.revoked == true || manifest.id in persistedRevocations) throw SecurityException("Skill revogada: ${manifest.id}")
+        if (existing?.revoked == true || persistedRevocations.containsKey(manifest.id)) throw SecurityException("Skill revogada: ${manifest.id}")
         val record = SkillRecord(manifest.copy(contentHash = manifest.contentHash ?: calculated), Instant.now())
         records[manifest.id] = record
         record

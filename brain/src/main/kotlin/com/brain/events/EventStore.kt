@@ -98,7 +98,7 @@ private fun toJson(e: BrainEvent) = JSONObject().apply {
     put("eventId", e.eventId); put("timestamp", e.timestamp.toString()); put("version", e.version); put("previousHash", e.previousHash); put("hash", e.hash); put("idempotencyKey", e.idempotencyKey ?: JSONObject.NULL)
     put("payload", JSONObject(e.payload))
 }
-private fun fromJson(j: JSONObject) = BrainEvent(j.getString("runId"), j.getString("sessionId"), j.getString("taskId"), j.getString("type"), j.getLong("sequence"), j.getString("eventId"), Instant.parse(j.getString("timestamp")), j.optJSONObject("payload")?.let { obj -> obj.keys().asSequence().associateWith { obj.getString(it) } } ?: emptyMap(), j.optInt("version", 1), j.optString("previousHash", "GENESIS"), j.optString("hash", ""), j.optString("idempotencyKey").takeUnless { it == "null" })
+private fun fromJson(j: JSONObject) = BrainEvent(j.getString("runId"), j.getString("sessionId"), j.getString("taskId"), j.getString("type"), j.getLong("sequence"), j.getString("eventId"), Instant.parse(j.getString("timestamp")), j.optJSONObject("payload")?.let { obj -> obj.keys().asSequence().associateWith { obj.getString(it) } } ?: emptyMap(), j.optInt("version", 1), j.optString("previousHash", "GENESIS"), j.optString("hash", ""), j.opt("idempotencyKey")?.takeUnless { it == JSONObject.NULL }?.toString())
 private fun verify(events: List<BrainEvent>): Boolean {
     var previous = "GENESIS"
     events.forEachIndexed { index, event -> if (event.sequence != index.toLong() || event.previousHash != previous || event.hash != sha256(event.canonical())) return false else previous = event.hash }

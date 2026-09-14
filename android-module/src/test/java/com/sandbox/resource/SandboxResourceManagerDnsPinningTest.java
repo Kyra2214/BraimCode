@@ -18,7 +18,7 @@ public class SandboxResourceManagerDnsPinningTest {
         AtomicInteger resolutions = new AtomicInteger();
         HttpURLConnection[] seen = new HttpURLConnection[1];
         try {
-            RootfsManifest manifest = new RootfsManifest("1.0.0", "arm64-v8a", "test", "https://example.test/rootfs.tar.gz", 0, "0".repeat(64), "1.0.0");
+            RootfsManifest manifest = new RootfsManifest("1.0.0", "arm64-v8a", "test", "https://example.test/rootfs.tar.gz", 0, "0".repeat(64), "1.0.0", "", "", "", "", false);
             SandboxResourceManager manager = new SandboxResourceManager(
                 target,
                 null,
@@ -30,21 +30,29 @@ public class SandboxResourceManagerDnsPinningTest {
                 host -> {
                     Assert.assertEquals("example.test", host);
                     resolutions.incrementAndGet();
-                    return new InetAddress[]{InetAddress.getByAddress(host, new byte[]{93, (byte)184, (byte)216, 34})};
+                    try {
+                        return new InetAddress[]{InetAddress.getByAddress(host, new byte[]{93, (byte)184, (byte)216, 34})};
+                    } catch (java.net.UnknownHostException error) {
+                        throw new AssertionError(error);
+                    }
                 }
             );
 
-            manager.ensureAvailable(manifest);
+            manager.ensureAvailable(manifest, null);
             Assert.assertEquals(1, resolutions.get());
             Assert.assertEquals("93.184.216.34", seen[0].getURL().getHost());
-            Assert.assertEquals("example.test", seen[0].getRequestProperty("Host"));
+            Assert.assertEquals("example.test", ((FakeConnection) seen[0]).hostHeader);
         } finally {
             target.delete();
         }
     }
 
     private static final class FakeConnection extends HttpURLConnection {
+        String hostHeader;
         FakeConnection(URL url) { super(url); }
+        @Override public void setRequestProperty(String key, String value) {
+            if ("Host".equalsIgnoreCase(key)) hostHeader = value;
+        }
         @Override public void connect() { connected = true; }
         @Override public void disconnect() { connected = false; }
         @Override public boolean usingProxy() { return false; }

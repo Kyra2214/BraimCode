@@ -7,7 +7,7 @@ import org.junit.Test
 
 class RemotePluginCatalogTest {
     private val source = "trusted"
-    private val url = "https://plugins.example.org/catalog.json"
+    private val url = "https://93.184.216.34/catalog.json"
     private val bytes = "plugin-artifact".toByteArray()
 
     private fun digest(value: ByteArray): String = MessageDigest.getInstance("SHA-256")
@@ -61,6 +61,6 @@ class RemotePluginCatalogTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun `nao aceita catalogo HTTP`() {
-        RemoteCatalogSnapshot(source, "http://plugins.example.org/catalog.json", emptyList(), 100L)
+        RemoteCatalogSnapshot(source, "http://93.184.216.34/catalog.json", emptyList(), 100L)
     }
 }

@@ -9,7 +9,7 @@ class AuthorizedCapabilityExecutorTest {
             error("executor must not run without authorization")
     }
 
-    @Test(expected = IllegalStateException::class)
+    @Test(expected = SecurityException::class)
     fun `nega capacidade fora do catalogo antes do executor`() {
         val gateway = AuthorizedCapabilityExecutor(
             executor = NeverCalled(),

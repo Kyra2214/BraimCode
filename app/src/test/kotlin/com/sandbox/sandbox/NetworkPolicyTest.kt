@@ -7,24 +7,24 @@ import org.junit.Test
 class NetworkPolicyTest {
     @Test
     fun `nega acesso por padrao`() {
-        val decision = NetworkPolicyBroker().decide(NetworkAccessRequest("api", "tcp", 443, "api.example.com"))
+        val decision = NetworkPolicyBroker().decide(NetworkAccessRequest("api", "tcp", 443, "93.184.216.34"))
         assertFalse(decision.allowed)
     }
 
     @Test
     fun `autoriza somente regra correspondente`() {
-        val policy = NetworkPolicy(rules = setOf(NetworkRule("api", "tcp", 443, setOf("api.example.com"))))
+        val policy = NetworkPolicy(rules = setOf(NetworkRule("api", "tcp", 443, setOf("93.184.216.34"))))
         val broker = NetworkPolicyBroker(policy)
 
-        assertTrue(broker.decide(NetworkAccessRequest("api", "tcp", 443, "api.example.com")).allowed)
-        assertFalse(broker.decide(NetworkAccessRequest("api", "tcp", 80, "api.example.com")).allowed)
-        assertFalse(broker.decide(NetworkAccessRequest("other", "tcp", 443, "api.example.com")).allowed)
+        assertTrue(broker.decide(NetworkAccessRequest("api", "tcp", 443, "93.184.216.34")).allowed)
+        assertFalse(broker.decide(NetworkAccessRequest("api", "tcp", 80, "93.184.216.34")).allowed)
+        assertFalse(broker.decide(NetworkAccessRequest("other", "tcp", 443, "93.184.216.34")).allowed)
     }
 
     @Test
     fun `regra sem hosts permite host publico na porta declarada`() {
         val policy = NetworkPolicy(rules = setOf(NetworkRule("web", "tcp", 443)))
-        assertTrue(NetworkPolicyBroker(policy).decide(NetworkAccessRequest("web", "tcp", 443, "example.com")).allowed)
+        assertTrue(NetworkPolicyBroker(policy).decide(NetworkAccessRequest("web", "tcp", 443, "93.184.216.34")).allowed)
     }
 
     @Test(expected = IllegalArgumentException::class)

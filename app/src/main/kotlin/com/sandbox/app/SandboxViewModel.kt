@@ -124,9 +124,6 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     val apiProviders: List<ApiProvider> = runCatching { ApiKeyCatalogLoader.load(application) }.getOrElse { emptyList() }
     private val apiKeyInputs = mutableStateMapOf<String, String>()
     val apiKeyTestState = mutableStateMapOf<String, ApiKeyTestUiState>()
-        private set
-
-        private set
 
     // --- Plugins / Ferramentas (Expansão Fase 1) ---
 

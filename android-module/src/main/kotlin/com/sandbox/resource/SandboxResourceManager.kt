@@ -221,7 +221,7 @@ private class SniSocketFactory(
     override fun getSupportedCipherSuites(): Array<String> = delegate.supportedCipherSuites
 
     override fun createSocket(host: String, port: Int): java.net.Socket = configure(delegate.createSocket(host, port))
-    override fun createSocket(host: String, port: Int, localHost: String, localPort: Int): java.net.Socket = configure(delegate.createSocket(host, port, java.net.InetAddress.getByName(localHost), localPort))
+    override fun createSocket(host: String, port: Int, localAddress: java.net.InetAddress, localPort: Int): java.net.Socket = configure(delegate.createSocket(host, port, localAddress, localPort))
     override fun createSocket(host: java.net.InetAddress, port: Int): java.net.Socket = configure(delegate.createSocket(host, port))
     override fun createSocket(address: java.net.InetAddress, port: Int, localAddress: java.net.InetAddress, localPort: Int): java.net.Socket = configure(delegate.createSocket(address, port, localAddress, localPort))
     override fun createSocket(socket: java.net.Socket, host: String, port: Int, autoClose: Boolean): java.net.Socket = configure(delegate.createSocket(socket, host, port, autoClose))

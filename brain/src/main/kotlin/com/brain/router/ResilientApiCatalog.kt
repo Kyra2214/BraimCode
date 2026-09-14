@@ -3,17 +3,21 @@ package com.brain.router
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import java.io.File
+import org.json.JSONObject
 
 /** Stateful quota and fallback layer. Reservations are consumed exactly once. */
 class ResilientApiCatalog(
     private val delegate: ApiCatalog,
     private val cooldown: Duration = Duration.ofSeconds(30),
-    private val clock: () -> Instant = { Instant.now() }
+    private val clock: () -> Instant = { Instant.now() },
+    private val stateFile: File? = null
 ) : ApiCatalog {
     private data class Window(var minuteAt: Instant, var dayAt: Instant, var minuteUsed: Int = 0, var dayUsed: Int = 0, var reserved: Int = 0)
     private val windows = ConcurrentHashMap<String, Window>()
     private val cooldownUntil = ConcurrentHashMap<String, Instant>()
     private fun key(p: String, m: String) = "$p::$m"
+    init { loadState() }
 
     override fun listarModelos(): List<ProviderModel> = delegate.listarModelos()
     override fun listarPorPapel(papel: PapelPipeline): List<ProviderModel> = delegate.listarPorPapel(papel).filter(::available)
@@ -33,6 +37,7 @@ class ResilientApiCatalog(
             cooldownUntil[key(providerId, modeloId)] = clock().plus(cooldown)
         }
         delegate.registrarResultado(providerId, modeloId, sucesso, latenciaMs, erro)
+        saveState()
     }
 
     @Synchronized fun reserve(model: ProviderModel): Boolean {
@@ -41,6 +46,7 @@ class ResilientApiCatalog(
         window.minuteUsed++
         window.dayUsed++
         window.reserved++
+        saveState()
         return true
     }
 
@@ -51,6 +57,7 @@ class ResilientApiCatalog(
             cooldownUntil[key(model.providerId, model.modeloId)] = clock().plus(cooldown)
         }
         delegate.registrarResultado(model.providerId, model.modeloId, success, 0L, error?.let { ErroObservado(it, clock()) })
+        saveState()
     }
 
     fun waterfall(papel: PapelPipeline, outcome: (ProviderModel) -> Boolean): ProviderModel? =
@@ -71,6 +78,29 @@ class ResilientApiCatalog(
     private fun consume(model: ProviderModel) {
         val window = window(model)
         if (window.reserved > 0) window.reserved-- else { window.minuteUsed++; window.dayUsed++ }
+    }
+
+    @Synchronized private fun saveState() {
+        val file = stateFile ?: return
+        file.parentFile?.mkdirs()
+        val json = JSONObject()
+        windows.forEach { (id, w) -> json.put("w:$id", JSONObject().put("minuteAt", w.minuteAt.toString()).put("dayAt", w.dayAt.toString()).put("minuteUsed", w.minuteUsed).put("dayUsed", w.dayUsed).put("reserved", w.reserved)) }
+        cooldownUntil.forEach { (id, until) -> json.put("c:$id", until.toString()) }
+        file.writeText(json.toString())
+    }
+
+    private fun loadState() {
+        val file = stateFile ?: return
+        if (!file.isFile) return
+        runCatching {
+            val json = JSONObject(file.readText())
+            json.keys().forEach { id ->
+                when {
+                    id.startsWith("w:") -> json.getJSONObject(id).let { w -> windows[id.removePrefix("w:")] = Window(Instant.parse(w.getString("minuteAt")), Instant.parse(w.getString("dayAt")), w.getInt("minuteUsed"), w.getInt("dayUsed"), w.getInt("reserved")) }
+                    id.startsWith("c:") -> cooldownUntil[id.removePrefix("c:")] = Instant.parse(json.getString(id))
+                }
+            }
+        }
     }
 
     private fun window(model: ProviderModel): Window {

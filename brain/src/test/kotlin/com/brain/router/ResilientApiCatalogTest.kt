@@ -2,6 +2,7 @@ package com.brain.router
 
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicReference
+import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -32,5 +33,15 @@ class ResilientApiCatalogTest {
         val catalog = ResilientApiCatalog(InMemoryApiCatalog(listOf(first, second)))
         val chosen = catalog.waterfall(PapelPipeline.EXECUCAO_CODIGO) { it.providerId == "second" }
         assertEquals("second", chosen?.providerId)
+    }
+
+    @Test fun `quota persiste entre instancias`() {
+        val file = Files.createTempFile("api-quota", ".json").toFile()
+        try {
+            val first = ResilientApiCatalog(InMemoryApiCatalog(listOf(model())), stateFile = file)
+            assertTrue(first.reserve(model()))
+            val second = ResilientApiCatalog(InMemoryApiCatalog(listOf(model())), stateFile = file)
+            assertEquals(1, second.statsAtuais("p", "m")?.quotaRestanteEstimada)
+        } finally { file.delete() }
     }
 }

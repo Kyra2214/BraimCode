@@ -26,11 +26,12 @@ data class ApiProvider(
 )
 
 /**
- * Carrega o catálogo de APIs gratuitas de `assets/ai_api_catalog.json`.
- * Este é o mesmo seed real referenciado em com.brain.router.ApiCatalog —
- * só os campos precisos pra UI (cadastro, doc, endpoint) são expostos aqui.
- * Lembrete do escopo do projeto: só entram provedores com camada gratuita
- * (FREE_TIER / FREE_PERMANENT / PROMOTIONAL_CREDITS), nunca paga.
+ * Carrega o catálogo de APIs disponíveis para cadastro.
+ *
+ * O campo `access` informa a modalidade real do modelo (FREE_TIER,
+ * FREE_PERMANENT, PROMOTIONAL_CREDITS ou PAYG). Assim a UI pode cadastrar
+ * tanto opções gratuitas quanto providers pagos opcionais, sem confundir
+ * Grok/xAI com uma API gratuita.
  */
 object ApiKeyCatalogLoader {
     fun load(context: Context): List<ApiProvider> {

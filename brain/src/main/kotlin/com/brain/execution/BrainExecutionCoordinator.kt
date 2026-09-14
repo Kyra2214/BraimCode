@@ -35,7 +35,7 @@ class BrainExecutionCoordinator(
             val decision = policy.authorize(actor, step.capacidade, step.id, PolicyContext(runId = runId, taskId = step.id, actor = actor, riskClass = step.riskClass))
             emit(runId, step.id, "PolicyChecked", mapOf("decision" to decision.decision.name, "capability" to step.capacidade))
             if (decision.decision == Decision.ASK) {
-                approvals.create(ApprovalRequest(runId = runId, taskId = step.id, capability = step.capacidade, resource = step.id, expiresAt = decision.expiresAt))
+                approvals.create(ApprovalRequest(runId = runId, taskId = step.id, capability = step.capacidade, resource = step.id, expiresAt = Instant.parse(decision.expiresAt)))
                 emit(runId, step.id, "ApprovalRequested", emptyMap())
                 return CoordinatorResult(runId, CoordinatorStatus.WAITING_APPROVAL, attempts, errors)
             }
@@ -95,7 +95,6 @@ class BrainExecutionCoordinator(
                     if (result?.success == true) break
                 }
 
-                // Último recurso: a IA local dentro do Sandbox, sem custo de API.
                 if (result?.success != true) {
                     emit(runId, step.id, "LocalFallback", mapOf("reason" to "todos os provedores gratuitos falharam ou atingiram o limite"))
                     val localAttempt = executor.execute(step, null)

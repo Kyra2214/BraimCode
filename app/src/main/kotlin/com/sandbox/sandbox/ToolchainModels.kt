@@ -59,9 +59,12 @@ object BuiltInToolchains {
 class ToolchainDetector(private val executor: SandboxCommandExecutor) {
     fun detect(profile: ToolchainProfile): ToolchainDetection {
         val command = if (profile.id == "java") {
-            // On Android/proot the default 256 MiB JVM heap may be impossible to
-            // reserve even when Java is installed. Keep this probe lightweight.
-            listOf("java", "--version")
+            // Android/proot can fail to reserve the default JVM heap even when Java is installed.
+            // Keep the version probe small so detection does not depend on the default heap size.
+            listOf(
+                "bash", "-c",
+                "export JAVA_TOOL_OPTIONS='-Xmx64m -XX:MaxMetaspaceSize=32m'; exec java --version"
+            )
         } else {
             listOf(profile.executable) + profile.versionArguments
         }

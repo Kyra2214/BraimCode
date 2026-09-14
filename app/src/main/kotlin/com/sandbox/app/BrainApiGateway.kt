@@ -1,5 +1,8 @@
 package com.sandbox.app
 
+import com.brain.memory.ConservativeKnowledgeCritic
+import com.brain.memory.KnowledgeCritic
+import com.brain.memory.KnowledgeCriticDecision
 import com.brain.memory.KnowledgeEntry
 import com.brain.memory.KnowledgeLearningCycle
 import com.brain.memory.KnowledgeSource
@@ -22,7 +25,8 @@ class BrainApiGateway(
     private val providers: List<ApiProvider>,
     private val keyStore: ApiKeyStore,
     private val router: DefaultAIRouter = DefaultAIRouter(),
-    private val learning: KnowledgeLearningCycle = KnowledgeLearningCycle()
+    private val learning: KnowledgeLearningCycle = KnowledgeLearningCycle(),
+    private val critic: KnowledgeCritic = ConservativeKnowledgeCritic()
 ) {
     data class GatewayResult(
         val text: String,
@@ -31,14 +35,24 @@ class BrainApiGateway(
         val attempts: List<String>,
         val source: KnowledgeSource? = null,
         val knowledgeId: String? = null,
-        val fromMemory: Boolean = false
+        val fromMemory: Boolean = false,
+        val knowledgeValidated: Boolean = false
     )
 
     fun complete(prompt: String, papel: PapelPipeline = PapelPipeline.ESCRITA_DE_PROMPT): GatewayResult {
         require(prompt.isNotBlank()) { "prompt não pode ser vazio" }
 
         learning.recall(prompt)?.let { learned ->
-            return GatewayResult(learned.answer, "memory", "knowledge:${learned.id}", emptyList(), learned.source, learned.id, true)
+            return GatewayResult(
+                learned.answer,
+                "memory",
+                "knowledge:${learned.id}",
+                emptyList(),
+                learned.source,
+                learned.id,
+                true,
+                true
+            )
         }
 
         val catalog = ApiCatalogRegistry.current() ?: error("Catálogo de APIs não instalado")
@@ -61,15 +75,27 @@ class BrainApiGateway(
             else if (currentModels.isNotEmpty()) {
                 val replacement = currentModels.firstOrNull { papel in it.papeisSugeridos }
                 if (replacement != null && tried.add("${replacement.providerId}::${replacement.modeloId}")) model = replacement
-                else { attempts += "$key: modelo removido/indisponível"; continue }
+                else {
+                    attempts += "$key: modelo removido/indisponível"
+                    continue
+                }
             }
 
             val provider = providers.firstOrNull { it.id == model.providerId }
-            if (provider == null) { attempts += "$key: provider não cadastrado"; continue }
+            if (provider == null) {
+                attempts += "$key: provider não cadastrado"
+                continue
+            }
             val apiKey = keyStore.get(model.providerId)?.takeIf { it.isNotBlank() }
-            if (apiKey == null) { attempts += "$key: chave não cadastrada"; continue }
+            if (apiKey == null) {
+                attempts += "$key: chave não cadastrada"
+                continue
+            }
             val baseEndpoint = provider.models.firstOrNull()?.endpoint
-            if (baseEndpoint.isNullOrBlank()) { attempts += "$key: endpoint ausente"; continue }
+            if (baseEndpoint.isNullOrBlank()) {
+                attempts += "$key: endpoint ausente"
+                continue
+            }
 
             val client = AndroidProviderClient(model.providerId, chatCompletionsEndpoint(baseEndpoint))
             val request = ProviderRequest(model.modeloId, prompt, mapOf("Authorization" to "Bearer $apiKey"))
@@ -77,10 +103,34 @@ class BrainApiGateway(
             if (response != null && response.statusCode in 200..299) {
                 val text = extractText(response.body)
                 if (text.isNotBlank()) {
-                    val source = buildSource(response, model, provider, text)
+                    val source = buildSource(response, model, text)
                     val urls = extractUrls(response.body + "\n" + text)
-                    val knowledge = learning.observeExternal(prompt, text, source, urls + source?.uri.orEmpty(), tagsFor(papel, prompt))
-                    return GatewayResult(text, model.providerId, model.modeloId, attempts, source, knowledge.id, false)
+                    val knowledge = learning.observeExternal(
+                        problem = prompt,
+                        answer = text,
+                        source = source,
+                        retrievalHints = urls,
+                        tags = tagsFor(papel, prompt)
+                    )
+                    val verdict = critic.evaluate(knowledge)
+                    val validated = when (verdict.decision) {
+                        KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, source) != null
+                        KnowledgeCriticDecision.REJECT -> false
+                        KnowledgeCriticDecision.UNCERTAIN -> false
+                    }
+                    if (!validated) {
+                        attempts += "$key: Critic ${verdict.decision.name.lowercase()} (${verdict.reason})"
+                    }
+                    return GatewayResult(
+                        text = text,
+                        providerId = model.providerId,
+                        modelId = model.modeloId,
+                        attempts = attempts,
+                        source = source,
+                        knowledgeId = knowledge.id,
+                        fromMemory = false,
+                        knowledgeValidated = validated
+                    )
                 }
                 attempts += "$key: resposta sem conteúdo"
             } else attempts += "$key: HTTP ${response?.statusCode ?: 0}"
@@ -88,19 +138,21 @@ class BrainApiGateway(
         throw IllegalStateException("Todas as APIs gratuitas falharam. Tentativas: ${attempts.joinToString(" | ")}")
     }
 
-    /** O Critic chama isto depois de validar; só conhecimento validado entra no recall. */
-    fun confirmKnowledge(knowledgeId: String, confidence: Double, source: KnowledgeSource? = null): KnowledgeEntry? = learning.confirm(knowledgeId, confidence, source)
+    /** Permite a validação especializada substituir o gate conservador. */
+    fun confirmKnowledge(knowledgeId: String, confidence: Double, source: KnowledgeSource? = null): KnowledgeEntry? =
+        learning.confirm(knowledgeId, confidence, source)
 
     /** Corrige a resposta aprendida sem perder sua identidade e histórico. */
-    fun correctKnowledge(knowledgeId: String, correctedAnswer: String, confidence: Double): KnowledgeEntry? = learning.correct(knowledgeId, correctedAnswer, confidence)
+    fun correctKnowledge(knowledgeId: String, correctedAnswer: String, confidence: Double): KnowledgeEntry? =
+        learning.correct(knowledgeId, correctedAnswer, confidence)
 
-    private fun buildSource(response: ProviderResponse, model: ProviderModel, provider: ApiProvider, text: String): KnowledgeSource {
+    private fun buildSource(response: ProviderResponse, model: ProviderModel, text: String): KnowledgeSource {
         val urls = extractUrls(response.body + "\n" + text)
         val github = urls.firstOrNull { it.contains("github.com/", ignoreCase = true) }
         val parts = github?.let(::parseGithub)
         return KnowledgeSource(
             type = if (github != null) "github" else "api",
-            uri = github ?: urls.firstOrNull() ?: provider.documentationUrl,
+            uri = github ?: urls.firstOrNull(),
             providerId = response.providerId,
             modelId = model.modeloId,
             repository = parts?.repository,
@@ -129,7 +181,10 @@ class BrainApiGateway(
     }.getOrNull()
 
     private fun extractUrls(value: String): List<String> = Regex("https?://[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE)
-        .findAll(value).map { it.value.trimEnd('.', ',', ';', ')', ']', '}') }.distinct().toList()
+        .findAll(value)
+        .map { it.value.trimEnd('.', ',', ';', ')', ']', '}') }
+        .distinct()
+        .toList()
 
     private fun tagsFor(papel: PapelPipeline, prompt: String): List<String> =
         (listOf(papel.name.lowercase()) + prompt.lowercase().split(Regex("[^\\p{L}\\p{N}_]+"))
@@ -177,6 +232,8 @@ private class AndroidProviderClient(
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             ProviderResponse(status, body, (System.nanoTime() - started) / 1_000_000, providerId)
-        } finally { connection.disconnect() }
+        } finally {
+            connection.disconnect()
+        }
     }
 }

@@ -82,3 +82,7 @@ A lógica já existente do `KeywordPlanner` foi extraída para `FunctionSplitter
 ## Fase 12 — Dispatcher
 
 Foi criado `com.brain.dispatch.Dispatcher`, que recebe uma tarefa do `ExecutionPlan`, consulta `CapabilityDiscovery`, escolhe um único candidato e encaminha uma `ActionRequest` ao `ActionGateway`. Ele não redefine estratégia, não autoriza e não executa comandos diretamente.
+
+## Fase 13 — Workflow/DAG
+
+O `WorkflowEngine` existente foi evoluído, sem criar outro motor, para manter DAG/dependências, retry, lease/fencing e idempotência, e acrescentar paralelismo limitado por `maxParallelism`, cancelamento cooperativo, timeout por node, status `CANCELLED`/`TIMED_OUT`, evidências intermediárias e persistência dessas evidências. A assinatura antiga com execute como trailing lambda foi preservada.

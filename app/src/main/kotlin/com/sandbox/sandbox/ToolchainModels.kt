@@ -38,7 +38,7 @@ data class ToolchainInstallPlan(
     val timeoutSeconds: Long = 900
 ) {
     init {
-        require(command.size == 3 && command[0] == "bash" && command[1] == "-c")
+        require(command.size >= 6 && command[0] == "apt-get")
         require(timeoutSeconds in 60..3600)
     }
 }
@@ -188,8 +188,7 @@ class ToolchainManager(
         val profile = profile(id)
         persist(ToolchainStatus(id, ToolchainState.REMOVING))
         return@synchronized try {
-            val packages = profile.packages.joinToString(" ")
-            val command = listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 remove -y $packages")
+            val command = listOf("apt-get", "-o", "Dpkg::Use-Pty=0", "remove", "-y") + profile.packages
             val execution = executor.execute(command, 900)
             check(execution.succeeded) { execution.stderr.ifBlank { "remoção falhou" } }
             val result = persist(ToolchainStatus(id, ToolchainState.NOT_INSTALLED))
@@ -205,20 +204,13 @@ class ToolchainManager(
         val preExistingNames = snapshot.installedPackages.map { it.substringBefore('=') }.toSet()
         val addedByTransaction = profile.packages.filter { it !in preExistingNames }
         if (addedByTransaction.isNotEmpty()) {
-            val packages = addedByTransaction.joinToString(" ")
-            val result = executor.execute(
-                listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 remove -y $packages"),
-                900
-            )
+            val result = executor.execute(listOf("apt-get", "-o", "Dpkg::Use-Pty=0", "remove", "-y") + addedByTransaction, 900)
             if (!result.succeeded) return result.stderr.ifBlank { "rollback remove falhou" }.take(4096)
         }
 
         if (snapshot.installedPackages.isNotEmpty()) {
-            val exact = snapshot.installedPackages.joinToString(" ")
-            val result = executor.execute(
-                listOf("bash", "-c", "export DEBIAN_FRONTEND=noninteractive; apt-get -o Dpkg::Use-Pty=0 install -y $exact"),
-                900
-            )
+            val exact = snapshot.installedPackages.map { it.substringBefore('=') }
+            val result = executor.execute(listOf("apt-get", "-o", "Dpkg::Use-Pty=0", "install", "-y") + exact, 900)
             if (!result.succeeded) return result.stderr.ifBlank { "rollback restore falhou: versão anterior indisponível" }.take(4096)
         }
 

@@ -7,5 +7,6 @@
   "sizeBytes": 1764603872,
   "sha256": "374e795ce3caa8eaf4cbb58f39d591230918f5226ec525d0140b5f94ff472c09",
   "minAppVersion": "1.0.0",
-  "ollamaIncluded": false
+  "ollamaIncluded": false,
+  "signatureRequired": false
 }

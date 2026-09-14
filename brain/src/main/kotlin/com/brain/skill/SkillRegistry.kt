@@ -62,7 +62,8 @@ class SkillRegistry(
         if (manifest.contentHash != null && calculated != null && manifest.contentHash != calculated) {
             throw SecurityException("hash da Skill não corresponde ao conteúdo")
         }
-        if (manifest.enabled && manifest.sourceId != "builtin" && !verifySignature(manifest, calculated ?: manifest.contentHash)) {
+        val builtIn = manifest.sourceId == "builtin" || manifest.sourceId == "brain-builtin"
+        if (manifest.enabled && !builtIn && !verifySignature(manifest, calculated ?: manifest.contentHash)) {
             throw SecurityException("Skill externa ativa exige assinatura Ed25519 verificável")
         }
         val existing = records[manifest.id]

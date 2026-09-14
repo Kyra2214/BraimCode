@@ -20,6 +20,12 @@ class SkillRegistryTest {
         assertEquals(listOf("code.analysis"), registry.findForCapability("code_analysis").map { it.manifest.id })
     }
 
+    @Test fun `skill brain-builtin é reconhecida como built-in`() {
+        val registry = SkillRegistry()
+        registry.register(skill(source = "brain-builtin"))
+        assertTrue(registry.isUsable("code.analysis"))
+    }
+
     @Test(expected = SecurityException::class)
     fun `skill externa não verificada não pode ser ativada`() {
         SkillRegistry().register(skill(trust = TrustLevel.UNTRUSTED))

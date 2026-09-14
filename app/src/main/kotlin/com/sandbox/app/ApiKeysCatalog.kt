@@ -1,11 +1,19 @@
 package com.sandbox.app
 
 import android.content.Context
+import com.brain.router.ApiCatalogRegistry
+import com.brain.router.DynamicApiProvider
+import com.brain.router.DynamicFreeApiCatalog
+import com.brain.router.DynamicFreeApiModelDiscovery
+import com.brain.router.PapelPipeline
+import com.brain.router.ProviderModel
+import com.brain.router.JanelaLimite
 import org.json.JSONObject
 
 /**
- * Um modelo específico oferecido por um provider (granularidade de modelo,
- * não só de empresa — ver com.brain.router.ApiCatalog para o motivo).
+ * Um modelo específico oferecido por um provider.
+ * A lista presente no JSON é apenas bootstrap: o Brain consulta a API do
+ * provider em runtime e substitui os modelos quando a descoberta funciona.
  */
 data class ApiProviderModel(
     val id: String,
@@ -26,12 +34,9 @@ data class ApiProvider(
 )
 
 /**
- * Carrega o catálogo de APIs que o agente pode usar.
- *
- * REGRA DO PROJETO: somente acesso gratuito entra no catálogo operacional.
- * São aceitos FREE_TIER e FREE_PERMANENT. Créditos promocionais e PAYG
- * ficam fora para impedir que o Brain roteie trabalho para uma API que possa
- * gerar cobrança.
+ * Carrega o catálogo operacional e instala o mesmo catálogo no Router do Brain.
+ * Somente FREE_TIER/FREE_PERMANENT entram. IDs de modelos não são uma allowlist:
+ * são apenas seed para o primeiro uso/offline; depois a API é a fonte de verdade.
  */
 object ApiKeyCatalogLoader {
     private val FREE_ACCESS = setOf("FREE_TIER", "FREE_PERMANENT")
@@ -40,7 +45,7 @@ object ApiKeyCatalogLoader {
         val json = context.assets.open("ai_api_catalog.json").bufferedReader().use { it.readText() }
         val root = JSONObject(json)
         val providersJson = root.getJSONArray("providers")
-        return buildList {
+        val providers = buildList {
             for (index in 0 until providersJson.length()) {
                 val providerObj = providersJson.getJSONObject(index)
                 val modelsJson = providerObj.getJSONArray("models")
@@ -81,5 +86,53 @@ object ApiKeyCatalogLoader {
                 }
             }
         }
+
+        installBrainCatalog(providers, context)
+        return providers
+    }
+
+    private fun installBrainCatalog(providers: List<ApiProvider>, context: Context) {
+        val keyStore = ApiKeyStore(context)
+        val dynamicProviders = providers.mapNotNull { provider ->
+            val endpoint = provider.models.firstOrNull()?.endpoint ?: return@mapNotNull null
+            val modelsEndpoint = when {
+                endpoint.endsWith("/models") -> endpoint
+                endpoint.endsWith("/") -> endpoint + "models"
+                else -> endpoint + "/models"
+            }
+            DynamicApiProvider(
+                providerId = provider.id,
+                modelsEndpoint = modelsEndpoint,
+                papers = provider.models.flatMap { model ->
+                    buildList {
+                        if ("chat" in model.capabilities) add(PapelPipeline.ESCRITA_DE_PROMPT)
+                        if ("coding" in model.capabilities || "agent" in model.capabilities) add(PapelPipeline.EXECUCAO_CODIGO)
+                        if ("reasoning" in model.capabilities) add(PapelPipeline.PLANEJAMENTO)
+                    }
+                }.distinct().ifEmpty { PapelPipeline.entries.toList() },
+                providerFreeTier = true
+            )
+        }
+        if (dynamicProviders.isEmpty()) return
+
+        val seed = providers.flatMap { provider ->
+            provider.models.map { model ->
+                ProviderModel(
+                    providerId = provider.id,
+                    modeloId = model.id,
+                    papeisSugeridos = dynamicProviders.first { it.providerId == provider.id }.papers,
+                    janela = JanelaLimite()
+                )
+            }
+        }
+        val discovery = DynamicFreeApiModelDiscovery(apiKey = { providerId -> keyStore.get(providerId) })
+        ApiCatalogRegistry.install(
+            DynamicFreeApiCatalog(
+                seed = seed,
+                providers = dynamicProviders,
+                discovery = discovery,
+                refreshEveryMs = 5 * 60 * 1000L
+            )
+        )
     }
 }

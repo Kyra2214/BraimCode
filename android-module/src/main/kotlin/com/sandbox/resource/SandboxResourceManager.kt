@@ -6,6 +6,12 @@ import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.URL
 import java.security.MessageDigest
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SNIHostName
+import javax.net.ssl.SSLParameters
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 
 /**
  * Responsável por baixar, retomar, validar e manter o rootfs do sandbox.
@@ -22,7 +28,8 @@ import java.security.MessageDigest
 class SandboxResourceManager(
     private val targetFile: File,
     private val rootfsSignatureVerifier: RootfsSignatureVerifier? = null,
-    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
+    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
+    private val addressResolver: (String) -> Array<InetAddress> = { InetAddress.getAllByName(it) }
 ) {
 
     sealed class DownloadResult {
@@ -73,16 +80,25 @@ class SandboxResourceManager(
 
         val url = URL(manifest.url)
         require(url.protocol.equals("https", ignoreCase = true)) { "RootFS exige HTTPS" }
-        require(url.userInfo == null && url.ref == null && isSafeResolvedHost(url.host)) {
+        require(url.userInfo == null && url.ref == null) {
             "destino RootFS inválido ou reservado"
         }
-        val connection = connectionFactory(url).apply {
+        val validatedAddress = resolveValidatedAddress(url.host)
+        val pinnedUrl = URL(url.protocol, validatedAddress.hostAddress, url.port, url.file)
+        val connection = connectionFactory(pinnedUrl).apply {
             connectTimeout = 15_000
             readTimeout = 15_000
             instanceFollowRedirects = false
+            setRequestProperty("Host", hostHeader(url))
             if (existingBytes > 0) {
                 setRequestProperty("Range", "bytes=$existingBytes-")
             }
+        }
+        if (connection is HttpsURLConnection) {
+            connection.hostnameVerifier = HostnameVerifier { _, session ->
+                HttpsURLConnection.getDefaultHostnameVerifier().verify(url.host, session)
+            }
+            connection.sslSocketFactory = SniSocketFactory(connection.sslSocketFactory, url.host)
         }
 
         connection.connect()
@@ -162,14 +178,20 @@ class SandboxResourceManager(
         return rootfsSignatureVerifier?.verify(file, rootfs) == true
     }
 
-    private fun isSafeResolvedHost(host: String): Boolean {
-        if (host.isBlank() || host.equals("localhost", true) || host.endsWith(".localhost", true)) return false
-        val addresses = runCatching { InetAddress.getAllByName(host) }.getOrNull() ?: return false
-        return addresses.isNotEmpty() && addresses.none { address ->
+    private fun resolveValidatedAddress(host: String): InetAddress {
+        if (host.isBlank() || host.equals("localhost", true) || host.endsWith(".localhost", true)) {
+            error("destino RootFS inválido ou reservado")
+        }
+        val addresses = runCatching { addressResolver(host) }.getOrNull()
+            ?: error("hostname RootFS não pôde ser resolvido")
+        require(addresses.isNotEmpty() && addresses.none { address ->
             address.isLoopbackAddress || address.isSiteLocalAddress || address.isLinkLocalAddress ||
                 address.isAnyLocalAddress || address.isMulticastAddress || isMappedPrivate(address.address)
-        }
+        }) { "destino RootFS inválido ou reservado" }
+        return addresses.first()
     }
+
+    private fun hostHeader(url: URL): String = if (url.port == -1 || (url.protocol == "https" && url.port == 443)) url.host else "${url.host}:${url.port}"
 
     private fun isMappedPrivate(bytes: ByteArray): Boolean {
         if (bytes.size != 16 || !bytes.copyOfRange(0, 10).all { it == 0.toByte() } || bytes[10] != 0xff.toByte() || bytes[11] != 0xff.toByte()) return false
@@ -185,5 +207,28 @@ class SandboxResourceManager(
         if (targetFile.exists()) targetFile.delete()
         val partial = File(targetFile.parentFile, "${targetFile.name}.part")
         if (partial.exists()) partial.delete()
+    }
+}
+
+private class SniSocketFactory(
+    private val delegate: SSLSocketFactory,
+    private val hostname: String
+) : SSLSocketFactory() {
+    override fun getDefaultCipherSuites(): Array<String> = delegate.defaultCipherSuites
+    override fun getSupportedCipherSuites(): Array<String> = delegate.supportedCipherSuites
+
+    override fun createSocket(host: String, port: Int): java.net.Socket = configure(delegate.createSocket(host, port))
+    override fun createSocket(host: String, port: Int, localHost: String, localPort: Int): java.net.Socket = configure(delegate.createSocket(host, port, java.net.InetAddress.getByName(localHost), localPort))
+    override fun createSocket(host: java.net.InetAddress, port: Int): java.net.Socket = configure(delegate.createSocket(host, port))
+    override fun createSocket(address: java.net.InetAddress, port: Int, localAddress: java.net.InetAddress, localPort: Int): java.net.Socket = configure(delegate.createSocket(address, port, localAddress, localPort))
+    override fun createSocket(socket: java.net.Socket, host: String, port: Int, autoClose: Boolean): java.net.Socket = configure(delegate.createSocket(socket, host, port, autoClose))
+
+    private fun configure(socket: java.net.Socket): java.net.Socket {
+        if (socket is SSLSocket) {
+            val parameters = socket.sslParameters
+            parameters.serverNames = listOf(SNIHostName(hostname))
+            socket.sslParameters = parameters
+        }
+        return socket
     }
 }

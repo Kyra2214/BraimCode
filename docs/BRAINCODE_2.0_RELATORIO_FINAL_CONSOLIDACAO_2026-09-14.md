@@ -3,8 +3,8 @@
 **Data:** 2026-09-14  
 **Repositório:** `Kyra2214/BrainCode`  
 **Base:** `origin/main` em `d477004`  
-**HEAD consolidado:** `e47b6ec`  
-**Commits novos:** 14  
+**HEAD consolidado:** `d49404b`  
+**Commits novos:** 15  
 **Autor:** Manus AI
 
 ## Conclusão executiva
@@ -103,7 +103,7 @@ A consolidação evoluiu os seguintes componentes existentes:
 
 ## Arquivos alterados e removidos
 
-Entre `origin/main` e o HEAD consolidado foram identificados **32 arquivos alterados ou adicionados**, com aproximadamente **2.342 linhas adicionadas e 40 removidas**. Não houve arquivo removido. O working tree final está limpo.
+Entre `origin/main` e o HEAD consolidado foram identificados **33 arquivos alterados ou adicionados**, com **2.486 linhas adicionadas e 40 removidas**. Não houve arquivo removido. O working tree final está limpo.
 
 Os arquivos de contrato e documentação também foram atualizados, especialmente `contracts/capability.md` e `docs/BRAINCODE_2.0_AUDITORIA_CONSOLIDACAO_2026-09-14.md`.
 

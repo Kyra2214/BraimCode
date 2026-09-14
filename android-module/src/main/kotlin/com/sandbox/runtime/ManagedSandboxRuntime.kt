@@ -26,7 +26,13 @@ class ManagedSandboxRuntime(
         stateRef.set(SandboxState.READY)
     }
 
-    fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox", networkAllowed: Boolean = false): ExecutionLog {
+    /**
+     * Network is enabled by default because the mobile sandbox is intended to
+     * talk to GitHub, AI APIs and download missing dependencies/LLMs. Callers
+     * that explicitly need a network namespace may still pass false; the
+     * launcher treats that isolation as best-effort on Android.
+     */
+    fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox", networkAllowed: Boolean = true): ExecutionLog {
         require(command.isNotEmpty()) { "command não pode ser vazio" }
         require(timeoutSeconds > 0) { "timeoutSeconds deve ser > 0" }
         val id = FileExecutionLogRepository.newId()
@@ -178,14 +184,6 @@ class ManagedSandboxRuntime(
         }.apply { isDaemon = true; name = "sandbox-process-watchdog-${a.id}"; start() }
     }
 
-    /**
-     * Separa a linha de marcação emitida por
-     * [ProotResourceLimits.verifiedPreamble] do stderr real do comando, e
-     * confere se o `ulimit` efetivo bateu com [launcher.resourceLimits].
-     * Retorna `null` no segundo elemento quando o launcher não pediu
-     * nenhum limite (nada para verificar) — nesse caso não há evento a
-     * emitir, só o caso `false` (pedido, mas não confirmado) é uma falha.
-     */
     private fun verifyResourceLimits(rawStderr: String): Pair<String, Boolean?> {
         val limits = launcher.resourceLimits
         if (!limits.hasLimits()) return rawStderr to null
@@ -204,16 +202,9 @@ class ManagedSandboxRuntime(
         return true
     }
 
-    /**
-     * Obtém o PID sem referenciar APIs de [Process] que não existem no
-     * android.jar de todas as versões suportadas. Em JVMs modernas o método
-     * `pid()` é descoberto por reflexão; em Androids que não o expõem, o
-     * encerramento direto do processo continua funcionando.
-     */
     private fun processPid(process: Process): Long? = runCatching {
-        val method = process.javaClass.methods.firstOrNull {
-            it.name == "pid" && it.parameterTypes.isEmpty()
-        } ?: return@runCatching null
+        val method = process.javaClass.methods.firstOrNull { it.name == "pid" && it.parameterTypes.isEmpty() }
+            ?: return@runCatching null
         (method.invoke(process) as? Number)?.toLong()
     }.getOrNull()
 
@@ -225,7 +216,7 @@ class ManagedSandboxRuntime(
 
     private fun emit(type: RuntimeEventType, id: String?, detail: String?) {
         val event = RuntimeEvent(System.currentTimeMillis(), type, id, detail)
-        runCatching { runtimeEventRepository?.append(event) }.onFailure { /* diagnostics must never break execution */ }
+        runCatching { runtimeEventRepository?.append(event) }
         runCatching { events(event) }
     }
 
@@ -259,9 +250,6 @@ private object ProcessTreeTerminator {
         if (processGroupManaged) {
             runCatching { ProcessBuilder(kill, "-$signal", "--", "-$pid").start().waitFor(1, TimeUnit.SECONDS) }
         } else {
-            // Android não expõe uma API portátil para enumerar descendentes.
-            // O fallback usa apenas /proc, disponível no Android, e mata os
-            // filhos antes do processo-pai para não deixar órfãos.
             descendantPids(pid).asReversed().forEach { child ->
                 runCatching { ProcessBuilder(kill, "-$signal", child.toString()).start().waitFor(1, TimeUnit.SECONDS) }
             }

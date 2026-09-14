@@ -1,0 +1,290 @@
+{
+  "versao": 3,
+  "categorias": [
+    {
+      "id": "cat_chat_adulto",
+      "nome": "Chat & Conversação Adulta (NSFW)",
+      "emoji": "💬",
+      "descricao": "Plataformas de conversação, roleplay e chat interativo sem censura ou com filtros restritos minimizados."
+    },
+    {
+      "id": "cat_companhia",
+      "nome": "Companhia & Namoradas Virtuais",
+      "emoji": "💖",
+      "descricao": "IAs de relacionamento, acompanhantes virtuais, voz, fotos realistas e companheiros interativos personalizados."
+    },
+    {
+      "id": "cat_rpg_fantasia",
+      "nome": "RPG & Narrativas Interativas",
+      "emoji": "🎭",
+      "descricao": "Mundos abertos, romances e aventuras baseadas em texto sem moderação de conteúdo adulto."
+    },
+    {
+      "id": "cat_geracao_imagens",
+      "nome": "Geração de Imagens & Arte 18+",
+      "emoji": "🎨",
+      "descricao": "Ferramentas, modelos e plataformas na nuvem para criação de artes visuais, avatares e ilustrações sem censura."
+    },
+    {
+      "id": "cat_modelos_locais",
+      "nome": "Modelos Open Source, Frontends & Locais",
+      "emoji": "💻",
+      "descricao": "Interfaces avançadas, frontends de roleplay e modelos locais para execução offline sem moderação."
+    }
+  ],
+  "ias": [
+    {
+      "id": "janitor_ai",
+      "nome": "Janitor AI",
+      "logo": "https://www.google.com/s2/favicons?domain=janitorai.com&sz=128",
+      "site": "https://janitorai.com",
+      "descricao": "Plataforma líder em chat com personagens e roleplay, contando com a Janitor LLM sem censura e suporte a chaves externas.",
+      "categoria_id": "cat_chat_adulto",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": true
+    },
+    {
+      "id": "crushon_ai",
+      "nome": "Crushon.ai",
+      "logo": "https://www.google.com/s2/favicons?domain=crushon.ai&sz=128",
+      "site": "https://crushon.ai",
+      "descricao": "Plataforma de bate-papo com personagens de IA totalmente livre de filtros de conteúdo adulto e NSFW.",
+      "categoria_id": "cat_chat_adulto",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": true
+    },
+    {
+      "id": "chub_ai",
+      "nome": "Chub.ai (MarsAI)",
+      "logo": "https://www.google.com/s2/favicons?domain=chub.ai&sz=128",
+      "site": "https://chub.ai",
+      "descricao": "O maior repositório de definições de personagens do mundo, integrado com motores de chat sem censura.",
+      "categoria_id": "cat_chat_adulto",
+      "status": "Disponível",
+      "acesso": "Gratuito / Freemium",
+      "destaque": true
+    },
+    {
+      "id": "spicychat_ai",
+      "nome": "SpicyChat AI",
+      "logo": "https://www.google.com/s2/favicons?domain=spicychat.ai&sz=128",
+      "site": "https://spicychat.ai",
+      "descricao": "Plataforma extremamente popular para bate-papo sem censura com milhares de personagens criados pela comunidade.",
+      "categoria_id": "cat_chat_adulto",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": true
+    },
+    {
+      "id": "figgs_ai",
+      "nome": "Figgs.ai",
+      "logo": "https://www.google.com/s2/favicons?domain=figgs.ai&sz=128",
+      "site": "https://www.figgs.ai",
+      "descricao": "Plataforma de criação e chat com personagens de IA interativos com foco em liberdade de expressão e roleplay.",
+      "categoria_id": "cat_chat_adulto",
+      "status": "Disponível",
+      "acesso": "Gratuito",
+      "destaque": false
+    },
+    {
+      "id": "char_hub",
+      "nome": "CharHub",
+      "logo": "https://www.google.com/s2/favicons?domain=charhub.io&sz=128",
+      "site": "https://charhub.io",
+      "descricao": "Agregador e plataforma de chat com personagens de IA para roleplay irrestrito.",
+      "categoria_id": "cat_chat_adulto",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": false
+    },
+    {
+      "id": "Candy_ai",
+      "nome": "Candy.ai",
+      "logo": "https://www.google.com/s2/favicons?domain=candy.ai&sz=128",
+      "site": "https://candy.ai",
+      "descricao": "Plataforma premium especializada em namoradas virtuais com geração de fotos realistas, voz e interações profundas.",
+      "categoria_id": "cat_companhia",
+      "status": "Disponível",
+      "acesso": "Pago / Freemium",
+      "destaque": true
+    },
+    {
+      "id": "nomi_ai",
+      "nome": "Nomi.ai",
+      "logo": "https://www.google.com/s2/favicons?domain=nomi.ai&sz=128",
+      "site": "https://nomi.ai",
+      "descricao": "Companheiros de IA altamente inteligentes, com memória persistente, capacidade de envio de selfies e conversas sem censura.",
+      "categoria_id": "cat_companhia",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": true
+    },
+    {
+      "id": "kindroid",
+      "nome": "Kindroid",
+      "logo": "https://www.google.com/s2/favicons?domain=kindroid.ai&sz=128",
+      "site": "https://kindroid.ai",
+      "descricao": "Assistente virtual realista com alta imersão, autonomia de mensagens e suporte a interações íntimas e dinâmicas.",
+      "categoria_id": "cat_companhia",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": true
+    },
+    {
+      "id": "dreamgf_ai",
+      "nome": "DreamGF.ai",
+      "logo": "https://www.google.com/s2/favicons?domain=dreamgf.ai&sz=128",
+      "site": "https://dreamgf.ai",
+      "descricao": "Crie e interaja com a namorada virtual dos seus sonhos com customização visual avançada e chat ilimitado.",
+      "categoria_id": "cat_companhia",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": false
+    },
+    {
+      "id": "soul_gen",
+      "nome": "SoulGen",
+      "logo": "https://www.google.com/s2/favicons?domain=soulgen.net&sz=128",
+      "site": "https://www.soulgen.net",
+      "descricao": "Gerador de namoradas virtuais com foco em criação de imagens e chat interativo personalizado.",
+      "categoria_id": "cat_companhia",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": false
+    },
+    {
+      "id": "horny_companion",
+      "nome": "Anima AI / Replika Alternativas",
+      "logo": "https://www.google.com/s2/favicons?domain=myanima.ai&sz=128",
+      "site": "https://myanima.ai",
+      "descricao": "Companheiro de IA voltado para conversas abertas, suporte emocional e roleplay sem julgamentos.",
+      "categoria_id": "cat_companhia",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": false
+    },
+    {
+      "id": "novel_ai",
+      "nome": "NovelAI",
+      "logo": "https://www.google.com/s2/favicons?domain=novelai.net&sz=128",
+      "site": "https://novelai.net",
+      "descricao": "Assistente de escrita criativa e narrativa baseado em modelos proprietários sem censura (Kayra, Clio), ideal para RPG e histórias adultas.",
+      "categoria_id": "cat_rpg_fantasia",
+      "status": "Disponível",
+      "acesso": "Assinatura",
+      "destaque": true
+    },
+    {
+      "id": "aidungeon",
+      "nome": "AI Dungeon",
+      "logo": "https://www.google.com/s2/favicons?domain=aidungeon.com&sz=128",
+      "site": "https://aidungeon.com",
+      "descricao": "Pioneiro em jogos de aventura em texto com IA, permitindo configurações flexíveis e modelos sem censura para campanhas livres.",
+      "categoria_id": "cat_rpg_fantasia",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": false
+    },
+    {
+      "id": "Holo_ai",
+      "nome": "Holo AI",
+      "logo": "https://www.google.com/s2/favicons?domain=holoai.org&sz=128",
+      "site": "https://holoai.org",
+      "descricao": "Plataforma de escrita e histórias com IA focada em criadores de conteúdo e narrativas livres de censura.",
+      "categoria_id": "cat_rpg_fantasia",
+      "status": "Disponível",
+      "acesso": "Assinatura",
+      "destaque": false
+    },
+    {
+      "id": "pony_diffusion",
+      "nome": "Pony Diffusion (Civitai)",
+      "logo": "https://www.google.com/s2/favicons?domain=civitai.com&sz=128",
+      "site": "https://civitai.com",
+      "descricao": "Modelos especializados baseados em Stable Diffusion para geração de imagens de alta qualidade, animes e arte 18+ sem filtros.",
+      "categoria_id": "cat_geracao_imagens",
+      "status": "Disponível",
+      "acesso": "Gratuito (Open Source)",
+      "destaque": true
+    },
+    {
+      "id": "tensor_art",
+      "nome": "Tensor.Art",
+      "logo": "https://www.google.com/s2/favicons?domain=tensor.art&sz=128",
+      "site": "https://tensor.art",
+      "descricao": "Plataforma online para execução de modelos Stable Diffusion, LoRAs e geração de imagens artísticas e NSFW na nuvem.",
+      "categoria_id": "cat_geracao_imagens",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": true
+    },
+    {
+      "id": "perchance_ai",
+      "nome": "Perchance AI Generator",
+      "logo": "https://www.google.com/s2/favicons?domain=perchance.org&sz=128",
+      "site": "https://perchance.org/ai-text-generator",
+      "descricao": "Geradores gratuitos ilimitados de texto e imagens baseados em IA sem censura e sem necessidade de cadastro.",
+      "categoria_id": "cat_geracao_imagens",
+      "status": "Disponível",
+      "acesso": "Gratuito",
+      "destaque": true
+    },
+    {
+      "id": "Hentai_ai",
+      "nome": "Yodayo / HentaiLlama",
+      "logo": "https://www.google.com/s2/favicons?domain=yodayo.com&sz=128",
+      "site": "https://yodayo.com",
+      "descricao": "Plataforma de arte e chat focada em anime e conteúdos criativos sem moderação estrita.",
+      "categoria_id": "cat_geracao_imagens",
+      "status": "Disponível",
+      "acesso": "Freemium",
+      "destaque": false
+    },
+    {
+      "id": "silly_tavern",
+      "nome": "SillyTavern",
+      "logo": "https://www.google.com/s2/favicons?domain=sillytavern.app&sz=128",
+      "site": "https://sillytavern.app",
+      "descricao": "Interface frontend local avançada para roleplay com IAs, suporte a extensões, expressões faciais, texto-para-voz e múltiplos backends.",
+      "categoria_id": "cat_modelos_locais",
+      "status": "Disponível",
+      "acesso": "Gratuito (Open Source)",
+      "destaque": true
+    },
+    {
+      "id": "kobold_cpp",
+      "nome": "KoboldCPP & KoboldAI",
+      "logo": "https://www.google.com/s2/favicons?domain=github.com&sz=128",
+      "site": "https://github.com/LostRuins/koboldcpp",
+      "descricao": "Ferramenta robusta para rodar modelos de linguagem GGUF (como Llama 3 Uncensored, Mistral, Command R) localmente no seu computador ou celular.",
+      "categoria_id": "cat_modelos_locais",
+      "status": "Disponível",
+      "acesso": "Gratuito (Open Source)",
+      "destaque": true
+    },
+    {
+      "id": "open_webui",
+      "nome": "Open WebUI (Ollama / Local)",
+      "logo": "https://www.google.com/s2/favicons?domain=openwebui.com&sz=128",
+      "site": "https://github.com/open-webui/open-webui",
+      "descricao": "Interface rica semelhante ao ChatGPT para gerenciar modelos locais sem censura via Ollama, LM Studio ou APIs externas.",
+      "categoria_id": "cat_modelos_locais",
+      "status": "Disponível",
+      "acesso": "Gratuito (Open Source)",
+      "destaque": false
+    },
+    {
+      "id": "lm_studio",
+      "nome": "LM Studio",
+      "logo": "https://www.google.com/s2/favicons?domain=lmstudio.ai&sz=128",
+      "site": "https://lmstudio.ai",
+      "descricao": "Aplicativo desktop para baixar e rodar qualquer modelo de IA de código aberto (HuggingFace) de forma totalmente privada e sem censura.",
+      "categoria_id": "cat_modelos_locais",
+      "status": "Disponível",
+      "acesso": "Gratuito",
+      "destaque": true
+    }
+  ]
+}

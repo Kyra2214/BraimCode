@@ -1,5 +1,11 @@
 package com.brain.skill
 
+import com.brain.capability.CapabilityAvailability
+import com.brain.capability.CapabilityCategory
+import com.brain.capability.CapabilityDefinition
+import com.brain.capability.CapabilityProvenance
+import com.brain.capability.CapabilityRegistry
+import com.brain.capability.CapabilityStatus
 import java.security.MessageDigest
 import java.security.KeyFactory
 import java.security.Signature
@@ -95,6 +101,48 @@ class SkillRegistry(
         .filter { capability in it.manifest.capabilities }
 
     fun isUsable(id: String): Boolean = get(id)?.let { it.manifest.enabled && !it.revoked } == true
+
+    /**
+     * Publica manifests no registry universal. A publicação é metadado para
+     * discovery; assinatura, trust e revogação continuam sendo decididos por
+     * este registry especializado antes de uma Skill ser considerada usável.
+     */
+    fun publishTo(registry: CapabilityRegistry) {
+        listEnabled().forEach { record ->
+            val manifest = record.manifest
+            val trustScore = when (manifest.trustLevel) {
+                TrustLevel.CORE -> 1.0
+                TrustLevel.VERIFIED -> .9
+                TrustLevel.COMMUNITY -> .6
+                TrustLevel.UNTRUSTED -> .1
+            }
+            registry.register(
+                CapabilityDefinition(
+                    id = "skill.${manifest.id}",
+                    name = manifest.name,
+                    description = manifest.description,
+                    category = CapabilityCategory.SKILL,
+                    ownerId = manifest.sourceId,
+                    origin = manifest.sourceId,
+                    requiredCapabilities = manifest.capabilities,
+                    providedCapabilities = manifest.capabilities,
+                    requiredPermissions = manifest.requiredPermissions,
+                    reliability = trustScore,
+                    quality = trustScore,
+                    availability = CapabilityAvailability.AVAILABLE,
+                    version = manifest.version,
+                    status = if (record.revoked) CapabilityStatus.REVOKED else CapabilityStatus.ACTIVE,
+                    provenance = listOf(
+                        CapabilityProvenance(
+                            sourceId = manifest.sourceId,
+                            sourceType = "skill-manifest",
+                            evidence = manifest.contentHash ?: manifest.id
+                        )
+                    )
+                )
+            )
+        }
+    }
 
     private fun validate(manifest: SkillManifest) {
         require(Regex("^[a-z0-9][a-z0-9._-]+$").matches(manifest.id)) { "id de Skill inválido" }

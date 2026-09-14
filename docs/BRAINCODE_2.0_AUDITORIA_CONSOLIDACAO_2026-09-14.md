@@ -58,3 +58,7 @@ Foi criado `com.brain.gateway.ActionGateway` no módulo `:brain` como contrato a
 ## Fase 6 — Agent Registry
 
 O `AgentRegistry` bounded existente foi preservado e passou a publicar definições `CapabilityCategory.AGENT` no registry universal por meio de `publishTo`. O índice local continua armazenando objetos executáveis e a publicação é apenas declarativa; missão, allowlist e evidência continuam obrigatórias. O teste do módulo Android não pôde ser executado porque o ambiente não possui Android SDK configurado (`ANDROID_HOME`/`sdk.dir` ausentes); `:brain:test` permaneceu verde.
+
+## Fase 7 — Skill Registry
+
+O `SkillRegistry` especializado existente foi preservado para validação de manifests, assinatura, trust e revogação. Ele passou a publicar somente Skills habilitadas no `CapabilityRegistry` por `publishTo`; a publicação não concede autorização e mantém as capabilities declaradas descobríveis.

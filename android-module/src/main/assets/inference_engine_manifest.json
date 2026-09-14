@@ -1,0 +1,9 @@
+{
+  "id": "llama.cpp-ubuntu-arm64",
+  "version": "b10901",
+  "architecture": "arm64-v8a",
+  "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10901/llama-b10901-bin-ubuntu-arm64.tar.gz",
+  "sizeBytes": 13454970,
+  "sha256": "d38cca8cec331058433c2edaa31682821db2ef30f8c8346f605b1325cbe25032",
+  "license": "MIT"
+}

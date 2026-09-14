@@ -9,6 +9,7 @@ import com.brain.qa.ExecutorValidacaoProjeto
 import com.brain.qa.ResultadoValidacao
 import com.brain.router.AIRouter
 import com.brain.router.ApiCatalog
+import com.brain.router.DynamicFreeApiCatalog
 import com.brain.router.RoutingDecision
 import com.brain.router.RoutingProfile
 
@@ -116,7 +117,7 @@ class CicloExecucaoPlano(
     }
 
     private fun processarPasso(passo: PassoPlano, authorization: ExecutionAuthorization, decision: PolicyDecision?): ResultadoPasso {
-        val decisaoRouter = passo.papel?.let { router.decidir(it, catalog, profiles) }
+        val decisaoRouter = decidirComRefresh(passo)
         sandbox.abrirSessao(authorization).use { sessao ->
             val execucao = sessao.rodarCapacidade(passo.parametros)
             if (execucao is AgentSandboxSession.CommandOutcome.Refused) return ResultadoPasso(passo.id, StatusPasso.REPROVADO, decisaoPolicy = decision, decisaoRouter = decisaoRouter, execucao = execucao, motivo = execucao.reason)
@@ -124,5 +125,18 @@ class CicloExecucaoPlano(
             val reprovado = evidencias.any { it.resultado == ResultadoValidacao.FALHOU }
             return ResultadoPasso(passo.id, if (reprovado) StatusPasso.REPROVADO else StatusPasso.APROVADO, decisaoPolicy = decision, decisaoRouter = decisaoRouter, execucao = execucao, evidencias = evidencias, motivo = if (reprovado) "validação encontrou evidência FALHOU" else null)
         }
+    }
+
+    /**
+     * Se o catálogo for dinâmico, a API escolhida é consultada imediatamente
+     * antes do uso. Se a lista mudou, o Router decide novamente. Assim um
+     * modelo removido/deprecado não fica preso no seed/cache antigo.
+     */
+    private fun decidirComRefresh(passo: PassoPlano): RoutingDecision? {
+        val papel = passo.papel ?: return null
+        val primeira = router.decidir(papel, catalog, profiles) ?: return null
+        if (catalog !is DynamicFreeApiCatalog) return primeira
+        catalog.refreshProvider(primeira.escolhido.providerId)
+        return router.decidir(papel, catalog, profiles)
     }
 }

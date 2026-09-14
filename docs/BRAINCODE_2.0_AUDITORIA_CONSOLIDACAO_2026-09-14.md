@@ -42,3 +42,7 @@ Nenhum componente funcional foi removido. Em particular, foram preservados o cat
 ## Próxima fase ordenada
 
 A próxima etapa é **Capability Discovery**, que deverá consumir `CapabilityRegistry`, classificar intenção/categoria, filtrar por Policy e ranquear candidatos por compatibilidade, qualidade, confiabilidade, custo, latência, disponibilidade, contexto e risco. Ela não deve carregar todo o registry no contexto do Brain.
+
+## Fase 3 — Capability Discovery
+
+Foi consolidado `CapabilityDiscovery` sobre o registry único. A descoberta segue `intenção → categoria → candidatas estruturais → filtro de policy → ranking → limite de candidatos`. A inferência de categoria é determinística e o ranking combina compatibilidade, qualidade, confiabilidade, custo, latência, disponibilidade, risco, provider preferido e contexto declarativo. A função de policy é injetada; Discovery não autoriza, executa rede ou escolhe comandos.

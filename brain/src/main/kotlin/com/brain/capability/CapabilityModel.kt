@@ -89,6 +89,7 @@ data class CapabilityDefinition(
     val cost: CostClass = CostClass.UNKNOWN,
     val estimatedLatencyMs: Long? = null,
     val reliability: Double = 0.5,
+    val quality: Double = 0.5,
     val supportsFiles: Boolean = false,
     val supportsWeb: Boolean = false,
     val supportsCode: Boolean = false,
@@ -108,6 +109,7 @@ data class CapabilityDefinition(
         require(origin.isNotBlank()) { "origem da capability é obrigatória" }
         require(version.isNotBlank()) { "versão da capability é obrigatória" }
         require(reliability in 0.0..1.0) { "reliability deve estar entre 0 e 1" }
+        require(quality in 0.0..1.0) { "quality deve estar entre 0 e 1" }
         estimatedLatencyMs?.let { require(it >= 0) { "latência estimada não pode ser negativa" } }
         require(id !in requiredCapabilities) { "capability não pode depender de si mesma" }
         require(requiredCapabilities.none { it.isBlank() }) { "capability requerida não pode ser vazia" }

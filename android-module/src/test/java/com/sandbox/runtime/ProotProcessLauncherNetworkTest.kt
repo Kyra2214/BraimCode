@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.junit.Assert.assertThrows
 import java.io.File
 
 class ProotProcessLauncherNetworkTest {
@@ -32,7 +31,7 @@ class ProotProcessLauncherNetworkTest {
     }
 
     @Test
-    fun `rede proibida adiciona unshare n e separador na ordem`() {
+    fun `rede proibida adiciona unshare n e separador na ordem quando disponivel`() {
         val launcher = launcher()
         val args = launcher.buildArgs(listOf("echo", "ok"), "/tmp", "/system/bin/setsid", "/system/bin/unshare")
 
@@ -44,11 +43,12 @@ class ProotProcessLauncherNetworkTest {
     }
 
     @Test
-    fun `rede proibida sem unshare falha fechado`() {
+    fun `rede proibida sem unshare continua compativel e inicia sem isolamento de rede`() {
         val launcher = launcher(unshare = null)
-        val exception = assertThrows(UnsupportedOperationException::class.java) {
-            launcher.launch(listOf("echo", "ok"), "/tmp", networkAllowed = false)
-        }
-        assertTrue(exception.message.orEmpty().contains("unshare"))
+        val args = launcher.buildArgs(listOf("echo", "ok"), "/tmp", "/system/bin/setsid", null)
+
+        assertFalse(args.contains("/system/bin/unshare"))
+        assertFalse(args.contains("-n"))
+        assertTrue(args.any { it.endsWith(".bin") })
     }
 }

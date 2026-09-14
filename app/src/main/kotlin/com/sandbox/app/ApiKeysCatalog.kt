@@ -5,9 +5,9 @@ import com.brain.router.ApiCatalogRegistry
 import com.brain.router.DynamicApiProvider
 import com.brain.router.DynamicFreeApiCatalog
 import com.brain.router.DynamicFreeApiModelDiscovery
+import com.brain.router.JanelaLimite
 import com.brain.router.PapelPipeline
 import com.brain.router.ProviderModel
-import com.brain.router.JanelaLimite
 import org.json.JSONObject
 
 /**
@@ -30,6 +30,7 @@ data class ApiProvider(
     val region: String,
     val officialUrl: String,
     val documentationUrl: String,
+    val modelsEndpoint: String?,
     val models: List<ApiProviderModel>
 )
 
@@ -80,6 +81,7 @@ object ApiKeyCatalogLoader {
                             region = providerObj.optString("region", ""),
                             officialUrl = providerObj.getString("officialUrl"),
                             documentationUrl = providerObj.optString("documentationUrl", providerObj.getString("officialUrl")),
+                            modelsEndpoint = providerObj.optString("modelsEndpoint", null),
                             models = models
                         )
                     )
@@ -95,7 +97,7 @@ object ApiKeyCatalogLoader {
         val keyStore = ApiKeyStore(context)
         val dynamicProviders = providers.mapNotNull { provider ->
             val endpoint = provider.models.firstOrNull()?.endpoint ?: return@mapNotNull null
-            val modelsEndpoint = when {
+            val modelsEndpoint = provider.modelsEndpoint ?: when {
                 endpoint.endsWith("/models") -> endpoint
                 endpoint.endsWith("/") -> endpoint + "models"
                 else -> endpoint + "/models"

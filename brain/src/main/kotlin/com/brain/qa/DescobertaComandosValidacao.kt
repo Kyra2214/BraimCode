@@ -60,7 +60,7 @@ object DescobertaComandosValidacao {
 
     private fun disponivel(comando: String): Boolean = try {
         val probe = if (comando.startsWith("./")) comando.removePrefix("./") else comando
-        val processo = ProcessBuilder("sh", "-c", "command -v $probe").redirectErrorStream(true).start()
+        val processo = ProcessBuilder(probe, "--version").redirectErrorStream(true).start()
         aguardarSaidaDoProcesso(processo, 2_000L) == 0
     } catch (_: Exception) {
         false

@@ -8,7 +8,7 @@ import java.util.zip.ZipInputStream
 
 data class Project(val id: String, val name: String, val path: File, val createdAt: Long, val updatedAt: Long)
 
-class WorkspaceManager(private val root: File) {
+class WorkspaceManager(private val root: File, private val maxWorkspaceBytes: Long = 2L * 1024 * 1024 * 1024) {
     val projectsDir = File(root, "projects")
     val toolsDir = File(root, "tools")
     val environmentsDir = File(root, "environments")
@@ -18,6 +18,7 @@ class WorkspaceManager(private val root: File) {
 
     @Synchronized fun listProjects(): List<Project> = projectsDir.listFiles()?.filter { it.isDirectory }?.map { project(it) }?.sortedBy { it.name } ?: emptyList()
     @Synchronized fun createProject(name: String): Project {
+        ensureCapacity(256)
         validateName(name)
         val safe = safeName(name)
         require(safe.isNotBlank()) { "Nome do projeto inválido" }
@@ -35,6 +36,7 @@ class WorkspaceManager(private val root: File) {
     @Synchronized fun deleteProject(name: String) { openProject(name).path.deleteRecursively() }
     @Synchronized fun importProject(source: File, name: String = source.nameWithoutExtension): Project {
         require(source.isFile) { "Arquivo de projeto não encontrado" }
+        ensureCapacity(source.length())
         val target = createProject(name).path
         if (source.extension.equals("zip", true)) extractZip(source, target) else Files.copy(source.toPath(), File(target, source.name).toPath(), StandardCopyOption.REPLACE_EXISTING)
         return project(target)
@@ -55,9 +57,26 @@ class WorkspaceManager(private val root: File) {
                 val entry = input.nextEntry ?: break
                 val output = File(target, entry.name)
                 require(output.canonicalPath.startsWith(target.canonicalPath + File.separator)) { "ZIP contém caminho inseguro" }
-                if (entry.isDirectory) output.mkdirs() else { output.parentFile?.mkdirs(); output.outputStream().use { input.copyTo(it) } }
+                if (entry.isDirectory) output.mkdirs() else {
+                    output.parentFile?.mkdirs()
+                    output.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            total += read
+                            ensureCapacity(read.toLong())
+                            out.write(buffer, 0, read)
+                        }
+                    }
+                }
             }
         }
     }
+    private fun ensureCapacity(incoming: Long) {
+        require(incoming >= 0 && workspaceSize() <= maxWorkspaceBytes - incoming) { "quota agregada do workspace excedida" }
+    }
+    fun workspaceSize(): Long = root.walkTopDown().filter { it.isFile }.fold(0L) { total, file -> total + file.length() }
     private fun safeName(value: String): String = value.trim().replace(Regex("[^A-Za-z0-9._-]"), "-").trim('-').take(80).ifBlank { UUID.randomUUID().toString() }
 }

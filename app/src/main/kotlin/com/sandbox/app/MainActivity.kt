@@ -93,12 +93,6 @@ fun SandboxMobileApp(viewModel: SandboxViewModel) {
     }
 }
 
-/**
- * Aba "Ferramentas": alterna entre o catálogo de ferramentas do rootfs
- * (já existia) e a nova sub-aba de chaves de API — cada API só de
- * camada gratuita (ver ai_api_catalog.json), com link de cadastro, campo
- * pra colar a chave, salvar e testar com uma chamada real.
- */
 @Composable
 private fun ToolsAndApiScreen(viewModel: SandboxViewModel) {
     var showApiKeys by remember { mutableStateOf(false) }
@@ -121,11 +115,8 @@ fun SandboxValidationScreen(viewModel: SandboxViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         StatusSection(viewModel)
-        LocalModelSection(viewModel)
         ChatboxSection(viewModel)
         val phase = viewModel.phase
-        // Terminal livre é superfície de alto risco: permanece disponível
-        // apenas em build debug para desenvolvimento, nunca na release.
         if (BuildConfig.DEBUG && (phase is SandboxPhase.Ready || phase is SandboxPhase.Running)) CommandSection(viewModel)
         viewModel.lastResult?.let { ResultSection(it, viewModel.lastExecution) }
         viewModel.diagnosticsReport?.let { DiagnosticsSection(it) }
@@ -210,52 +201,14 @@ private fun OperationsScreen(viewModel: SandboxViewModel) {
                             Text(status?.state?.name ?: "Verificar")
                         }
                     }
-                    status?.versionOutput?.takeIf { it.isNotBlank() }?.let {
-                        Text(it.trim(), style = MaterialTheme.typography.bodySmall)
-                    }
-                    status?.error?.takeIf { it.isNotBlank() }?.let {
-                        Text("Erro: ${it.trim()}", style = MaterialTheme.typography.bodySmall)
-                    }
+                    status?.versionOutput?.takeIf { it.isNotBlank() }?.let { Text(it.trim(), style = MaterialTheme.typography.bodySmall) }
+                    status?.error?.takeIf { it.isNotBlank() }?.let { Text("Erro: ${it.trim()}", style = MaterialTheme.typography.bodySmall) }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun LocalModelSection(viewModel: SandboxViewModel) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Mini-LLM local", style = MaterialTheme.typography.titleMedium)
-            Text("SmolLM2 135M Instruct (GGUF, quantização Q4_K_M, Apache-2.0)")
-            when {
-                viewModel.localModelReady -> Text("Modelo baixado e verificado por SHA-256.", color = MaterialTheme.colorScheme.primary)
-                viewModel.localModelProgress != null -> {
-                    val (downloaded, total) = viewModel.localModelProgress!!
-                    Text("Baixando modelo: ${downloaded / (1024 * 1024)} MiB / ${total / (1024 * 1024)} MiB")
-                    if (total > 0) {
-                        LinearProgressIndicator(
-                            progress = { (downloaded.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-                else -> Button(onClick = { viewModel.downloadLocalModel() }) { Text("Baixar mini-LLM (~101 MiB)") }
-            }
-            viewModel.localModelError?.let {
-                Text("Falha: $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-/**
- * Chatbox de TESTE da mini-LLM, separado do terminal (CommandSection):
- * aqui o comando de inferência é montado internamente, não digitado à
- * mão. Enquanto não empacotamos um motor de inferência no rootfs, a
- * resposta normal é um erro explicando isso — já dá pra validar o fluxo
- * inteiro (UI → runtime → rootfs) mesmo assim.
- */
 @Composable
 private fun ChatboxSection(viewModel: SandboxViewModel) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -265,11 +218,11 @@ private fun ChatboxSection(viewModel: SandboxViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Chatbox de teste da mini-LLM", style = MaterialTheme.typography.titleMedium)
+                Text("Chat", style = MaterialTheme.typography.titleMedium)
                 TextButton(onClick = { viewModel.clearChat() }, enabled = viewModel.chatMessages.isNotEmpty()) { Text("Limpar") }
             }
             Text(
-                "Fora do terminal, só pra testar o início do processo. Sem motor de inferência empacotado ainda, o normal é aparecer um erro explicando o que falta.",
+                "Conversa do usuário com o Brain. O Chat não expõe modelo, provider ou motor de inferência.",
                 style = MaterialTheme.typography.bodySmall
             )
             if (viewModel.chatMessages.isEmpty()) {
@@ -282,13 +235,13 @@ private fun ChatboxSection(viewModel: SandboxViewModel) {
             if (viewModel.chatRunning) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text("Rodando…", style = MaterialTheme.typography.bodySmall)
+                    Text("Processando…", style = MaterialTheme.typography.bodySmall)
                 }
             }
             OutlinedTextField(
                 value = viewModel.chatInput,
                 onValueChange = { viewModel.chatInput = it },
-                label = { Text("Mensagem para a mini-LLM") },
+                label = { Text("Mensagem") },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !viewModel.chatRunning,
                 singleLine = false
@@ -306,14 +259,12 @@ private fun ChatboxSection(viewModel: SandboxViewModel) {
 private fun ChatBubble(message: ChatMessage) {
     val (label, color) = when (message.role) {
         ChatRole.USER -> "Você" to MaterialTheme.colorScheme.onSurface
-        ChatRole.ASSISTANT -> "mini-LLM" to MaterialTheme.colorScheme.primary
+        ChatRole.ASSISTANT -> "Chat" to MaterialTheme.colorScheme.primary
         ChatRole.ERROR -> "Erro" to MaterialTheme.colorScheme.error
     }
     Column {
         Text(label, style = MaterialTheme.typography.labelSmall, color = color)
-        SelectionContainer {
-            Text(message.content, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-        }
+        SelectionContainer { Text(message.content, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
     }
 }
 
@@ -323,20 +274,12 @@ private fun DiagnosticsSection(report: String) {
     val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Diagnóstico do rootfs (sem proot, direto do disco):", style = MaterialTheme.typography.labelMedium)
-                TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(report))
-                    Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show()
-                }) { Text("Copiar") }
+                TextButton(onClick = { clipboard.setText(AnnotatedString(report)); Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show() }) { Text("Copiar") }
             }
             Text("Toque e segure o texto pra selecionar só um trecho.", style = MaterialTheme.typography.labelSmall)
-            SelectionContainer {
-                Text(report, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-            }
+            SelectionContainer { Text(report, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -348,15 +291,9 @@ private fun SelfCheckReportSection(report: com.sandbox.sandbox.SelfCheckReport) 
     val markdown = report.toMarkdown()
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Teste geral (relatório .md):", style = MaterialTheme.typography.labelMedium)
-                TextButton(onClick = {
-                    clipboard.setText(AnnotatedString(markdown))
-                    Toast.makeText(context, "Markdown copiado", Toast.LENGTH_SHORT).show()
-                }) { Text("Copiar") }
+                TextButton(onClick = { clipboard.setText(AnnotatedString(markdown)); Toast.makeText(context, "Markdown copiado", Toast.LENGTH_SHORT).show() }) { Text("Copiar") }
             }
             Text(
                 "${report.totalOk}/${report.totalItems} OK" +
@@ -366,9 +303,7 @@ private fun SelfCheckReportSection(report: com.sandbox.sandbox.SelfCheckReport) 
                 style = MaterialTheme.typography.titleSmall
             )
             Text("Toque e segure o texto pra selecionar só um trecho.", style = MaterialTheme.typography.labelSmall)
-            SelectionContainer {
-                Text(markdown, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-            }
+            SelectionContainer { Text(markdown, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }
@@ -379,16 +314,12 @@ private fun StatusSection(viewModel: SandboxViewModel) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (viewModel.namespaceSupport.compatibilityMode) {
                 Text(
-                    "Modo compatibilidade: user namespaces indisponíveis no kernel. " +
-                        "Executando via proot com isolamento reduzido (${viewModel.namespaceSupport.reason}).",
+                    "Modo compatibilidade: user namespaces indisponíveis no kernel. Executando via proot com isolamento reduzido (${viewModel.namespaceSupport.reason}).",
                     color = MaterialTheme.colorScheme.tertiary,
                     style = MaterialTheme.typography.bodySmall
                 )
             } else {
-                Text(
-                    "User namespaces disponíveis; o runtime continuará usando proot por compatibilidade.",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Text("User namespaces disponíveis; o runtime continuará usando proot por compatibilidade.", style = MaterialTheme.typography.bodySmall)
             }
             when (val phase = viewModel.phase) {
                 is SandboxPhase.NotReady -> {
@@ -408,13 +339,8 @@ private fun StatusSection(viewModel: SandboxViewModel) {
                     if (phase.totalBytes > 0L) {
                         val progress = (phase.bytesCompleted.toFloat() / phase.totalBytes.toFloat()).coerceIn(0f, 1f)
                         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                        Text(
-                            "${(progress * 100).toInt()}% — ${phase.bytesCompleted / (1024 * 1024)} MiB / ${phase.totalBytes / (1024 * 1024)} MiB",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
+                        Text("${(progress * 100).toInt()}% — ${phase.bytesCompleted / (1024 * 1024)} MiB / ${phase.totalBytes / (1024 * 1024)} MiB", style = MaterialTheme.typography.bodySmall)
+                    } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Text("Não feche o aplicativo durante esta etapa.", style = MaterialTheme.typography.bodySmall)
                 }
                 is SandboxPhase.Ready -> {
@@ -423,26 +349,18 @@ private fun StatusSection(viewModel: SandboxViewModel) {
                         OutlinedButton(onClick = { viewModel.resetSandbox() }) { Text("Resetar sandbox") }
                         OutlinedButton(onClick = { viewModel.runDiagnostics() }) { Text("Diagnóstico") }
                     }
-                    Button(onClick = { viewModel.runFullSelfCheck() }, enabled = !viewModel.selfCheckRunning) {
-                        Text("Teste geral")
-                    }
+                    Button(onClick = { viewModel.runFullSelfCheck() }, enabled = !viewModel.selfCheckRunning) { Text("Teste geral") }
                     viewModel.selfCheckStage?.let {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                             Text(it, style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    Button(onClick = { viewModel.runBrainHealthCheck() }) {
-                        Text("Verificar pelo Brain")
-                    }
+                    Button(onClick = { viewModel.runBrainHealthCheck() }) { Text("Verificar pelo Brain") }
                     viewModel.lastBrainCycle?.let { cycle ->
                         val result = cycle.passos.singleOrNull()
                         Text(
-                            if (cycle.aprovado) {
-                                "Brain → Policy → Sandbox: aprovado"
-                            } else {
-                                "Brain → Policy → Sandbox: ${result?.motivo ?: "reprovado"}"
-                            },
+                            if (cycle.aprovado) "Brain → Policy → Sandbox: aprovado" else "Brain → Policy → Sandbox: ${result?.motivo ?: "reprovado"}",
                             color = if (cycle.aprovado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -467,11 +385,7 @@ private fun StatusSection(viewModel: SandboxViewModel) {
 @Composable
 private fun CommandSection(viewModel: SandboxViewModel) {
     val running = viewModel.phase is SandboxPhase.Running
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text("Comandos comuns de projeto:", style = MaterialTheme.typography.labelMedium)
         TextButton(onClick = { viewModel.clearTerminal() }, enabled = !running) { Text("Limpar") }
     }
@@ -485,9 +399,7 @@ private fun CommandSection(viewModel: SandboxViewModel) {
         enabled = !running,
         singleLine = false
     )
-    Button(onClick = { viewModel.runCommand() }, enabled = !running, modifier = Modifier.fillMaxWidth()) {
-        Text(if (running) "Executando..." else "Executar")
-    }
+    Button(onClick = { viewModel.runCommand() }, enabled = !running, modifier = Modifier.fillMaxWidth()) { Text(if (running) "Executando..." else "Executar") }
 }
 
 @Composable
@@ -505,10 +417,7 @@ private fun ResultSection(result: SandboxExecutionResult, execution: com.sandbox
     val context = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
                     text = when {
                         result.timedOut -> "Timeout"
@@ -522,10 +431,7 @@ private fun ResultSection(result: SandboxExecutionResult, execution: com.sandbox
                     TextButton(onClick = {
                         val combined = buildString {
                             if (result.stdout.isNotBlank()) { append("stdout:\n"); append(result.stdout) }
-                            if (result.stderr.isNotBlank()) {
-                                if (isNotEmpty()) append("\n\n")
-                                append("stderr:\n"); append(result.stderr)
-                            }
+                            if (result.stderr.isNotBlank()) { if (isNotEmpty()) append("\n\n"); append("stderr:\n"); append(result.stderr) }
                         }
                         clipboard.setText(AnnotatedString(combined))
                         Toast.makeText(context, "Saída copiada", Toast.LENGTH_SHORT).show()
@@ -538,35 +444,19 @@ private fun ResultSection(result: SandboxExecutionResult, execution: com.sandbox
                 if (it.outputTruncated) Text("Saída limitada para proteger a memória do app.", style = MaterialTheme.typography.bodySmall)
             }
             if (result.stdout.isNotBlank()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("stdout:", style = MaterialTheme.typography.labelMedium)
-                    TextButton(onClick = {
-                        clipboard.setText(AnnotatedString(result.stdout))
-                        Toast.makeText(context, "stdout copiado", Toast.LENGTH_SHORT).show()
-                    }) { Text("Copiar") }
+                    TextButton(onClick = { clipboard.setText(AnnotatedString(result.stdout)); Toast.makeText(context, "stdout copiado", Toast.LENGTH_SHORT).show() }) { Text("Copiar") }
                 }
                 Text("Toque e segure pra selecionar só um trecho", style = MaterialTheme.typography.labelSmall)
-                SelectionContainer {
-                    Text(result.stdout, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                }
+                SelectionContainer { Text(result.stdout, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
             }
             if (result.stderr.isNotBlank()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("stderr:", style = MaterialTheme.typography.labelMedium)
-                    TextButton(onClick = {
-                        clipboard.setText(AnnotatedString(result.stderr))
-                        Toast.makeText(context, "stderr copiado", Toast.LENGTH_SHORT).show()
-                    }) { Text("Copiar") }
+                    TextButton(onClick = { clipboard.setText(AnnotatedString(result.stderr)); Toast.makeText(context, "stderr copiado", Toast.LENGTH_SHORT).show() }) { Text("Copiar") }
                 }
-                SelectionContainer {
-                    Text(result.stderr, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                }
+                SelectionContainer { Text(result.stderr, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
             }
             if (result.stdout.isBlank() && result.stderr.isBlank()) Text("(sem saída)", style = MaterialTheme.typography.bodySmall)
         }

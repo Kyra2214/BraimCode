@@ -28,5 +28,9 @@ dependencies {
     // módulo JVM puro, precisa ser declarado explicitamente.
     implementation("org.json:json:20240303")
 
+    // Alguns testes do módulo usam kotlin.test.*. Declarar kotlin-test aqui
+    // evita que um teste introduza uma API de teste sem a dependência do
+    // módulo JVM correspondente.
+    testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
 }

@@ -46,3 +46,7 @@ A próxima etapa é **Capability Discovery**, que deverá consumir `CapabilityRe
 ## Fase 3 — Capability Discovery
 
 Foi consolidado `CapabilityDiscovery` sobre o registry único. A descoberta segue `intenção → categoria → candidatas estruturais → filtro de policy → ranking → limite de candidatos`. A inferência de categoria é determinística e o ranking combina compatibilidade, qualidade, confiabilidade, custo, latência, disponibilidade, risco, provider preferido e contexto declarativo. A função de policy é injetada; Discovery não autoriza, executa rede ou escolhe comandos.
+
+## Fase 4 — Policy Broker
+
+O `PolicyBroker` existente foi evoluído, sem duplicação, para consultar o `CapabilityRegistry` como fonte de registro quando fornecido e avaliar actor, capability, recurso, classificação de dados, ambiente, risco, sandbox, rede, filesystem, orçamento, TTL e aprovação. `PolicyOutcome` expõe `ALLOW`, `DENY`, `REQUIRE_APPROVAL` e `SANDBOX_ONLY`; `Decision.ASK` permanece como compatibilidade interna. O broker continua deny-by-default e não executa ações.

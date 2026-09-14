@@ -6,6 +6,9 @@ package com.brain.policy
  */
 enum class Decision { ALLOW, ASK, DENY }
 
+/** Resultado arquitetural normalizado; ASK permanece para compatibilidade. */
+enum class PolicyOutcome { ALLOW, DENY, REQUIRE_APPROVAL, SANDBOX_ONLY }
+
 /**
  * Nível de aprovação humana exigido antes de uma capacidade poder ser
  * executada, mesmo quando a Policy já autorizaria sozinha (decision = ASK).
@@ -25,12 +28,16 @@ data class PolicyContext(
     val filesystemRoots: List<String> = emptyList(),
     val budget: Map<String, Long> = emptyMap(),
     val ttlSeconds: Int = 300,
-    val expiresAt: String? = null
+    val expiresAt: String? = null,
+    val dataClassifications: Set<String> = emptySet(),
+    val environment: String = "sandbox"
 ) {
     init {
         require(runId.isNotBlank()) { "runId não pode ser vazio" }
         require(taskId.isNotBlank()) { "taskId não pode ser vazio" }
         require(actor.isNotBlank()) { "actor não pode ser vazio" }
+        require(dataClassifications.none { it.isBlank() }) { "classificação de dado não pode ser vazia" }
+        require(environment.isNotBlank()) { "environment não pode ser vazio" }
     }
 }
 
@@ -60,6 +67,14 @@ data class PolicyDecision(
     val resource: String = "",
     val authorizationToken: AuthorizationToken? = null
 ) {
+    val outcome: PolicyOutcome
+        get() = when {
+            decision == Decision.DENY -> PolicyOutcome.DENY
+            decision == Decision.ASK -> PolicyOutcome.REQUIRE_APPROVAL
+            sandboxRequired -> PolicyOutcome.SANDBOX_ONLY
+            else -> PolicyOutcome.ALLOW
+        }
+
     val isExpired: Boolean
         get() = java.time.Instant.now().isAfter(java.time.Instant.parse(expiresAt))
 }

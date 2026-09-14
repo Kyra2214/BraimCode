@@ -1,5 +1,6 @@
 package com.brain.policy
 
+import com.brain.capability.CapabilityRegistry
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -13,7 +14,8 @@ import java.util.UUID
  */
 class PolicyBroker(
     allowedCapabilities: Collection<String> = emptyList(),
-    actorCapabilities: Map<String, Collection<String>> = emptyMap()
+    actorCapabilities: Map<String, Collection<String>> = emptyMap(),
+    private val capabilityRegistry: CapabilityRegistry? = null
 ) {
     private val allowed: Set<String> = allowedCapabilities.toSet()
     private val actors: Map<String, Set<String>> = actorCapabilities.mapValues { it.value.toSet() }
@@ -25,7 +27,7 @@ class PolicyBroker(
         when {
             context.ttlSeconds <= 0 -> reason = "policy TTL must be positive"
             context.budget.values.any { it < 0 } -> reason = "budget values cannot be negative"
-            capability !in allowed -> reason = "capability '$capability' is not registered"
+            !isRegistered(capability) -> reason = "capability '$capability' is not registered"
             capability !in (actors[actor] ?: emptySet()) -> reason = "actor '$actor' is not authorized for '$capability'"
             !context.sandboxRequired && context.riskClass !in setOf(RiskClass.LOW, RiskClass.READ_ONLY) ->
                 reason = "sandbox is mandatory for non-low-risk capability"
@@ -33,6 +35,15 @@ class PolicyBroker(
                 reason = "network access is not allowed by policy"
             capability.startsWith("filesystem") && context.filesystemRoots.isEmpty() ->
                 reason = "filesystem capability requires an explicit root"
+            context.environment.equals("production", ignoreCase = true) &&
+                context.riskClass in setOf(RiskClass.HIGH, RiskClass.CRITICAL) && !context.sandboxRequired ->
+                reason = "high-risk production action must be sandboxed"
+            context.dataClassifications.any { it.equals("restricted", ignoreCase = true) } &&
+                context.riskClass !in setOf(RiskClass.READ_ONLY, RiskClass.LOW) &&
+                context.approval == ApprovalRequired.NONE -> {
+                decision = Decision.ASK
+                reason = "restricted data requires explicit approval for medium or higher risk"
+            }
             context.expiresAt != null && !Instant.now().isBefore(Instant.parse(context.expiresAt)) ->
                 reason = "policy context has expired"
             context.approval != ApprovalRequired.NONE -> {
@@ -90,6 +101,16 @@ class PolicyBroker(
     fun withActorCapability(actor: String, capability: String): PolicyBroker {
         val novosActors = actors.mapValues { it.value.toMutableSet() }.toMutableMap()
         novosActors.getOrPut(actor) { mutableSetOf() }.add(capability)
-        return PolicyBroker(allowed + capability, novosActors)
+        return PolicyBroker(allowed + capability, novosActors, capabilityRegistry)
     }
+
+    fun withCapabilityRegistry(registry: CapabilityRegistry): PolicyBroker =
+        PolicyBroker(allowed, actors, registry)
+
+    private fun isRegistered(capability: String): Boolean =
+        if (capabilityRegistry != null) {
+            capabilityRegistry.findByCapability(capability).any { it.status == com.brain.capability.CapabilityStatus.ACTIVE }
+        } else {
+            capability in allowed
+        }
 }

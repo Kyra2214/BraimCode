@@ -74,3 +74,7 @@ O `KnowledgeCompiler` foi consolidado sobre `KnowledgeLearningCycle` e `Conserva
 ## Fase 10 — Planner
 
 `PlanoExecucao` foi mantido como contrato canônico e recebeu o alias `ExecutionPlan`, além da coleção derivada de `requiredCapabilities`. O Planner continua produzindo objetivo, passos, dependências e critérios; não executa ações nem escolhe executor.
+
+## Fase 11 — Function Splitter
+
+A lógica já existente do `KeywordPlanner` foi extraída para `FunctionSplitter`/`KeywordFunctionSplitter`. O Planner agora somente solicita funções declarativas e monta `ExecutionPlan`; cada função continua declarando sua capability, dependências, papel, risco e critério de sucesso.

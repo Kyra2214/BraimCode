@@ -14,7 +14,6 @@ import com.sandbox.agent.ResultadoCiclo
 import com.sandbox.resource.SandboxResourceManager
 import com.sandbox.runtime.ExecutionLog
 import com.sandbox.runtime.ManagedSandboxRuntime
-import com.sandbox.runtime.SandboxExecutionResult
 import com.sandbox.sandbox.BuiltInCatalog
 import com.sandbox.sandbox.ComponentKind
 import com.sandbox.sandbox.InstallationState
@@ -89,9 +88,6 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     private var brainIntegration: BrainIntegrationFacade? = null
 
     var phase by mutableStateOf<SandboxPhase>(SandboxPhase.NotReady); private set
-    var localModelProgress by mutableStateOf<Pair<Long, Long>?>(null); private set
-    var localModelReady by mutableStateOf(false); private set
-    var localModelError by mutableStateOf<String?>(null)
     val chatMessages = mutableStateListOf<ChatMessage>()
     var chatInput by mutableStateOf("")
     var chatRunning by mutableStateOf(false); private set
@@ -113,7 +109,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var pluginHistory by mutableStateOf<List<PluginOperationRecord>>(emptyList()); private set
     val sandboxReadyForPlugins get() = platform != null
     var commandInput by mutableStateOf("echo hello from sandbox")
-    var lastResult by mutableStateOf<SandboxExecutionResult?>(null); private set
+    var lastResult by mutableStateOf<com.sandbox.runtime.SandboxExecutionResult?>(null); private set
     var lastExecution by mutableStateOf<ExecutionLog?>(null); private set
     fun clearTerminal() { commandInput = ""; lastResult = null; lastExecution = null }
     var diagnosticsReport by mutableStateOf<String?>(null); private set
@@ -145,36 +141,64 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             selfCheckRunning = true; phase = SandboxPhase.Running
             try {
                 selfCheckStage = "Verificando toolchains (Java, Python, Node, C/C++, Rust, Go, Android SDK)..."
-                val toolchainItems = withContext(Dispatchers.IO) { com.sandbox.sandbox.BuiltInToolchains.all.map { profile ->
-                    val status = runCatching { plat.toolchains.refreshStatus(profile.id) }.getOrElse { e -> ToolchainStatus(profile.id, com.sandbox.sandbox.ToolchainState.FAILED, error = e.message ?: e.javaClass.simpleName) }
-                    withContext(Dispatchers.Main) { toolchainStatuses = toolchainStatuses + (profile.id to status) }
-                    val optIn = profile.id == "android"
-                    val itemStatus = when (status.state) { com.sandbox.sandbox.ToolchainState.INSTALLED -> SelfCheckStatus.OK; com.sandbox.sandbox.ToolchainState.NOT_INSTALLED -> if (optIn) SelfCheckStatus.WARNING else SelfCheckStatus.FAILED; else -> SelfCheckStatus.FAILED }
-                    val detail = when { status.state == com.sandbox.sandbox.ToolchainState.INSTALLED -> status.versionOutput.lineSequence().firstOrNull()?.take(120) ?: "instalado"; optIn && status.state == com.sandbox.sandbox.ToolchainState.NOT_INSTALLED -> "opcional — instale na aba Operações se precisar"; else -> (status.error ?: "não encontrado").take(200) }
-                    SelfCheckItem(profile.displayName, itemStatus, detail)
-                } }
-                selfCheckStage = "Verificando ferramentas de linha de comando..."
-                val cliItems = withContext(Dispatchers.IO) { CLI_TOOL_CHECKS.map { check ->
-                    val active = runtime
-                    if (active == null) SelfCheckItem(check.label, SelfCheckStatus.FAILED, "runtime indisponível") else {
-                        val e = runCatching { active.execute(listOf("bash", "-c", check.script), timeoutSeconds = 15, workingDir = "/home/sandbox") }.getOrNull()
-                        when { e == null -> SelfCheckItem(check.label, SelfCheckStatus.FAILED, "falha ao executar a checagem"); e.succeeded -> SelfCheckItem(check.label, SelfCheckStatus.OK, e.stdout.lineSequence().firstOrNull { it.isNotBlank() }?.take(120) ?: "instalado"); else -> SelfCheckItem(check.label, SelfCheckStatus.FAILED, e.stderr.ifBlank { e.stdout }.ifBlank { "comando não encontrado" }.take(160)) }
+                val toolchainItems = withContext(Dispatchers.IO) {
+                    com.sandbox.sandbox.BuiltInToolchains.all.map { profile ->
+                        val status = runCatching { plat.toolchains.refreshStatus(profile.id) }.getOrElse { e -> ToolchainStatus(profile.id, com.sandbox.sandbox.ToolchainState.FAILED, error = e.message ?: e.javaClass.simpleName) }
+                        withContext(Dispatchers.Main) { toolchainStatuses = toolchainStatuses + (profile.id to status) }
+                        val optIn = profile.id == "android"
+                        val itemStatus = when (status.state) {
+                            com.sandbox.sandbox.ToolchainState.INSTALLED -> SelfCheckStatus.OK
+                            com.sandbox.sandbox.ToolchainState.NOT_INSTALLED -> if (optIn) SelfCheckStatus.WARNING else SelfCheckStatus.FAILED
+                            else -> SelfCheckStatus.FAILED
+                        }
+                        val detail = when {
+                            status.state == com.sandbox.sandbox.ToolchainState.INSTALLED -> status.versionOutput.lineSequence().firstOrNull()?.take(120) ?: "instalado"
+                            optIn && status.state == com.sandbox.sandbox.ToolchainState.NOT_INSTALLED -> "opcional — instale na aba Operações se precisar"
+                            else -> (status.error ?: "não encontrado").take(200)
+                        }
+                        SelfCheckItem(profile.displayName, itemStatus, detail)
                     }
-                } }
+                }
+                selfCheckStage = "Verificando ferramentas de linha de comando..."
+                val cliItems = withContext(Dispatchers.IO) {
+                    CLI_TOOL_CHECKS.map { check ->
+                        val active = runtime
+                        if (active == null) SelfCheckItem(check.label, SelfCheckStatus.FAILED, "runtime indisponível") else {
+                            val e = runCatching { active.execute(listOf("bash", "-c", check.script), timeoutSeconds = 15, workingDir = "/home/sandbox") }.getOrNull()
+                            when {
+                                e == null -> SelfCheckItem(check.label, SelfCheckStatus.FAILED, "falha ao executar a checagem")
+                                e.succeeded -> SelfCheckItem(check.label, SelfCheckStatus.OK, e.stdout.lineSequence().firstOrNull { it.isNotBlank() }?.take(120) ?: "instalado")
+                                else -> SelfCheckItem(check.label, SelfCheckStatus.FAILED, e.stderr.ifBlank { e.stdout }.ifBlank { "comando não encontrado" }.take(160))
+                            }
+                        }
+                    }
+                }
                 selfCheckStage = "Verificando plugins e ferramentas opcionais instalados..."
-                val pluginItems = withContext(Dispatchers.IO) { plat.plugins.components().mapNotNull { c ->
-                    val cached = plat.plugins.status(c.id); if (cached == null || cached.state != InstallationState.INSTALLED) return@mapNotNull null
-                    val works = runCatching { plat.plugins.validate(c) }.getOrDefault(false)
-                    SelfCheckItem(c.name, if (works) SelfCheckStatus.OK else SelfCheckStatus.FAILED, if (works) (cached.version ?: "instalado") else "validação falhou")
-                } }
-                val llmItem = when { localModelReady -> SelfCheckItem("SmolLM2 135M Instruct (mini-LLM local)", SelfCheckStatus.OK, "baixada e verificada por SHA-256"); localModelError != null -> SelfCheckItem("SmolLM2 135M Instruct (mini-LLM local)", SelfCheckStatus.WARNING, "download com falha: $localModelError"); else -> SelfCheckItem("SmolLM2 135M Instruct (mini-LLM local)", SelfCheckStatus.WARNING, "ainda não baixada") }
+                val pluginItems = withContext(Dispatchers.IO) {
+                    plat.plugins.components().mapNotNull { c ->
+                        val cached = plat.plugins.status(c.id)
+                        if (cached == null || cached.state != InstallationState.INSTALLED) return@mapNotNull null
+                        val works = runCatching { plat.plugins.validate(c) }.getOrDefault(false)
+                        SelfCheckItem(c.name, if (works) SelfCheckStatus.OK else SelfCheckStatus.FAILED, if (works) (cached.version ?: "instalado") else "validação falhou")
+                    }
+                }
                 selfCheckStage = "Conferindo arquivos do rootfs extraído no disco..."
                 val rootfsText = withContext(Dispatchers.IO) { runCatching { factory.inspectExtractedRootfs() }.getOrElse { "Falha ao inspecionar rootfs: ${it.message}" } }
                 val missing = rootfsText.contains("AUSENTE")
                 val m = Regex("Total: (\\d+) arquivos, (\\d+) pastas, (\\d+) symlinks, (\\d+) MB").find(rootfsText)
                 val detail = m?.let { "${it.groupValues[1]} arquivos, ${it.groupValues[2]} pastas, ${it.groupValues[4]} MB no disco" } ?: "tamanho não determinado"
-                selfCheckReport = SelfCheckReport(System.currentTimeMillis(), listOf(SelfCheckSection("Toolchains", toolchainItems), SelfCheckSection("Ferramentas de linha de comando", cliItems), SelfCheckSection("Plugins opcionais instalados (catálogo)", pluginItems), SelfCheckSection("Mini-LLM local", listOf(llmItem)), SelfCheckSection("Rootfs no disco", listOf(SelfCheckItem("Rootfs extraído (caminhos essenciais)", if (missing) SelfCheckStatus.FAILED else SelfCheckStatus.OK, detail)))))
-            } finally { selfCheckStage = null; selfCheckRunning = false; phase = if (runtime != null) SandboxPhase.Ready else SandboxPhase.NotReady }
+                selfCheckReport = SelfCheckReport(
+                    System.currentTimeMillis(),
+                    listOf(
+                        SelfCheckSection("Toolchains", toolchainItems),
+                        SelfCheckSection("Ferramentas de linha de comando", cliItems),
+                        SelfCheckSection("Plugins opcionais instalados (catálogo)", pluginItems),
+                        SelfCheckSection("Rootfs no disco", listOf(SelfCheckItem("Rootfs extraído (caminhos essenciais)", if (missing) SelfCheckStatus.FAILED else SelfCheckStatus.OK, detail)))
+                    )
+                )
+            } finally {
+                selfCheckStage = null; selfCheckRunning = false; phase = if (runtime != null) SandboxPhase.Ready else SandboxPhase.NotReady
+            }
         }
     }
 
@@ -188,7 +212,13 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                 phase = SandboxPhase.Downloading(0, 0)
                 val manifests = try { ManifestLoader.loadAll(getApplication()) } catch (e: IllegalStateException) { phase = SandboxPhase.Blocked(e.message ?: "Manifesto inválido"); return@launch }
                 val total = manifests.sumOf { it.sizeBytes }; var completed = 0L
-                val results = withContext(Dispatchers.IO) { manifests.mapIndexed { i, manifest -> val r = factory.layerResourceManager(i).ensureAvailable(manifest) { d, _ -> phase = SandboxPhase.Downloading(completed + d, total) }; if (r is SandboxResourceManager.DownloadResult.Success) completed += manifest.sizeBytes; r } }
+                val results = withContext(Dispatchers.IO) {
+                    manifests.mapIndexed { i, manifest ->
+                        val r = factory.layerResourceManager(i).ensureAvailable(manifest) { d, _ -> phase = SandboxPhase.Downloading(completed + d, total) }
+                        if (r is SandboxResourceManager.DownloadResult.Success) completed += manifest.sizeBytes
+                        r
+                    }
+                }
                 results.filterIsInstance<SandboxResourceManager.DownloadResult.Failure>().firstOrNull()?.let { phase = SandboxPhase.Blocked(it.reason); return@launch }
             }
             phase = SandboxPhase.Preparing("Extraindo RootFS", 0, 1)
@@ -206,17 +236,15 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun runCommand() {
-        val active = runtime ?: return; if (phase != SandboxPhase.Ready) return; val command = commandInput.trim(); if (command.isEmpty()) return
-        viewModelScope.launch { phase = SandboxPhase.Running; val e = withContext(Dispatchers.IO) { runCatching { active.execute(listOf("/bin/bash", "-c", command), 60, "/home/sandbox") }.getOrNull() }; if (e != null) { lastExecution = e; lastResult = e.toUiResult() }; phase = SandboxPhase.Ready }
-    }
-
-    fun downloadLocalModel() {
-        if (localModelProgress != null || localModelReady) return
+        val active = runtime ?: return
+        if (phase != SandboxPhase.Ready) return
+        val command = commandInput.trim()
+        if (command.isEmpty()) return
         viewModelScope.launch {
-            localModelError = null
-            val manifest = runCatching { LocalModelManifestLoader.load(getApplication()) }.getOrElse { localModelError = it.message ?: "Manifesto da mini-LLM inválido"; return@launch }
-            val result = withContext(Dispatchers.IO) { factory.modelResourceManager(manifest.id).ensureAvailable(manifest) { d, t -> localModelProgress = d to t } }
-            localModelProgress = null; when (result) { is SandboxResourceManager.DownloadResult.Success -> localModelReady = true; is SandboxResourceManager.DownloadResult.Failure -> localModelError = result.reason }
+            phase = SandboxPhase.Running
+            val e = withContext(Dispatchers.IO) { runCatching { active.execute(listOf("/bin/bash", "-c", command), 60, "/home/sandbox") }.getOrNull() }
+            if (e != null) { lastExecution = e; lastResult = e.toUiResult() }
+            phase = SandboxPhase.Ready
         }
     }
 
@@ -225,7 +253,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         val prompt = chatInput.trim(); if (prompt.isEmpty() || chatRunning) return
         chatMessages.add(ChatMessage(ChatRole.USER, prompt)); chatInput = ""; chatRunning = true
         viewModelScope.launch {
-            val response = withContext(Dispatchers.IO) { runCatching { ChatMessage(ChatRole.ASSISTANT, brainApiGateway.complete(prompt).text) }.getOrElse { ChatMessage(ChatRole.ERROR, "Brain não conseguiu responder: ${it.message ?: it.javaClass.simpleName}") } }
+            val response = withContext(Dispatchers.IO) {
+                runCatching { ChatMessage(ChatRole.ASSISTANT, brainApiGateway.complete(prompt).text) }
+                    .getOrElse { ChatMessage(ChatRole.ERROR, "Brain não conseguiu responder: ${it.message ?: it.javaClass.simpleName}") }
+            }
             chatMessages.add(response); chatRunning = false
         }
     }
@@ -257,15 +288,15 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     fun runBrainWorkflow() { val i = brainIntegration ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch(Dispatchers.IO) { val r = runCatching { i.runHealthWorkflow("workflow-${System.currentTimeMillis()}") }.getOrNull(); r?.let { i.recordExperience(it.runId, it.status.name == "COMPLETED") }; withContext(Dispatchers.Main) { lastWorkflowStatus = r?.status?.name ?: "FAILED" } } }
     fun runDiscovery() { val i = brainIntegration ?: return; discoverySummary = runCatching { val r = i.discoverBuiltInCandidate(); "${r.radar.accepted} candidato(s) aceito(s), ${r.radar.rejected} rejeitado(s), ${r.workspace.windows.size} janela(s)" }.getOrElse { "Discovery falhou: ${it.message}" } }
     fun publishLocalDelivery() { val i = brainIntegration ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch(Dispatchers.IO) { val root = File(getApplication<Application>().filesDir, "sandbox/workspace"); val s = runCatching { val r = i.publishLocalDelivery(root, "delivery-${System.currentTimeMillis()}"); "Recibo local: ${r.artifacts.size} artefato(s), ${r.artifacts.sumOf { it.bytes }} bytes, ${r.artifacts.firstOrNull()?.sha256?.take(12) ?: "sem arquivos"}" }.getOrElse { "Falha na entrega local: ${it.message ?: "erro desconhecido"}" }; withContext(Dispatchers.Main) { deliverySummary = s } } }
-    fun resetSandbox() { viewModelScope.launch { withContext(Dispatchers.IO) { runtime?.reset { factory.purgeAll() }; runtime = null; brainController = null; brainIntegration = null; factory.clearPersistentSession() }; platform = null; installingComponentIds = emptySet(); statusCache = emptyMap(); pluginSnapshots = emptyList(); pluginHistory = emptyList(); pluginListVersion++; lastResult = null; lastExecution = null; diagnosticsReport = null; lastBrainCycle = null; lastTestLabReport = null; lastSecurityAssessment = null; toolchainStatuses = emptyMap(); pendingApprovalId = null; pendingApprovalPlan = null; pendingApprovalRunId = null; workspaceProjects = emptyList(); lastGitStatus = null; sqliteServiceStatus = null; workspaceError = null; brainSkillSummary = emptyList(); lastWorkflowStatus = null; memorySuccessRate = null; discoverySummary = null; deliverySummary = null; localModelProgress = null; localModelReady = false; localModelError = null; selfCheckReport = null; selfCheckStage = null; selfCheckRunning = false; phase = SandboxPhase.NotReady } }
+    fun resetSandbox() { viewModelScope.launch { withContext(Dispatchers.IO) { runtime?.reset { factory.purgeAll() }; runtime = null; brainController = null; brainIntegration = null; factory.clearPersistentSession() }; platform = null; installingComponentIds = emptySet(); statusCache = emptyMap(); pluginSnapshots = emptyList(); pluginHistory = emptyList(); pluginListVersion++; lastResult = null; lastExecution = null; diagnosticsReport = null; lastBrainCycle = null; lastTestLabReport = null; lastSecurityAssessment = null; toolchainStatuses = emptyMap(); pendingApprovalId = null; pendingApprovalPlan = null; pendingApprovalRunId = null; workspaceProjects = emptyList(); lastGitStatus = null; sqliteServiceStatus = null; workspaceError = null; brainSkillSummary = emptyList(); lastWorkflowStatus = null; memorySuccessRate = null; discoverySummary = null; deliverySummary = null; selfCheckReport = null; selfCheckStage = null; selfCheckRunning = false; phase = SandboxPhase.NotReady } }
     fun recentExecutions(limit: Int = 20): List<ExecutionLog> = runtime?.getRecentExecutions(limit) ?: emptyList()
     fun pluginComponents(kind: ComponentKind, query: String, installedOnly: Boolean): List<SandboxComponent> { val base = (platform?.plugins?.components() ?: BuiltInCatalog.all).filter { it.kind == kind }; val searched = if (query.isBlank()) base else base.filter { it.name.contains(query, true) || it.description.contains(query, true) || it.id.contains(query, true) }; return if (!installedOnly) searched else searched.filter { statusCache[it.id]?.state == InstallationState.INSTALLED } }
     fun pluginStatus(id: String): InstalledComponent? = statusCache[id]
-    private fun refreshStatusCache() { val p = platform ?: run { statusCache = emptyMap(); return }; viewModelScope.launch(Dispatchers.IO) { val snapshot = p.plugins.components().mapNotNull { c -> p.plugins.status(c.id)?.let { c.id to it } }.toMap(); withContext(Dispatchers.Main) { statusCache = snapshot } } }
+    private fun refreshStatusCache() { val p = platform ?: run { statusCache = emptyMap(); return }; viewModelScope.launch(Dispatchers.IO) { val snapshot = p.plugins.components().mapNotNull { c -> p.plugins.status(c.id)?.let { c.id to it } }.toMap(); withContext(Dispatchers.Main) { statusCache = snapshot } }
     fun installComponent(id: String) { val p = platform ?: run { lastPluginError = "Prepare o sandbox antes de instalar componentes."; return }; if (id in installingComponentIds) return; lastPluginError = null; installingComponentIds = installingComponentIds + id; viewModelScope.launch { var result: Result<InstalledComponent>? = null; try { result = withContext(Dispatchers.IO) { runCatching { p.plugins.install(id) } }; result.onFailure { lastPluginError = it.message ?: "Falha ao instalar $id" }; result.getOrNull()?.let { if (it.state == InstallationState.FAILED) lastPluginError = it.error ?: "Falha ao instalar $id" } } finally { installingComponentIds = installingComponentIds - id; val finished = result; finished?.getOrNull()?.let { statusCache = statusCache + (id to it) }; refreshPluginAudit(); pluginListVersion++ } } }
     fun removeComponent(id: String) { val p = platform ?: run { lastPluginError = "Prepare o sandbox antes de remover componentes."; return }; if (id in installingComponentIds) return; lastPluginError = null; installingComponentIds = installingComponentIds + id; viewModelScope.launch { var result: Result<InstalledComponent?>? = null; try { result = withContext(Dispatchers.IO) { runCatching { p.plugins.remove(id) } }; result.onFailure { lastPluginError = it.message ?: "Falha ao remover $id" }; result.getOrNull()?.let { if (it.state == InstallationState.FAILED) lastPluginError = it.error ?: "Falha ao remover $id" } } finally { installingComponentIds = installingComponentIds - id; val finished = result; finished?.getOrNull()?.let { installed -> statusCache = if (installed != null) statusCache + (id to installed) else statusCache - id }; refreshPluginAudit(); pluginListVersion++ } } }
     fun clearPluginError() { lastPluginError = null }
     fun refreshPluginAudit() { val p = platform ?: return; viewModelScope.launch(Dispatchers.IO) { val snapshots = p.plugins.snapshots(); val history = p.plugins.history(); withContext(Dispatchers.Main) { pluginSnapshots = snapshots; pluginHistory = history } } }
     fun rollbackPlugins(version: Long) { val p = platform ?: return; viewModelScope.launch { runCatching { withContext(Dispatchers.IO) { p.plugins.rollback(version) } }.onFailure { lastPluginError = it.message ?: "Falha ao restaurar snapshot v$version" }; refreshStatusCache(); refreshPluginAudit(); pluginListVersion++ } }
-    private fun ExecutionLog.toUiResult() = SandboxExecutionResult(stdout = stdout, stderr = stderr, exitCode = exitCode ?: -1, timedOut = timedOut)
+    private fun ExecutionLog.toUiResult() = com.sandbox.runtime.SandboxExecutionResult(stdout = stdout, stderr = stderr, exitCode = exitCode ?: -1, timedOut = timedOut)
 }

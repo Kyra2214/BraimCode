@@ -11,7 +11,7 @@
 
 A consolidação incremental definida no plano mestre foi implementada nas 15 fases ordenadas. O trabalho evoluiu componentes existentes sempre que eles já cobriam parte da responsabilidade. Nenhum componente funcional foi removido. O resultado introduz uma autoridade declarativa única para capabilities e conecta discovery, policy, gateway, agentes, skills, retrieval, conhecimento, planejamento, dispatch, workflows, jobs e auto-skills sem criar `Brain2`, `Router2`, `Memory2` ou registries paralelos equivalentes.
 
-A validação do núcleo JVM foi concluída com sucesso: `:brain:check` passou com 109 testes Kotlin, a suíte Python passou com 155 testes, o gate arquitetural passou, `git diff --check` passou e os scripts shell passaram na validação sintática. O build completo do projeto e o assemble Android não foram declarados como aprovados porque o ambiente de validação não possui Android SDK configurado. Portanto, o estado correto é **consolidação do núcleo aprovada; build Android completo bloqueado por infraestrutura**.
+A validação do núcleo JVM foi concluída com sucesso: `:brain:check` passou com 113 testes Kotlin, a suíte Python passou com 155 testes, o gate arquitetural passou, `git diff --check` passou e os scripts shell passaram na validação sintática. O build completo do projeto e o assemble Android não foram declarados como aprovados porque o ambiente de validação não possui Android SDK configurado. Portanto, o estado correto é **consolidação do núcleo aprovada; build Android completo bloqueado por infraestrutura**.
 
 ## Arquitetura consolidada
 
@@ -103,7 +103,7 @@ A consolidação evoluiu os seguintes componentes existentes:
 
 ## Arquivos alterados e removidos
 
-Entre `origin/main` e o HEAD consolidado foram identificados **33 arquivos alterados ou adicionados**, com **2.486 linhas adicionadas e 40 removidas**. Não houve arquivo removido. O working tree final está limpo.
+Entre a base original `d477004` e o HEAD consolidado foram identificados **50 arquivos alterados ou adicionados**, com **3.060 linhas adicionadas e 48 removidas**. Não houve arquivo removido. O working tree final está limpo.
 
 Os arquivos de contrato e documentação também foram atualizados, especialmente `contracts/capability.md` e `docs/BRAINCODE_2.0_AUDITORIA_CONSOLIDACAO_2026-09-14.md`.
 
@@ -112,7 +112,7 @@ Os arquivos de contrato e documentação também foram atualizados, especialment
 | Validação | Resultado | Observação |
 |---|---|---|
 | `./gradlew :brain:check` | **PASS** | Build e testes do módulo JVM. |
-| `./gradlew :brain:test` | **PASS** | 109 testes Kotlin, 0 falhas, 0 erros, 0 skips. |
+| `./gradlew :brain:test` | **PASS** | 113 testes Kotlin, 0 falhas, 0 erros, 0 skips. |
 | `python3 -m unittest discover -s tests -p 'test_*.py' -q` | **PASS** | 155 testes Python. |
 | `bash scripts/architecture-gate.sh` | **PASS** | Superfícies de execução continuam policy-gated. |
 | `git diff --check` | **PASS** | Nenhum erro de whitespace. |
@@ -169,3 +169,35 @@ A implementação realizada cobre o núcleo arquitetural, mas não deve ser desc
 Há ainda quatro itens transversais do plano que permanecem parciais: **Fast Intent Classifier**, adapters de APIs como capabilities com bootstrap no registry, integração completa do Provider Router com seleção `free-first`, e uma política explícita que escolha deterministicamente quando LLM é necessário. O `ApiCatalog` e o router foram preservados, mas a integração universal de produção não foi concluída.
 
 Portanto, o status correto é: **núcleo arquitetural consolidado e validado; plano mestre integral ainda não concluído**. As próximas prioridades são Observabilidade, contratos `Intent`/`Task`, adapters `Knowledge`/`Workflow`, agentes concretos, skill validation end-to-end, `ALLOW_WITH_LIMITS`, discovery lazy e wiring Android/produção.
+
+
+## Revalidação fase a fase após fechamento das lacunas
+
+A comparação foi repetida diretamente contra as Fases 0–14 do plano mestre. As lacunas implementáveis no núcleo foram fechadas nesta rodada:
+
+| Fase | Fechamento realizado | Estado atual |
+|---|---|---|
+| 0 — Consolidação | Auditoria, mapa de componentes e regra de não duplicação | **Concluída** |
+| 1 — Universal Capability Model | `CapabilityProvider`, `CapabilityDefinition`, `CapabilityRegistry`, `CapabilityCandidate`, `CapabilityDiscovery`, adapter `ApiCatalogCapabilityProvider` e `LazyCapabilityDiscovery` | **Concluída no núcleo** |
+| 2 — Policy Broker | `ALLOW`, `ALLOW_WITH_LIMITS`, `REQUIRE_APPROVAL`, `DENY`, limites vinculados ao token e testes de risco/dados/sandbox | **Concluída no núcleo** |
+| 3 — Action Gateway | Lifecycle, audit event com hash/referência/status, trace técnico e gateway agnóstico | **Concluída no núcleo; wiring Android end-to-end pendente** |
+| 4 — Agent Registry | Definições declarativas built-in para `ResearchAgent` e `CodeAgent`, além da publicação de bounded agents | **Concluída declarativamente** |
+| 5 — Skill Registry | Seis manifests candidatos do plano, trust/revogação/publicação e `SkillValidator` com Sandbox/Test/Critic/PASS | **Concluída no núcleo** |
+| 6 — Retrieval Executor | Camadas `KNOWLEDGE` e `WORKFLOWS`, adapters para Knowledge validado e Workflow habilitado, além das fontes anteriores | **Concluída no núcleo** |
+| 7 — Knowledge Compiler | Candidatos explícitos para `Knowledge`, `Skill`, `Prompt`, `Workflow` e `Rule`, sempre dependentes de conhecimento validado | **Concluída como geração de candidatos** |
+| 8 — Planner + Function Splitter | `Intent`, `Task`, `Dependency`, assumptions, policies, fallback, required capabilities, classifier rápido e política de uso de LLM | **Concluída no núcleo** |
+| 9 — Dispatcher | Discovery → candidato → Action Gateway | **Concluída no núcleo** |
+| 10 — Workflow/DAG | Dependências, paralelismo limitado, retry, cancelamento, timeout, evidências e checkpoints persistidos | **Concluída no núcleo; retomada granular por node ainda pode ser endurecida** |
+| 11 — Durable Jobs | `JobStore` e `DurableJobRunner` integrados ao WorkflowEngine, com estados, tentativas e evidências | **Concluída no núcleo** |
+| 12 — Auto-Skill Learning | Detecção de repetições bem-sucedidas e promoção somente via `SkillValidator` | **Concluída no núcleo** |
+| 13 — Capability Discovery Hierárquico | Categorias, ranking, limite de candidatos e carregamento lazy por `CapabilityProvider` | **Concluída no núcleo** |
+| 14 — Observabilidade | `ExecutionTrace`, stages Task/Plan/Capability/Policy/Agent/Sandbox/Evidence/Critic e integração do ActionGateway | **Concluída no núcleo** |
+
+Após esta rodada, não há lacuna de contrato ou componente central do plano que permaneça simplesmente não implementada no módulo `:brain`. Os itens restantes são validações de integração e ambiente, não novos contratos básicos:
+
+1. O wiring Android real `Chat → Brain → Retrieval → Discovery → Dispatcher → Policy → ActionGateway → Sandbox/Provider` ainda precisa ser executado em ambiente com Android SDK.
+2. Os agents built-in estão registrados declarativamente; as implementações operacionais concretas de `ResearchAgent` e `CodeAgent` continuam bounded pelos módulos existentes e ainda precisam de um cenário end-to-end comprovado.
+3. A recuperação de workflow persiste checkpoints e permite reentrada segura, mas a retomada granular a partir do último node concluído ainda pode ser otimizada para não reexecutar nodes já concluídos.
+4. O build Android completo continua bloqueado pela ausência de `ANDROID_HOME`, `ANDROID_SDK_ROOT` ou `local.properties` com `sdk.dir`.
+
+A classificação correta agora é: **plano mestre implementado no núcleo JVM, com quatro pendências de integração/infraestrutura explicitamente delimitadas**.

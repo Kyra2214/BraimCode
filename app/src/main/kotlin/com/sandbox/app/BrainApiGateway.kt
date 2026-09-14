@@ -39,8 +39,10 @@ class BrainApiGateway(
         val knowledgeValidated: Boolean = false
     )
 
-    /** Execução local é injetada pelo app depois que o Sandbox fica pronto. */
-    private var localExecutor: ((String) -> LocalExecutionResult)? = null
+    /** Fallback local: o Brain escolhe; a execução permanece no runtime Sandbox. */
+    private var localExecutor: ((String) -> LocalExecutionResult)? = { prompt ->
+        BrainLocalRuntimeExecutor(keyStore.appContext).complete(prompt)
+    }
 
     data class LocalExecutionResult(
         val text: String,
@@ -56,16 +58,7 @@ class BrainApiGateway(
         require(prompt.isNotBlank()) { "prompt não pode ser vazio" }
 
         learning.recall(prompt)?.let { learned ->
-            return GatewayResult(
-                learned.answer,
-                "memory",
-                "knowledge:${learned.id}",
-                emptyList(),
-                learned.source,
-                learned.id,
-                true,
-                true
-            )
+            return GatewayResult(learned.answer, "memory", "knowledge:${learned.id}", emptyList(), learned.source, learned.id, true, true)
         }
 
         val catalog = ApiCatalogRegistry.current() ?: error("Catálogo de APIs não instalado")
@@ -120,13 +113,7 @@ class BrainApiGateway(
                 if (text.isNotBlank()) {
                     val source = buildSource(response, model, text)
                     val urls = extractUrls(response.body + "\n" + text)
-                    val knowledge = learning.observeExternal(
-                        problem = prompt,
-                        answer = text,
-                        source = source,
-                        retrievalHints = urls,
-                        tags = tagsFor(papel, prompt)
-                    )
+                    val knowledge = learning.observeExternal(prompt, text, source, urls, tagsFor(papel, prompt))
                     val verdict = critic.evaluate(knowledge)
                     val validated = when (verdict.decision) {
                         KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, source) != null
@@ -140,8 +127,7 @@ class BrainApiGateway(
             } else attempts += "$key: HTTP ${response?.statusCode ?: 0}"
         }
 
-        // API gratuita esgotada: o Brain usa o modelo local instalado, sem expor
-        // o nome do motor/modelo ao usuário. O executor permanece atrás desta fronteira.
+        // Sem API gratuita disponível: o próprio Brain cai para o Brain Local.
         val local = localExecutor
         if (local != null) {
             val result = runCatching { local.invoke(prompt) }.getOrElse {
@@ -149,33 +135,16 @@ class BrainApiGateway(
                 null
             }
             if (result != null && result.text.isNotBlank()) {
-                val knowledge = learning.observeExternal(
-                    problem = prompt,
-                    answer = result.text,
-                    source = result.source,
-                    retrievalHints = emptyList(),
-                    tags = tagsFor(papel, prompt)
-                )
+                val knowledge = learning.observeExternal(prompt, result.text, result.source, emptyList(), tagsFor(papel, prompt))
                 val verdict = critic.evaluate(knowledge)
                 val validated = when (verdict.decision) {
                     KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, result.source) != null
                     KnowledgeCriticDecision.REJECT -> false
                     KnowledgeCriticDecision.UNCERTAIN -> false
                 }
-                return GatewayResult(
-                    text = result.text,
-                    providerId = "brain-local",
-                    modelId = "brain-local",
-                    attempts = attempts,
-                    source = result.source,
-                    knowledgeId = knowledge.id,
-                    fromMemory = false,
-                    knowledgeValidated = validated
-                )
+                return GatewayResult(result.text, "brain-local", "brain-local", attempts, result.source, knowledge.id, false, validated)
             }
-        } else {
-            attempts += "brain-local: Sandbox ainda não conectado"
-        }
+        } else attempts += "brain-local: Sandbox ainda não conectado"
         throw IllegalStateException("Brain não conseguiu responder. Tentativas: ${attempts.joinToString(" | ")}")
     }
 
@@ -189,15 +158,7 @@ class BrainApiGateway(
         val urls = extractUrls(response.body + "\n" + text)
         val github = urls.firstOrNull { it.contains("github.com/", ignoreCase = true) }
         val parts = github?.let(::parseGithub)
-        return KnowledgeSource(
-            type = if (github != null) "github" else "api",
-            uri = github ?: urls.firstOrNull(),
-            providerId = response.providerId,
-            modelId = model.modeloId,
-            repository = parts?.repository,
-            path = parts?.path,
-            commit = parts?.commit
-        )
+        return KnowledgeSource(if (github != null) "github" else "api", github ?: urls.firstOrNull(), response.providerId, model.modeloId, parts?.repository, parts?.path, parts?.commit)
     }
 
     private data class GithubSource(val repository: String?, val path: String?, val commit: String?)
@@ -220,10 +181,7 @@ class BrainApiGateway(
     }.getOrNull()
 
     private fun extractUrls(value: String): List<String> = Regex("https?://[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE)
-        .findAll(value)
-        .map { it.value.trimEnd('.', ',', ';', ')', ']', '}') }
-        .distinct()
-        .toList()
+        .findAll(value).map { it.value.trimEnd('.', ',', ';', ')', ']', '}') }.distinct().toList()
 
     private fun tagsFor(papel: PapelPipeline, prompt: String): List<String> =
         (listOf(papel.name.lowercase()) + prompt.lowercase().split(Regex("[^\\p{L}\\p{N}_]+"))
@@ -271,8 +229,6 @@ private class AndroidProviderClient(
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             ProviderResponse(status, body, (System.nanoTime() - started) / 1_000_000, providerId)
-        } finally {
-            connection.disconnect()
-        }
+        } finally { connection.disconnect() }
     }
 }

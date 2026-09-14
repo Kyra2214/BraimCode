@@ -34,16 +34,19 @@ class LocalLlmSandboxBridge(private val context: Context) {
     fun ensureEngine(): Result<String> = runCatching {
         require(rootfsDir.isDirectory) { "RootFS não está preparado." }
         val manifest = loadManifest()
-        val archiveResult = SandboxResourceManager(engineArchive).ensureAvailable(manifest)
-        val archive = when (archiveResult) {
-            is SandboxResourceManager.DownloadResult.Success -> archiveResult.file
-            is SandboxResourceManager.DownloadResult.Failure -> error(archiveResult.reason)
-        }
 
+        // Fast path: depois da primeira instalação o tarball é apagado, mas
+        // o motor permanece no RootFS. Não baixamos os ~13,5 MB novamente.
         val existing = findLlamaCli()
         if (existing != null && engineMarker.readTextOrNull() == manifest.version) {
             exposeOnGuestPath(existing)
             return@runCatching guestPath(existing)
+        }
+
+        val archiveResult = SandboxResourceManager(engineArchive).ensureAvailable(manifest)
+        val archive = when (archiveResult) {
+            is SandboxResourceManager.DownloadResult.Success -> archiveResult.file
+            is SandboxResourceManager.DownloadResult.Failure -> error(archiveResult.reason)
         }
 
         engineDir.deleteRecursively()

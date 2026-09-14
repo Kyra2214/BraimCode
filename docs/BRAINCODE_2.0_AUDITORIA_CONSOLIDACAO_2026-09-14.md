@@ -70,3 +70,7 @@ Foi criado `com.brain.retrieval.Retrieval` sobre contratos existentes de memóri
 ## Fase 9 — Knowledge Compiler
 
 O `KnowledgeCompiler` foi consolidado sobre `KnowledgeLearningCycle` e `ConservativeKnowledgeCritic`. O fluxo explícito é `KnowledgeEvidence → candidate KnowledgeEntry → Critic → validated knowledge`; resposta externa sem fonte permanece incerta. A criação de `SkillCandidate` só ocorre para conhecimento validado, e o registro de Skill exige chamada explícita de validação no `SkillRegistry`.
+
+## Fase 10 — Planner
+
+`PlanoExecucao` foi mantido como contrato canônico e recebeu o alias `ExecutionPlan`, além da coleção derivada de `requiredCapabilities`. O Planner continua produzindo objetivo, passos, dependências e critérios; não executa ações nem escolhe executor.

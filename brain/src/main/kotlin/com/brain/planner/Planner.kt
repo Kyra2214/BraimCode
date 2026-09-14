@@ -51,6 +51,7 @@ data class PlanoExecucao(
     val passos: List<PassoPlano>
 ) {
     val ordemDeExecucao: List<PassoPlano>
+    val requiredCapabilities: Set<String>
 
     init {
         require(objetivo.isNotBlank()) { "objetivo não pode ser vazio" }
@@ -69,6 +70,7 @@ data class PlanoExecucao(
         }
 
         ordemDeExecucao = ordenarTopologicamente(passos)
+        requiredCapabilities = passos.map { it.capacidade }.toSet()
     }
 
     private fun ordenarTopologicamente(passos: List<PassoPlano>): List<PassoPlano> {
@@ -97,6 +99,9 @@ data class PlanoExecucao(
         return ordem.map { porId.getValue(it) }
     }
 }
+
+/** Nome universal do plano mestre; mantém PlanoExecucao como API existente. */
+typealias ExecutionPlan = PlanoExecucao
 
 /**
  * Decompõe um objetivo em texto livre num [PlanoExecucao]. Ainda não há

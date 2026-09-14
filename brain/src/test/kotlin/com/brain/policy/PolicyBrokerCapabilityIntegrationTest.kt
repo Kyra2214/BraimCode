@@ -40,7 +40,7 @@ class PolicyBrokerCapabilityIntegrationTest {
         val decision = broker.authorize("agent", "filesystem.read", "/safe/file", context())
 
         assertEquals(Decision.ALLOW, decision.decision)
-        assertEquals(PolicyOutcome.SANDBOX_ONLY, decision.outcome)
+        assertEquals(PolicyOutcome.ALLOW_WITH_LIMITS, decision.outcome)
     }
 
     @Test

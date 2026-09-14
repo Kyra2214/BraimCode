@@ -3,11 +3,13 @@ package com.brain.retrieval
 /** Ordem econômica e arquitetural obrigatória do retrieval. */
 enum class RetrievalLayer(val priority: Int) {
     MEMORY(0),
-    SKILLS(1),
-    PROMPT_LIBRARY(2),
-    TOOLS(3),
-    AGENTS(4),
-    APIS(5)
+    KNOWLEDGE(1),
+    SKILLS(2),
+    PROMPT_LIBRARY(3),
+    WORKFLOWS(4),
+    TOOLS(5),
+    AGENTS(6),
+    APIS(7)
 }
 
 data class RetrievalQuery(
@@ -45,7 +47,7 @@ data class RetrievalSource(
     val id: String,
     val layer: RetrievalLayer,
     val lookup: RetrievalLookup,
-    val validatedOnly: Boolean = layer == RetrievalLayer.MEMORY || layer == RetrievalLayer.SKILLS
+    val validatedOnly: Boolean = layer == RetrievalLayer.MEMORY || layer == RetrievalLayer.KNOWLEDGE || layer == RetrievalLayer.SKILLS
 ) {
     init { require(id.isNotBlank()) { "id da fonte é obrigatório" } }
 }

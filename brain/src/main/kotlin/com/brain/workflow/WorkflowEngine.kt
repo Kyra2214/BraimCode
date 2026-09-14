@@ -109,7 +109,7 @@ class WorkflowEngine(private val stateFile: File? = null, private val leaseStore
         execute: (WorkflowNode, Int) -> WorkflowStepResult,
         isCancelled: () -> Boolean = { false }
     ): WorkflowRunResult = synchronized(lock) {
-        completedRuns[idempotencyKey]?.let { return it }
+        completedRuns[idempotencyKey]?.takeIf { it.status in setOf(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED, WorkflowStatus.TIMED_OUT) }?.let { return it }
         validate(manifest)
         if (!manifest.enabled) throw IllegalStateException("workflow desabilitado")
         val lease = leaseStore?.acquire(manifest.id, runId)
@@ -127,6 +127,7 @@ class WorkflowEngine(private val stateFile: File? = null, private val leaseStore
                 }
                 val batchResults = executeBatch(ready, manifest.maxParallelism, execute, isCancelled)
                 results += batchResults
+                persist(WorkflowRunResult(runId, idempotencyKey, WorkflowStatus.RUNNING, results.toList()))
                 pending.removeAll(ready.toSet())
                 if (batchResults.any { it.error == "cancelled" }) {
                     return@synchronized persist(WorkflowRunResult(runId, idempotencyKey, WorkflowStatus.CANCELLED, results, "workflow cancelado"))

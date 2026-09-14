@@ -7,7 +7,7 @@ package com.brain.policy
 enum class Decision { ALLOW, ASK, DENY }
 
 /** Resultado arquitetural normalizado; ASK permanece para compatibilidade. */
-enum class PolicyOutcome { ALLOW, DENY, REQUIRE_APPROVAL, SANDBOX_ONLY }
+enum class PolicyOutcome { ALLOW, ALLOW_WITH_LIMITS, DENY, REQUIRE_APPROVAL, SANDBOX_ONLY }
 
 /**
  * Nível de aprovação humana exigido antes de uma capacidade poder ser
@@ -65,12 +65,14 @@ data class PolicyDecision(
     val expiresAt: String,
     val reason: String,
     val resource: String = "",
-    val authorizationToken: AuthorizationToken? = null
+    val authorizationToken: AuthorizationToken? = null,
+    val limitsApplied: Boolean = false
 ) {
     val outcome: PolicyOutcome
         get() = when {
             decision == Decision.DENY -> PolicyOutcome.DENY
             decision == Decision.ASK -> PolicyOutcome.REQUIRE_APPROVAL
+            limitsApplied -> PolicyOutcome.ALLOW_WITH_LIMITS
             sandboxRequired -> PolicyOutcome.SANDBOX_ONLY
             else -> PolicyOutcome.ALLOW
         }

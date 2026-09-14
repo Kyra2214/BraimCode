@@ -1,5 +1,6 @@
 package com.brain.router
 
+import com.brain.capability.CostClass
 import java.time.Instant
 
 /**
@@ -12,7 +13,8 @@ data class ProviderModel(
     val modeloId: String,
     val papeisSugeridos: List<PapelPipeline>,
     val janela: JanelaLimite,
-    val contextoMaximoTokens: Int? = null
+    val contextoMaximoTokens: Int? = null,
+    val cost: CostClass = CostClass.FREE
 )
 
 data class JanelaLimite(

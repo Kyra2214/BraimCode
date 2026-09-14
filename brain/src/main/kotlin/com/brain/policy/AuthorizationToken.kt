@@ -17,7 +17,8 @@ class AuthorizationToken private constructor(
     private val networkAllowed: Boolean,
     private val filesystemRoots: List<String>,
     private val budget: Map<String, Long>,
-    private val expiresAt: String
+    private val expiresAt: String,
+    private val limitsApplied: Boolean
 ) {
     fun matches(decision: PolicyDecision): Boolean =
         decisionId == decision.decisionId &&
@@ -32,7 +33,8 @@ class AuthorizationToken private constructor(
             networkAllowed == decision.networkAllowed &&
             filesystemRoots == decision.filesystemRoots &&
             budget == decision.budget &&
-            expiresAt == decision.expiresAt
+            expiresAt == decision.expiresAt &&
+            limitsApplied == decision.limitsApplied
 
     companion object {
         internal fun issue(decision: PolicyDecision): AuthorizationToken =
@@ -49,7 +51,8 @@ class AuthorizationToken private constructor(
                 networkAllowed = decision.networkAllowed,
                 filesystemRoots = decision.filesystemRoots.toList(),
                 budget = decision.budget.toMap(),
-                expiresAt = decision.expiresAt
+                expiresAt = decision.expiresAt,
+                limitsApplied = decision.limitsApplied
             )
     }
 }

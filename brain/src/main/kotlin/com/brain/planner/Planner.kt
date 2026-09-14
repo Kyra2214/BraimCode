@@ -48,10 +48,14 @@ data class PassoPlano(
  */
 data class PlanoExecucao(
     val objetivo: String,
-    val passos: List<PassoPlano>
+    val passos: List<PassoPlano>,
+    val assumptions: Set<String> = emptySet(),
+    val policies: Set<String> = emptySet(),
+    val fallback: String? = null
 ) {
     val ordemDeExecucao: List<PassoPlano>
     val requiredCapabilities: Set<String>
+    val tasks: List<Task>
 
     init {
         require(objetivo.isNotBlank()) { "objetivo não pode ser vazio" }
@@ -71,6 +75,17 @@ data class PlanoExecucao(
 
         ordemDeExecucao = ordenarTopologicamente(passos)
         requiredCapabilities = passos.map { it.capacidade }.toSet()
+        tasks = passos.map { passo ->
+            Task(
+                id = passo.id,
+                objective = passo.criterioSucesso,
+                inputs = passo.parametros,
+                dependencies = passo.dependeDe.toSet(),
+                capabilities = setOf(passo.capacidade),
+                retryLimit = 0,
+                validation = passo.criterioSucesso
+            )
+        }
     }
 
     private fun ordenarTopologicamente(passos: List<PassoPlano>): List<PassoPlano> {

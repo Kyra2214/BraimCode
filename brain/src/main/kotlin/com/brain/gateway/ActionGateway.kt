@@ -7,6 +7,8 @@ import com.brain.policy.PolicyBroker
 import com.brain.policy.PolicyContext
 import com.brain.policy.PolicyDecision
 import java.time.Instant
+import com.brain.observability.ExecutionTrace
+import com.brain.observability.TraceStage
 
 /** Pedido declarativo; não transporta comando ou shell arbitrário. */
 data class ActionRequest(
@@ -35,6 +37,8 @@ data class ActionExecution(
     val provenance: List<String> = emptyList()
 )
 
+enum class ActionLifecycle { CREATED, PLANNED, AUTHORIZED, DISPATCHED, RUNNING, SUCCEEDED, FAILED, BLOCKED, RETRYING, CANCELLED }
+
 fun interface ActionExecutor {
     fun execute(request: ActionRequest, capability: CapabilityDefinition, decision: PolicyDecision): ActionExecution
 }
@@ -52,7 +56,11 @@ data class ActionAuditRecord(
     val result: String? = null,
     val error: String? = null,
     val evidence: List<String> = emptyList(),
-    val provenance: List<String> = emptyList()
+    val provenance: List<String> = emptyList(),
+    val status: ActionLifecycle = if (success) ActionLifecycle.SUCCEEDED else ActionLifecycle.FAILED,
+    val inputHash: String? = null,
+    val outputReference: String? = null,
+    val lifecycle: List<ActionLifecycle> = emptyList()
 )
 
 fun interface ActionAuditLog {
@@ -86,14 +94,18 @@ class ActionGateway(
     private val policy: PolicyBroker,
     private val executor: ActionExecutor,
     private val audit: ActionAuditLog,
-    private val clock: () -> Instant = Instant::now
+    private val clock: () -> Instant = Instant::now,
+    private val trace: ExecutionTrace? = null
 ) {
     fun execute(request: ActionRequest): ActionGatewayResult {
         val started = clock()
+        trace?.record(request.actionId, TraceStage.TASK, "created", request.actionId)
+        trace?.record(request.actionId, TraceStage.CAPABILITY, "requested", request.capability)
         val definition = registry.findByCapability(request.capability)
             .firstOrNull { it.status.name == "ACTIVE" }
         val context = request.context.copy(actor = request.actor)
         val decision = policy.authorize(request.actor, request.capability, request.resource, context)
+        trace?.record(request.actionId, TraceStage.POLICY, decision.outcome.name, decision.decisionId)
         val safeParameters = redactParameters(request.parameters)
 
         if (definition == null || decision.decision != Decision.ALLOW || !policy.check(decision, request.resource.takeIf { it.isNotBlank() })) {
@@ -105,6 +117,8 @@ class ActionGateway(
 
         val execution = runCatching { executor.execute(request, definition, decision) }
             .getOrElse { ActionExecution(false, error = it.message ?: "executor failure", provenance = request.provenance) }
+        trace?.record(request.actionId, TraceStage.SANDBOX, if (execution.success) "succeeded" else "failed", request.capability)
+        trace?.record(request.actionId, TraceStage.EVIDENCE, if (execution.evidence.isNotEmpty()) "recorded" else "missing", request.actionId)
         record(request, safeParameters, decision, started, execution)
         return ActionGatewayResult(request.actionId, execution.success, decision, execution)
     }
@@ -130,7 +144,11 @@ class ActionGateway(
                 result = execution.result,
                 error = execution.error,
                 evidence = execution.evidence,
-                provenance = (request.provenance + execution.provenance).distinct()
+                provenance = (request.provenance + execution.provenance).distinct(),
+                status = if (execution.success) ActionLifecycle.SUCCEEDED else if (decision.decision == Decision.DENY) ActionLifecycle.BLOCKED else ActionLifecycle.FAILED,
+                inputHash = request.parameters.entries.sortedBy { it.key }.joinToString("&") { "${it.key}=${it.value}" }.hashCode().toString(16),
+                outputReference = execution.result?.takeIf { it.length < 256 },
+                lifecycle = listOf(ActionLifecycle.CREATED, ActionLifecycle.PLANNED, ActionLifecycle.DISPATCHED, ActionLifecycle.RUNNING, if (execution.success) ActionLifecycle.SUCCEEDED else ActionLifecycle.FAILED)
             )
         )
     }

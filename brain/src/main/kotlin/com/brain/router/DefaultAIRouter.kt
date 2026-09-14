@@ -77,6 +77,7 @@ class DefaultAIRouter(
         return (qualidade * pesos.qualidade) +
             (confiabilidade * pesos.confiabilidade) +
             (velocidade * pesos.velocidade) +
+            (if (modelo.cost == com.brain.capability.CostClass.FREE) pesos.bonusFreeFirst else 0.0) +
             (if (quotaEsgotada) pesos.penalidadeQuotaEsgotada else 0.0) +
             penalidadeErro
     }
@@ -115,6 +116,7 @@ data class RoutingWeights(
     val velocidade: Double = 0.5,
     val latenciaReferenciaMs: Double = 10_000.0,
     val penalidadeQuotaEsgotada: Double = -5.0,
+    val bonusFreeFirst: Double = 0.25,
     val penalidadeChaveInvalida: Double = -10.0,
     val penalidadeLimite: Double = -1.0,
     val penalidadeErroTransitorio: Double = -0.3

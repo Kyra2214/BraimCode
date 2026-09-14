@@ -57,6 +57,10 @@ class PolicyBroker(
         }
 
         val expires = Instant.now().plus(maxOf(1, context.ttlSeconds).toLong(), ChronoUnit.SECONDS)
+        val limitsApplied = decision == Decision.ALLOW && (
+            context.budget.isNotEmpty() || context.filesystemRoots.isNotEmpty() ||
+                context.ttlSeconds < 300 || context.networkAllowed
+            )
         val unsigned = PolicyDecision(
             decisionId = "decision_${UUID.randomUUID()}",
             runId = context.runId,
@@ -72,7 +76,8 @@ class PolicyBroker(
             budget = context.budget,
             expiresAt = expires.toString(),
             reason = reason,
-            resource = resource
+            resource = resource,
+            limitsApplied = limitsApplied
         )
         return unsigned.copy(authorizationToken = AuthorizationToken.issue(unsigned))
     }

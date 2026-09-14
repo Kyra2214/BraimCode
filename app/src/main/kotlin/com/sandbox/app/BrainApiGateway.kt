@@ -1,5 +1,8 @@
 package com.sandbox.app
 
+import com.brain.memory.KnowledgeEntry
+import com.brain.memory.KnowledgeLearningCycle
+import com.brain.memory.KnowledgeSource
 import com.brain.provider.ProviderClient
 import com.brain.provider.ProviderDispatcher
 import com.brain.provider.ProviderRequest
@@ -14,32 +17,35 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * Ponte real Brain -> APIs gratuitas.
- * O Brain escolhe provider/modelo; esta camada executa e percorre as
- * alternativas quando uma API falha, perde o modelo ou atinge limite.
- */
+/** Ponte interna Brain -> APIs gratuitas; o usuário não conversa com provider. */
 class BrainApiGateway(
     private val providers: List<ApiProvider>,
     private val keyStore: ApiKeyStore,
-    private val router: DefaultAIRouter = DefaultAIRouter()
+    private val router: DefaultAIRouter = DefaultAIRouter(),
+    private val learning: KnowledgeLearningCycle = KnowledgeLearningCycle()
 ) {
     data class GatewayResult(
         val text: String,
         val providerId: String,
         val modelId: String,
-        val attempts: List<String>
+        val attempts: List<String>,
+        val source: KnowledgeSource? = null,
+        val knowledgeId: String? = null,
+        val fromMemory: Boolean = false
     )
 
     fun complete(prompt: String, papel: PapelPipeline = PapelPipeline.ESCRITA_DE_PROMPT): GatewayResult {
         require(prompt.isNotBlank()) { "prompt não pode ser vazio" }
+
+        learning.recall(prompt)?.let { learned ->
+            return GatewayResult(learned.answer, "memory", "knowledge:${learned.id}", emptyList(), learned.source, learned.id, true)
+        }
+
         val catalog = ApiCatalogRegistry.current() ?: error("Catálogo de APIs não instalado")
         val dynamic = catalog as? DynamicFreeApiCatalog
         val attempts = mutableListOf<String>()
         val tried = mutableSetOf<String>()
-
         fun decide(): RoutingDecision? = router.decidir(papel, catalog, emptyList())
-
         val decision = decide() ?: error("Nenhuma API gratuita disponível para o papel $papel")
         val ordered = ArrayDeque<ProviderModel>()
         ordered.add(decision.escolhido)
@@ -49,65 +55,85 @@ class BrainApiGateway(
             var model = ordered.removeFirst()
             val key = "${model.providerId}::${model.modeloId}"
             if (!tried.add(key)) continue
-
-            // Atualiza somente o provider que está prestes a ser usado.
             val currentModels = dynamic?.refreshProvider(model.providerId).orEmpty()
             val refreshed = currentModels.firstOrNull { it.modeloId == model.modeloId }
-            if (refreshed != null) {
-                model = refreshed
-            } else if (currentModels.isNotEmpty()) {
+            if (refreshed != null) model = refreshed
+            else if (currentModels.isNotEmpty()) {
                 val replacement = currentModels.firstOrNull { papel in it.papeisSugeridos }
-                if (replacement != null) {
-                    val replacementKey = "${replacement.providerId}::${replacement.modeloId}"
-                    if (tried.add(replacementKey)) model = replacement
-                    else {
-                        attempts += "$key: modelo removido/indisponível"
-                        continue
-                    }
-                } else {
-                    attempts += "$key: modelo removido/indisponível"
-                    continue
-                }
+                if (replacement != null && tried.add("${replacement.providerId}::${replacement.modeloId}")) model = replacement
+                else { attempts += "$key: modelo removido/indisponível"; continue }
             }
 
             val provider = providers.firstOrNull { it.id == model.providerId }
-            if (provider == null) {
-                attempts += "$key: provider não cadastrado"
-                continue
-            }
+            if (provider == null) { attempts += "$key: provider não cadastrado"; continue }
             val apiKey = keyStore.get(model.providerId)?.takeIf { it.isNotBlank() }
-            if (apiKey == null) {
-                attempts += "$key: chave não cadastrada"
-                continue
-            }
+            if (apiKey == null) { attempts += "$key: chave não cadastrada"; continue }
             val baseEndpoint = provider.models.firstOrNull()?.endpoint
-            if (baseEndpoint.isNullOrBlank()) {
-                attempts += "$key: endpoint ausente"
-                continue
-            }
+            if (baseEndpoint.isNullOrBlank()) { attempts += "$key: endpoint ausente"; continue }
 
-            val client = AndroidProviderClient(
-                providerId = model.providerId,
-                endpoint = chatCompletionsEndpoint(baseEndpoint)
-            )
-            val request = ProviderRequest(
-                model = model.modeloId,
-                prompt = prompt,
-                headers = mapOf("Authorization" to "Bearer $apiKey")
-            )
+            val client = AndroidProviderClient(model.providerId, chatCompletionsEndpoint(baseEndpoint))
+            val request = ProviderRequest(model.modeloId, prompt, mapOf("Authorization" to "Bearer $apiKey"))
             val response = ProviderDispatcher(catalog).dispatch(model, client, request).getOrNull()
-
             if (response != null && response.statusCode in 200..299) {
                 val text = extractText(response.body)
-                if (text.isNotBlank()) return GatewayResult(text, model.providerId, model.modeloId, attempts)
+                if (text.isNotBlank()) {
+                    val source = buildSource(response, model, provider, text)
+                    val urls = extractUrls(response.body + "\n" + text)
+                    val knowledge = learning.observeExternal(prompt, text, source, urls + source?.uri.orEmpty(), tagsFor(papel, prompt))
+                    return GatewayResult(text, model.providerId, model.modeloId, attempts, source, knowledge.id, false)
+                }
                 attempts += "$key: resposta sem conteúdo"
-            } else {
-                attempts += "$key: HTTP ${response?.statusCode ?: 0}"
-            }
+            } else attempts += "$key: HTTP ${response?.statusCode ?: 0}"
         }
-
         throw IllegalStateException("Todas as APIs gratuitas falharam. Tentativas: ${attempts.joinToString(" | ")}")
     }
+
+    /** O Critic chama isto depois de validar; só conhecimento validado entra no recall. */
+    fun confirmKnowledge(knowledgeId: String, confidence: Double, source: KnowledgeSource? = null): KnowledgeEntry? = learning.confirm(knowledgeId, confidence, source)
+
+    /** Corrige a resposta aprendida sem perder sua identidade e histórico. */
+    fun correctKnowledge(knowledgeId: String, correctedAnswer: String, confidence: Double): KnowledgeEntry? = learning.correct(knowledgeId, correctedAnswer, confidence)
+
+    private fun buildSource(response: ProviderResponse, model: ProviderModel, provider: ApiProvider, text: String): KnowledgeSource {
+        val urls = extractUrls(response.body + "\n" + text)
+        val github = urls.firstOrNull { it.contains("github.com/", ignoreCase = true) }
+        val parts = github?.let(::parseGithub)
+        return KnowledgeSource(
+            type = if (github != null) "github" else "api",
+            uri = github ?: urls.firstOrNull() ?: provider.documentationUrl,
+            providerId = response.providerId,
+            modelId = model.modeloId,
+            repository = parts?.repository,
+            path = parts?.path,
+            commit = parts?.commit
+        )
+    }
+
+    private data class GithubSource(val repository: String?, val path: String?, val commit: String?)
+
+    private fun parseGithub(url: String): GithubSource? = runCatching {
+        val clean = url.substringBefore('#').substringBefore('?').trimEnd('/')
+        val marker = "github.com/"
+        val start = clean.indexOf(marker, ignoreCase = true)
+        if (start < 0) return@runCatching null
+        val parts = clean.substring(start + marker.length).split('/').filter { it.isNotBlank() }
+        if (parts.size < 2) return@runCatching null
+        val repo = "${parts[0]}/${parts[1]}"
+        val path = parts.drop(2).joinToString("/").takeIf { it.isNotBlank() }
+        val commit = when {
+            parts.getOrNull(2) == "commit" -> parts.getOrNull(3)
+            parts.getOrNull(2) == "blob" || parts.getOrNull(2) == "tree" -> parts.getOrNull(3)
+            else -> null
+        }
+        GithubSource(repo, path, commit)
+    }.getOrNull()
+
+    private fun extractUrls(value: String): List<String> = Regex("https?://[^\\s\\\"'<>]+", RegexOption.IGNORE_CASE)
+        .findAll(value).map { it.value.trimEnd('.', ',', ';', ')', ']', '}') }.distinct().toList()
+
+    private fun tagsFor(papel: PapelPipeline, prompt: String): List<String> =
+        (listOf(papel.name.lowercase()) + prompt.lowercase().split(Regex("[^\\p{L}\\p{N}_]+"))
+            .filter { it.length >= 4 }.take(12)).distinct()
 
     private fun chatCompletionsEndpoint(base: String): String {
         val normalized = base.trimEnd('/')
@@ -119,12 +145,10 @@ class BrainApiGateway(
         val choices = root.optJSONArray("choices") ?: return@runCatching ""
         val first = choices.optJSONObject(0) ?: return@runCatching ""
         first.optJSONObject("message")?.optString("content")?.takeIf { it.isNotBlank() }
-            ?: first.optString("text").takeIf { it.isNotBlank() }
-            ?: ""
+            ?: first.optString("text").takeIf { it.isNotBlank() } ?: ""
     }.getOrDefault("")
 }
 
-/** Cliente HTTP Android sem java.net.http, compatível com o runtime do APK. */
 private class AndroidProviderClient(
     private val providerId: String,
     private val endpoint: String,
@@ -138,7 +162,6 @@ private class AndroidProviderClient(
             put("model", request.model)
             put("messages", org.json.JSONArray().put(JSONObject().put("role", "user").put("content", request.prompt)))
         }.toString()
-
         val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = timeoutMs
@@ -154,8 +177,6 @@ private class AndroidProviderClient(
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             ProviderResponse(status, body, (System.nanoTime() - started) / 1_000_000, providerId)
-        } finally {
-            connection.disconnect()
-        }
+        } finally { connection.disconnect() }
     }
 }

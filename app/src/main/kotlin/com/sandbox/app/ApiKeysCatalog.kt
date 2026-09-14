@@ -26,14 +26,16 @@ data class ApiProvider(
 )
 
 /**
- * Carrega o catálogo de APIs disponíveis para cadastro.
+ * Carrega o catálogo de APIs que o agente pode usar.
  *
- * O campo `access` informa a modalidade real do modelo (FREE_TIER,
- * FREE_PERMANENT, PROMOTIONAL_CREDITS ou PAYG). Assim a UI pode cadastrar
- * tanto opções gratuitas quanto providers pagos opcionais, sem confundir
- * Grok/xAI com uma API gratuita.
+ * REGRA DO PROJETO: somente acesso gratuito entra no catálogo operacional.
+ * São aceitos FREE_TIER e FREE_PERMANENT. Créditos promocionais e PAYG
+ * ficam fora para impedir que o Brain roteie trabalho para uma API que possa
+ * gerar cobrança.
  */
 object ApiKeyCatalogLoader {
+    private val FREE_ACCESS = setOf("FREE_TIER", "FREE_PERMANENT")
+
     fun load(context: Context): List<ApiProvider> {
         val json = context.assets.open("ai_api_catalog.json").bufferedReader().use { it.readText() }
         val root = JSONObject(json)
@@ -45,6 +47,8 @@ object ApiKeyCatalogLoader {
                 val models = buildList {
                     for (modelIndex in 0 until modelsJson.length()) {
                         val modelObj = modelsJson.getJSONObject(modelIndex)
+                        val access = modelObj.optString("access", "FREE_TIER")
+                        if (access !in FREE_ACCESS) continue
                         val capabilitiesJson = modelObj.optJSONArray("capabilities")
                         val capabilities = buildList {
                             if (capabilitiesJson != null) {
@@ -56,23 +60,25 @@ object ApiKeyCatalogLoader {
                                 id = modelObj.getString("id"),
                                 name = modelObj.getString("name"),
                                 capabilities = capabilities,
-                                access = modelObj.optString("access", "FREE_TIER"),
+                                access = access,
                                 endpoint = modelObj.getString("endpoint"),
                                 requiresKey = modelObj.optBoolean("requiresKey", true)
                             )
                         )
                     }
                 }
-                add(
-                    ApiProvider(
-                        id = providerObj.getString("id"),
-                        name = providerObj.getString("name"),
-                        region = providerObj.optString("region", ""),
-                        officialUrl = providerObj.getString("officialUrl"),
-                        documentationUrl = providerObj.optString("documentationUrl", providerObj.getString("officialUrl")),
-                        models = models
+                if (models.isNotEmpty()) {
+                    add(
+                        ApiProvider(
+                            id = providerObj.getString("id"),
+                            name = providerObj.getString("name"),
+                            region = providerObj.optString("region", ""),
+                            officialUrl = providerObj.getString("officialUrl"),
+                            documentationUrl = providerObj.optString("documentationUrl", providerObj.getString("officialUrl")),
+                            models = models
+                        )
                     )
-                )
+                }
             }
         }
     }

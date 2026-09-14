@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import com.sandbox.agent.Sandbox
 import com.sandbox.resource.SandboxResourceManager
+import com.sandbox.resource.Ed25519RootfsSignatureVerifier
 import com.sandbox.runtime.FileExecutionLogRepository
 import com.sandbox.runtime.FileRuntimeEventStore
 import com.sandbox.runtime.ManagedSandboxRuntime
@@ -36,6 +37,17 @@ class AndroidSandboxFactory(private val context: Context) {
     private val extractionMarker = File(sandboxBaseDir, ".extractor-version")
     private val prootTmpDir = File(context.cacheDir, "sandbox-tmp")
 
+    private val rootfsVerifier by lazy {
+        val trustedKeys = runCatching {
+            context.assets.open("rootfs_trusted_keys.json").bufferedReader().use { reader ->
+                val json = org.json.JSONObject(reader.readText())
+                val keys = json.optJSONObject("keys") ?: org.json.JSONObject()
+                keys.keys().asSequence().associateWith { java.util.Base64.getDecoder().decode(keys.getString(it)) }
+            }
+        }.getOrDefault(emptyMap())
+        Ed25519RootfsSignatureVerifier(trustedKeys)
+    }
+
     private fun ensureProotExecutable(): File {
         val extracted = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
         if (extracted.exists()) {
@@ -61,13 +73,13 @@ class AndroidSandboxFactory(private val context: Context) {
 
     fun resourceManager(): SandboxResourceManager {
         sandboxBaseDir.mkdirs()
-        return SandboxResourceManager(downloadedArchives.first())
+        return SandboxResourceManager(downloadedArchives.first(), rootfsVerifier)
     }
 
     fun layerResourceManager(layer: Int): SandboxResourceManager {
         require(layer in downloadedArchives.indices) { "Camada RootFS inválida: $layer" }
         sandboxBaseDir.mkdirs()
-        return SandboxResourceManager(downloadedArchives[layer])
+        return SandboxResourceManager(downloadedArchives[layer], rootfsVerifier)
     }
 
     /** Gerenciador de artefatos de modelo; mantém a mini-LLM fora do RootFS. */

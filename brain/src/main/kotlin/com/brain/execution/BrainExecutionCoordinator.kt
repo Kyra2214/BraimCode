@@ -35,7 +35,7 @@ class BrainExecutionCoordinator(
             val decision = policy.authorize(actor, step.capacidade, step.id, PolicyContext(runId = runId, taskId = step.id, actor = actor, riskClass = step.riskClass))
             emit(runId, step.id, "PolicyChecked", mapOf("decision" to decision.decision.name, "capability" to step.capacidade))
             if (decision.decision == Decision.ASK) {
-                approvals.create(ApprovalRequest(runId, step.id, step.capacidade, step.id, Instant.parse(decision.expiresAt)))
+                approvals.create(ApprovalRequest(runId = runId, taskId = step.id, capability = step.capacidade, resource = step.id, expiresAt = decision.expiresAt))
                 emit(runId, step.id, "ApprovalRequested", emptyMap())
                 return CoordinatorResult(runId, CoordinatorStatus.WAITING_APPROVAL, attempts, errors)
             }

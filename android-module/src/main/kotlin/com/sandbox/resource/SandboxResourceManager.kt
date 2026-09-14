@@ -3,6 +3,7 @@ package com.sandbox.resource
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
+import java.net.InetAddress
 import java.net.URL
 import java.security.MessageDigest
 
@@ -20,7 +21,8 @@ import java.security.MessageDigest
  */
 class SandboxResourceManager(
     private val targetFile: File,
-    private val rootfsSignatureVerifier: RootfsSignatureVerifier? = null
+    private val rootfsSignatureVerifier: RootfsSignatureVerifier? = null,
+    private val connectionFactory: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection }
 ) {
 
     sealed class DownloadResult {
@@ -69,15 +71,23 @@ class SandboxResourceManager(
         val partialFile = File(targetFile.parentFile, "${targetFile.name}.part")
         var existingBytes = if (partialFile.exists()) partialFile.length() else 0L
 
-        val connection = (URL(manifest.url).openConnection() as HttpURLConnection).apply {
+        val url = URL(manifest.url)
+        require(url.protocol.equals("https", ignoreCase = true)) { "RootFS exige HTTPS" }
+        require(url.userInfo == null && url.ref == null && isSafeResolvedHost(url.host)) {
+            "destino RootFS inválido ou reservado"
+        }
+        val connection = connectionFactory(url).apply {
             connectTimeout = 15_000
             readTimeout = 15_000
+            instanceFollowRedirects = false
             if (existingBytes > 0) {
                 setRequestProperty("Range", "bytes=$existingBytes-")
             }
         }
 
         connection.connect()
+
+        require(connection.responseCode !in 300..399) { "redirect de RootFS bloqueado" }
 
         val supportsResume = connection.responseCode == HttpURLConnection.HTTP_PARTIAL
         if (!supportsResume) {
@@ -150,6 +160,22 @@ class SandboxResourceManager(
         val rootfs = manifest as? RootfsManifest ?: return true
         if (!rootfs.signatureRequired) return true
         return rootfsSignatureVerifier?.verify(file, rootfs) == true
+    }
+
+    private fun isSafeResolvedHost(host: String): Boolean {
+        if (host.isBlank() || host.equals("localhost", true) || host.endsWith(".localhost", true)) return false
+        val addresses = runCatching { InetAddress.getAllByName(host) }.getOrNull() ?: return false
+        return addresses.isNotEmpty() && addresses.none { address ->
+            address.isLoopbackAddress || address.isSiteLocalAddress || address.isLinkLocalAddress ||
+                address.isAnyLocalAddress || address.isMulticastAddress || isMappedPrivate(address.address)
+        }
+    }
+
+    private fun isMappedPrivate(bytes: ByteArray): Boolean {
+        if (bytes.size != 16 || !bytes.copyOfRange(0, 10).all { it == 0.toByte() } || bytes[10] != 0xff.toByte() || bytes[11] != 0xff.toByte()) return false
+        val a = bytes[12].toInt() and 0xff
+        val b = bytes[13].toInt() and 0xff
+        return a == 10 || a == 127 || (a == 169 && b == 254) || (a == 172 && b in 16..31) || (a == 192 && b == 168)
     }
 
     /**

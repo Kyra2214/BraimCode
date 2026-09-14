@@ -29,6 +29,8 @@ import com.sandbox.sandbox.SelfCheckSection
 import com.sandbox.sandbox.SelfCheckItem
 import com.sandbox.sandbox.SelfCheckStatus
 import com.brain.planner.PlanoExecucao
+import com.brain.prompt.InMemoryPromptLibrary
+import com.brain.prompt.PromptLibraryLoader
 import com.sandbox.sandbox.Project
 import com.sandbox.sandbox.ServiceStatus
 import com.sandbox.sandbox.BuiltInServices
@@ -227,7 +229,10 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                 val prepared = withContext(Dispatchers.IO) { factory.prepareManagedRuntime(factory.persistentSessionId()) { c, t, s -> phase = SandboxPhase.Preparing(s, c, t) } }
                 runtime = prepared
                 val dir = File(getApplication<Application>().filesDir, "sandbox")
-                brainController = BrainSandboxController(prepared, File(dir, "rootfs"))
+                val promptLibrary = InMemoryPromptLibrary(
+                    PromptLibraryLoader.fromJson(getApplication<Application>().assets.open("prompts_biblioteca.json").bufferedReader().use { it.readText() })
+                )
+                brainController = BrainSandboxController(prepared, File(dir, "rootfs"), promptLibrary = promptLibrary)
                 brainIntegration = BrainIntegrationFacade(File(dir, "brain"))
                 platform = SandboxPlatform(prepared, File(dir, "workspace"), File(dir, "components.tsv"), File(dir, "services"))
                 pluginListVersion++; refreshStatusCache(); refreshPluginAudit(); phase = SandboxPhase.Ready; refreshToolchains()
@@ -254,7 +259,18 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         chatMessages.add(ChatMessage(ChatRole.USER, prompt)); chatInput = ""; chatRunning = true
         viewModelScope.launch {
             val response = withContext(Dispatchers.IO) {
-                runCatching { ChatMessage(ChatRole.ASSISTANT, brainApiGateway.complete(prompt).text) }
+                runCatching {
+                    val controller = brainController
+                    if (controller != null && phase == SandboxPhase.Ready) {
+                        val cycle = controller.executeObjective(prompt, "chat-${System.currentTimeMillis()}")
+                        val summary = cycle.passos.joinToString("\n") { step ->
+                            "${step.passoId}: ${step.status.name}${step.motivo?.let { " — $it" } ?: ""}"
+                        }
+                        ChatMessage(ChatRole.ASSISTANT, summary.ifBlank { "Plano concluído: ${cycle.aprovado}" })
+                    } else {
+                        ChatMessage(ChatRole.ASSISTANT, brainApiGateway.complete(prompt).text)
+                    }
+                }
                     .getOrElse { ChatMessage(ChatRole.ERROR, "Brain não conseguiu responder: ${it.message ?: it.javaClass.simpleName}") }
             }
             chatMessages.add(response); chatRunning = false

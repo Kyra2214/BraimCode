@@ -14,7 +14,7 @@ data class ProjectIntent(
     val platform: String?,          // ex.: "android", "web"
     val complexity: Complexity,
     val areasInvolvidas: List<String>, // ex.: ["backend", "frontend", "player/multimidia"]
-    val podeResolverLocal: Boolean  // TODO: decidir esse campo dentro do Secretario
+    val podeResolverLocal: Boolean  // decidido pelo pipeline de planejamento ativo
 )
 
 enum class Complexity { BAIXA, MEDIA, ALTA }

@@ -23,8 +23,8 @@ class KeywordFunctionSplitter : FunctionSplitter {
         }
         if (normalizado.containsAny("escrever", "criar", "gerar", "documento", "relatório", "relatorio")) {
             passos += PassoPlano(
-                "produzir", "workspace.write", "artefato produzido",
-                dependeDe = passos.map { it.id }, papel = PapelPipeline.ESCRITA_DE_PROMPT,
+                "produzir", if (normalizado.containsAny("prompt", "template de prompt")) "prompt.library.write" else "workspace.write", "artefato produzido",
+                dependeDe = passos.map { it.id }, papel = if (normalizado.containsAny("prompt", "template de prompt")) PapelPipeline.ESCRITA_DE_PROMPT else PapelPipeline.PRODUCAO_DE_ARTEFATO,
                 riskClass = RiskClass.MEDIUM
             )
         }

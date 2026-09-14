@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class InMemoryPromptLibrary(
     templatesIniciais: List<PromptTemplate>
-) : PromptLibrary {
+) : PromptLibrary, PromptLibrarySnapshot {
 
     private data class Contador(
         val sucesso: Int = 0,
@@ -33,6 +33,10 @@ class InMemoryPromptLibrary(
     private val contadores = ConcurrentHashMap<String, Contador>()
 
     override suspend fun buscarPorContexto(contextoDeUso: String): List<PromptTemplate> {
+        return buscarPorContextoSnapshot(contextoDeUso)
+    }
+
+    override fun buscarPorContextoSnapshot(contextoDeUso: String): List<PromptTemplate> {
         val tokensPedido = tokenizar(contextoDeUso)
         if (tokensPedido.isEmpty()) return emptyList()
 

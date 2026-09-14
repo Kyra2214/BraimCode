@@ -119,12 +119,8 @@ data class PlanoExecucao(
 typealias ExecutionPlan = PlanoExecucao
 
 /**
- * Decompõe um objetivo em texto livre num [PlanoExecucao]. Ainda não há
- * implementação plugada a uma IA de planejamento real — mesma situação do
- * `com.brain.core.Secretario` (interface-only por ora). Este contrato
- * existe pra já fixar o formato que o Ciclo (Etapa 6) consome, mesmo antes
- * de a decomposição automática existir; até lá, quem monta o
- * [PlanoExecucao] é o próprio chamador.
+ * Decompõe um objetivo em texto livre num [PlanoExecucao]. A implementação
+ * determinística ativa é plugada pelo Ciclo Android antes da autorização.
  */
 interface Planner {
     suspend fun planejar(objetivo: String): PlanoExecucao

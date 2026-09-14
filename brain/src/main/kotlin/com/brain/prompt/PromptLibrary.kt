@@ -37,3 +37,12 @@ interface PromptLibrary {
     /** Chamado depois de cada uso real, alimentado pela Fase D (Memória). */
     suspend fun registrarResultado(templateId: String, sucesso: Boolean, custo: Double, tempoMs: Long)
 }
+
+/**
+ * Ponte síncrona opcional para componentes de decisão rápida como Retrieval.
+ * Implementações persistentes podem preencher um snapshot sem mudar o
+ * contrato suspend da biblioteca operacional.
+ */
+interface PromptLibrarySnapshot {
+    fun buscarPorContextoSnapshot(contextoDeUso: String): List<PromptTemplate>
+}

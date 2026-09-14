@@ -3,6 +3,9 @@ package com.sandbox.agent
 import com.brain.planner.AuthorizedPlan
 import com.brain.planner.PassoPlano
 import com.brain.planner.PlanoExecucao
+import com.brain.dispatch.DispatchTask
+import com.brain.dispatch.DispatchStatus
+import com.brain.dispatch.Dispatcher
 import com.brain.policy.*
 import com.brain.qa.EvidenciaComando
 import com.brain.qa.ExecutorValidacaoProjeto
@@ -43,7 +46,8 @@ class CicloExecucaoPlano(
     private val catalog: ApiCatalog,
     private val validador: ExecutorValidacaoProjeto = ExecutorValidacaoProjeto(),
     private val profiles: List<RoutingProfile> = emptyList(),
-    private val approvalStore: ApprovalStore? = null
+    private val approvalStore: ApprovalStore? = null,
+    private val dispatcher: Dispatcher? = null
 ) {
     private val approvedSteps = mutableSetOf<String>()
 
@@ -118,6 +122,32 @@ class CicloExecucaoPlano(
 
     private fun processarPasso(passo: PassoPlano, authorization: ExecutionAuthorization, decision: PolicyDecision?): ResultadoPasso {
         val decisaoRouter = decidirComRefresh(passo)
+        dispatcher?.let { modernDispatcher ->
+            val dispatch = modernDispatcher.dispatch(
+                DispatchTask(
+                    taskId = passo.id,
+                    step = passo,
+                    actor = decision?.actor ?: "android-app",
+                    context = PolicyContext(
+                        runId = authorization.runId,
+                        taskId = passo.id,
+                        actor = decision?.actor ?: "android-app",
+                        riskClass = passo.riskClass,
+                        sandboxRequired = true,
+                        networkAllowed = decision?.networkAllowed ?: false,
+                        filesystemRoots = decision?.filesystemRoots ?: emptyList(),
+                        budget = decision?.budget ?: emptyMap()
+                    )
+                )
+            )
+            return ResultadoPasso(
+                passo.id,
+                if (dispatch.status == DispatchStatus.DISPATCHED) StatusPasso.APROVADO else StatusPasso.REPROVADO,
+                decisaoPolicy = dispatch.gateway?.decision ?: decision,
+                decisaoRouter = decisaoRouter,
+                motivo = dispatch.reason ?: if (dispatch.status == DispatchStatus.DISPATCHED) null else "Dispatcher não executou a capability"
+            )
+        }
         sandbox.abrirSessao(authorization).use { sessao ->
             val execucao = sessao.rodarCapacidade(passo.parametros)
             if (execucao is AgentSandboxSession.CommandOutcome.Refused) return ResultadoPasso(passo.id, StatusPasso.REPROVADO, decisaoPolicy = decision, decisaoRouter = decisaoRouter, execucao = execucao, motivo = execucao.reason)

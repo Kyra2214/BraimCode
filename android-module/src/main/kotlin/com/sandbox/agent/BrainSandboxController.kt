@@ -2,14 +2,37 @@ package com.sandbox.agent
 
 import com.brain.planner.PassoPlano
 import com.brain.planner.PlanoExecucao
+import com.brain.capability.CapabilityAvailability
+import com.brain.capability.CapabilityCategory
+import com.brain.capability.CapabilityDefinition
+import com.brain.capability.CapabilityDiscovery
+import com.brain.capability.CapabilityProvenance
+import com.brain.capability.CapabilityRegistry
+import com.brain.dispatch.Dispatcher
+import com.brain.gateway.ActionGateway
+import com.brain.gateway.InMemoryActionAuditLog
+import com.brain.job.DurableJobRunner
+import com.brain.job.JobStore
 import com.brain.execution.RiskClass
+import com.brain.planner.FastIntentClassifier
 import com.brain.policy.PolicyBroker
 import com.brain.policy.FileApprovalStore
 import com.brain.router.ApiCatalogRegistry
 import com.brain.router.DefaultAIRouter
 import com.brain.router.InMemoryApiCatalog
 import com.sandbox.runtime.ManagedSandboxRuntime
+import com.brain.workflow.WorkflowEngine
+import com.brain.workflow.WorkflowManifest
+import com.brain.workflow.WorkflowNode
+import com.brain.workflow.WorkflowStepResult
+import com.brain.prompt.PromptLibrary
+import com.brain.retrieval.PromptLibraryRetrievalSource
+import com.brain.retrieval.Retrieval
+import com.brain.retrieval.RetrievalQuery
 import java.io.File
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.startCoroutine
 
 /**
  * Primeira fatia vertical da unificação Brain + Sandbox.
@@ -21,14 +44,38 @@ import java.io.File
 class BrainSandboxController(
     runtime: ManagedSandboxRuntime,
     rootfsDir: File,
-    private val actor: String = "android-app"
+    private val actor: String = "android-app",
+    promptLibrary: PromptLibrary? = null
 ) {
     private val approvals = FileApprovalStore(File(rootfsDir.parentFile ?: rootfsDir, "approvals.jsonl"))
     private val sandbox = Sandbox(runtime = runtime, rootfsDir = rootfsDir)
-    private val policy = PolicyBroker(
-        allowedCapabilities = setOf("sandbox.health"),
-        actorCapabilities = mapOf(actor to setOf("sandbox.health"))
+    private val capabilities = CapabilityRegistry(
+        listOf(
+            capability("sandbox.health", setOf("sandbox.health")),
+            capability("sandbox.info", setOf("network.research")),
+            capability("sandbox.build", setOf("workspace.write")),
+            capability("sandbox.test", setOf("sandbox.code")),
+            capability("sandbox.diagnose", setOf("brain.analyze")),
+            capability("sandbox.clean", emptySet())
+        )
     )
+    private val policy = PolicyBroker(
+        allowedCapabilities = capabilities.all().flatMap { listOf(it.id) + it.providedCapabilities },
+        actorCapabilities = mapOf(actor to capabilities.all().flatMap { listOf(it.id) + it.providedCapabilities })
+    ).withCapabilityRegistry(capabilities)
+    private val actionGateway = ActionGateway(
+        registry = capabilities,
+        policy = policy,
+        executor = BrainActionExecutor(sandbox),
+        audit = InMemoryActionAuditLog()
+    )
+    private val dispatcher = Dispatcher(CapabilityDiscovery(capabilities), actionGateway)
+    private val durableJobs = DurableJobRunner(
+        JobStore(File(rootfsDir.parentFile ?: rootfsDir, "brain-jobs.json")),
+        WorkflowEngine(File(rootfsDir.parentFile ?: rootfsDir, "brain-workflows.json"))
+    )
+    private val intentClassifier = FastIntentClassifier()
+    private val promptRetrieval = promptLibrary?.let { Retrieval(listOf(PromptLibraryRetrievalSource.from(it))) }
     private val apiCatalog = ApiCatalogRegistry.current() ?: InMemoryApiCatalog(emptyList())
     private val bridge = BrainSandboxExecutionBridge(
         CicloExecucaoPlano(
@@ -36,7 +83,8 @@ class BrainSandboxController(
             sandbox = sandbox,
             router = DefaultAIRouter(),
             catalog = apiCatalog,
-            approvalStore = approvals
+            approvalStore = approvals,
+            dispatcher = dispatcher
         )
     )
 
@@ -73,4 +121,56 @@ class BrainSandboxController(
             )
         )
     )
+
+    /** Entrada real do chat: objetivo → planner no caller → ciclo autorizado → dispatcher/gateway/sandbox. */
+    fun executeObjective(objective: String, runId: String = "chat-${System.currentTimeMillis()}"): ResultadoCiclo {
+        val classification = intentClassifier.classify(objective)
+        val planner = com.brain.planner.KeywordPlanner()
+        val basePlan = runBlockingPlanner { planner.planejar(classification.intent.objective) }
+        val promptHit = promptRetrieval?.retrieve(RetrievalQuery(objective))?.hit
+        val plan = if (promptHit != null) basePlan.copy(assumptions = basePlan.assumptions + "prompt-template:${promptHit.id}") else basePlan
+        var cycle: ResultadoCiclo? = null
+        durableJobs.run(
+            jobId = "job-$runId",
+            runId = runId,
+            taskId = "plan",
+            manifest = WorkflowManifest("brain-plan", "1.0.0", listOf(WorkflowNode("plan", "brain.plan"))),
+            authorize = { it == "brain.plan" },
+            execute = { node, attempt ->
+                cycle = bridge.authorizeAndExecute(plan, runId, actor)
+                WorkflowStepResult(
+                    nodeId = node.id,
+                    success = cycle?.aprovado == true,
+                    attempts = attempt,
+                    evidence = cycle?.passos.orEmpty().flatMap { it.evidencias }.map { it.toString() }
+                )
+            }
+        )
+        return requireNotNull(cycle) { "Workflow não produziu resultado do plano" }
+    }
+
+    private fun capability(id: String, provided: Set<String>) = CapabilityDefinition(
+        id = id,
+        name = id,
+        description = "capability Android executada pelo ActionGateway",
+        category = CapabilityCategory.SANDBOX,
+        ownerId = "android-sandbox",
+        origin = "android-sandbox",
+        providedCapabilities = provided,
+        availability = CapabilityAvailability.AVAILABLE,
+        provenance = listOf(CapabilityProvenance("android-sandbox", "CapabilityResolver"))
+    )
+}
+
+private fun <T> runBlockingPlanner(block: suspend () -> T): T {
+    var value: T? = null
+    var failure: Throwable? = null
+    block.startCoroutine(object : Continuation<T> {
+        override val context = EmptyCoroutineContext
+        override fun resumeWith(result: Result<T>) {
+            result.onSuccess { value = it }.onFailure { failure = it }
+        }
+    })
+    failure?.let { throw it }
+    return requireNotNull(value)
 }

@@ -1,6 +1,14 @@
 package com.sandbox.sandbox
 
+import com.brain.capability.CapabilityAvailability
+import com.brain.capability.CapabilityCategory
+import com.brain.capability.CapabilityDefinition
+import com.brain.capability.CapabilityProvenance
+import com.brain.capability.CapabilityRegistry
+import com.brain.gateway.ActionGateway
+import com.brain.gateway.InMemoryActionAuditLog
 import com.brain.policy.PolicyBroker
+import com.brain.execution.RiskClass
 import com.sandbox.runtime.ManagedSandboxRuntime
 import java.io.File
 
@@ -14,12 +22,34 @@ class SandboxPlatform(
     networkPolicy: NetworkPolicy = NetworkPolicy(),
     trustedRemotePluginSourceIds: Set<String> = emptySet()
 ) {
+    private val gatewayCapabilities = CapabilityRegistry(
+        listOf("sandbox.git", "sandbox.toolchain", "sandbox.test", "sandbox.diagnostics", "sandbox.plugin").map { id ->
+            CapabilityDefinition(
+                id = id,
+                name = id,
+                description = "capability Android Sandbox via ActionGateway",
+                category = CapabilityCategory.SANDBOX,
+                ownerId = "sandbox-platform",
+                origin = "android-sandbox",
+                risk = RiskClass.LOW,
+                availability = CapabilityAvailability.AVAILABLE,
+                provenance = listOf(CapabilityProvenance("android-sandbox", "sandbox-platform"))
+            )
+        }
+    )
     private val policyBroker = PolicyBroker(
         allowedCapabilities = setOf("sandbox.git", "sandbox.toolchain", "sandbox.test", "sandbox.diagnostics", "sandbox.plugin"),
         actorCapabilities = mapOf("sandbox-platform" to setOf("sandbox.git", "sandbox.toolchain", "sandbox.test", "sandbox.diagnostics", "sandbox.plugin"))
+    ).withCapabilityRegistry(gatewayCapabilities)
+    private val gatewayExecutionLogs = GatewayBackedSandboxExecutor.logs()
+    private val actionGateway = ActionGateway(
+        registry = gatewayCapabilities,
+        policy = policyBroker,
+        executor = SandboxActionExecutor(ManagedRuntimeExecutor(runtime), gatewayExecutionLogs),
+        audit = InMemoryActionAuditLog()
     )
     private val securedExecutor = SecureCommandExecutor(
-        PolicyGatedExecutor(ManagedRuntimeExecutor(runtime), policyBroker), policy
+        GatewayBackedSandboxExecutor(actionGateway, gatewayExecutionLogs), policy
     )
     private val remotePluginCatalog = RemotePluginCatalog(trustedRemotePluginSourceIds)
     private val componentJsonFile = File(componentStateFile.parentFile, "components.json")

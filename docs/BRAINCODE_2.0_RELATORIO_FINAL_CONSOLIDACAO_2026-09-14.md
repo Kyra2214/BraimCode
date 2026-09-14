@@ -201,3 +201,40 @@ Após esta rodada, não há lacuna de contrato ou componente central do plano qu
 4. O build Android completo continua bloqueado pela ausência de `ANDROID_HOME`, `ANDROID_SDK_ROOT` ou `local.properties` com `sdk.dir`.
 
 A classificação correta agora é: **plano mestre implementado no núcleo JVM, com quatro pendências de integração/infraestrutura explicitamente delimitadas**.
+
+
+## E2E completo executado
+
+Foi adicionado e executado `com.brain.e2e.BrainEndToEndTest`. O cenário passa pelo seguinte caminho real no módulo JVM:
+
+```text
+Intent textual
+  → KeywordPlanner / ExecutionPlan
+  → Retrieval inicial sem solução
+  → CapabilityDiscovery
+  → PolicyBroker
+  → Dispatcher
+  → ActionGateway
+  → executor de ferramenta
+  → WorkflowEngine / DAG
+  → JobStore / DurableJobRunner
+  → persistência e reload do JobRecord
+  → Evidence
+  → KnowledgeCompiler + ConservativeKnowledgeCritic
+  → SkillCandidate
+  → SkillValidator: Sandbox → Test → Critic → PASS
+  → SkillRegistry
+  → Retrieval de Knowledge validado com short-circuit antes de APIs
+  → ActionAuditRecord
+  → ExecutionTrace
+```
+
+O teste confirmou `SUCCEEDED` para o Job, uma única auditoria de ação, evidence de origem, Knowledge `VALIDATED`, Skill usável após promoção explícita, reload do JobStore após persistência e ausência de chamada posterior à camada de APIs quando Knowledge validado foi encontrado.
+
+Durante a execução foi detectado e corrigido um defeito real: o Discovery inferia `API` pela linguagem do objetivo e descartava uma implementação `TOOL` mesmo quando a capability requerida era explícita. A correção mantém a categoria inferida para ranking/observabilidade, mas não a usa como filtro rígido nesse caso.
+
+## Ponte Android → Gateway → Sandbox
+
+Foi adicionada `GatewayBackedSandboxExecutor` no módulo Android. A ponte classifica o executável em capabilities allowlisted, constrói `ActionRequest` com parâmetros declarados, chama `ActionGateway`, usa `SandboxActionExecutor` para invocar o `ManagedRuntimeExecutor` real e recupera o `ExecutionLog`. `SandboxPlatform` foi atualizado para instalar esse caminho antes dos serviços, Git, diagnostics, TestLab e toolchains. O `PolicyGatedExecutor` deixa de ser o ponto paralelo de autorização para essa fachada; a autorização central passa pelo ActionGateway, enquanto `SecureCommandExecutor` continua impondo limites Android locais.
+
+A ponte Android não pôde ser compilada neste sandbox porque o projeto não possui Android SDK configurado. Portanto, o E2E executado é completo no núcleo JVM, e o trecho Android→Sandbox está implementado no código, mas requer uma execução final em ambiente com `ANDROID_HOME`/`sdk.dir`.

@@ -49,8 +49,11 @@ class CapabilityDiscovery(private val registry: CapabilityRegistry) {
         policyAllows: (CapabilityDefinition) -> Boolean = { true }
     ): CapabilityDiscoveryResult {
         val categories = intent.categories.ifEmpty { inferCategories(intent) }
+        // Uma capability explícita já identifica a intenção estrutural;
+        // não deixar inferência textual eliminar Tool/Sandbox/Agent/API válidos.
+        val queryCategories = if (intent.categories.isEmpty() && intent.requiredCapabilities.isNotEmpty()) emptySet() else categories
         val query = CapabilityQuery(
-            categories = categories,
+            categories = queryCategories,
             requiredCapabilities = intent.requiredCapabilities,
             providerIds = intent.preferredProviders,
             riskAtMost = intent.riskAtMost,

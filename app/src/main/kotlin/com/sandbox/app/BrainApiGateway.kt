@@ -20,7 +20,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Ponte interna Brain -> APIs gratuitas; o usuário não conversa com provider. */
+/** Ponte interna Brain -> APIs gratuitas -> Brain Local; o usuário não conversa com provider/modelo. */
 class BrainApiGateway(
     private val providers: List<ApiProvider>,
     private val keyStore: ApiKeyStore,
@@ -38,6 +38,19 @@ class BrainApiGateway(
         val fromMemory: Boolean = false,
         val knowledgeValidated: Boolean = false
     )
+
+    /** Execução local é injetada pelo app depois que o Sandbox fica pronto. */
+    private var localExecutor: ((String) -> LocalExecutionResult)? = null
+
+    data class LocalExecutionResult(
+        val text: String,
+        val modelId: String,
+        val source: KnowledgeSource = KnowledgeSource(type = "local", uri = "brain://local")
+    )
+
+    fun setLocalExecutor(executor: (String) -> LocalExecutionResult) {
+        localExecutor = executor
+    }
 
     fun complete(prompt: String, papel: PapelPipeline = PapelPipeline.ESCRITA_DE_PROMPT): GatewayResult {
         require(prompt.isNotBlank()) { "prompt não pode ser vazio" }
@@ -60,10 +73,12 @@ class BrainApiGateway(
         val attempts = mutableListOf<String>()
         val tried = mutableSetOf<String>()
         fun decide(): RoutingDecision? = router.decidir(papel, catalog, emptyList())
-        val decision = decide() ?: error("Nenhuma API gratuita disponível para o papel $papel")
+        val decision = decide()
         val ordered = ArrayDeque<ProviderModel>()
-        ordered.add(decision.escolhido)
-        ordered.addAll(decision.alternativas)
+        if (decision != null) {
+            ordered.add(decision.escolhido)
+            ordered.addAll(decision.alternativas)
+        }
 
         while (ordered.isNotEmpty()) {
             var model = ordered.removeFirst()
@@ -118,31 +133,55 @@ class BrainApiGateway(
                         KnowledgeCriticDecision.REJECT -> false
                         KnowledgeCriticDecision.UNCERTAIN -> false
                     }
-                    if (!validated) {
-                        attempts += "$key: Critic ${verdict.decision.name.lowercase()} (${verdict.reason})"
-                    }
-                    return GatewayResult(
-                        text = text,
-                        providerId = model.providerId,
-                        modelId = model.modeloId,
-                        attempts = attempts,
-                        source = source,
-                        knowledgeId = knowledge.id,
-                        fromMemory = false,
-                        knowledgeValidated = validated
-                    )
+                    if (!validated) attempts += "$key: Critic ${verdict.decision.name.lowercase()} (${verdict.reason})"
+                    return GatewayResult(text, model.providerId, model.modeloId, attempts, source, knowledge.id, false, validated)
                 }
                 attempts += "$key: resposta sem conteúdo"
             } else attempts += "$key: HTTP ${response?.statusCode ?: 0}"
         }
-        throw IllegalStateException("Todas as APIs gratuitas falharam. Tentativas: ${attempts.joinToString(" | ")}")
+
+        // API gratuita esgotada: o Brain usa o modelo local instalado, sem expor
+        // o nome do motor/modelo ao usuário. O executor permanece atrás desta fronteira.
+        val local = localExecutor
+        if (local != null) {
+            val result = runCatching { local.invoke(prompt) }.getOrElse {
+                attempts += "brain-local: ${it.message ?: it.javaClass.simpleName}"
+                null
+            }
+            if (result != null && result.text.isNotBlank()) {
+                val knowledge = learning.observeExternal(
+                    problem = prompt,
+                    answer = result.text,
+                    source = result.source,
+                    retrievalHints = emptyList(),
+                    tags = tagsFor(papel, prompt)
+                )
+                val verdict = critic.evaluate(knowledge)
+                val validated = when (verdict.decision) {
+                    KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, result.source) != null
+                    KnowledgeCriticDecision.REJECT -> false
+                    KnowledgeCriticDecision.UNCERTAIN -> false
+                }
+                return GatewayResult(
+                    text = result.text,
+                    providerId = "brain-local",
+                    modelId = "brain-local",
+                    attempts = attempts,
+                    source = result.source,
+                    knowledgeId = knowledge.id,
+                    fromMemory = false,
+                    knowledgeValidated = validated
+                )
+            }
+        } else {
+            attempts += "brain-local: Sandbox ainda não conectado"
+        }
+        throw IllegalStateException("Brain não conseguiu responder. Tentativas: ${attempts.joinToString(" | ")}")
     }
 
-    /** Permite a validação especializada substituir o gate conservador. */
     fun confirmKnowledge(knowledgeId: String, confidence: Double, source: KnowledgeSource? = null): KnowledgeEntry? =
         learning.confirm(knowledgeId, confidence, source)
 
-    /** Corrige a resposta aprendida sem perder sua identidade e histórico. */
     fun correctKnowledge(knowledgeId: String, correctedAnswer: String, confidence: Double): KnowledgeEntry? =
         learning.correct(knowledgeId, correctedAnswer, confidence)
 

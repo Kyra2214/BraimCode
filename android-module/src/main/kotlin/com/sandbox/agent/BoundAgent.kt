@@ -1,5 +1,11 @@
 package com.sandbox.agent
 
+import com.brain.capability.CapabilityAvailability
+import com.brain.capability.CapabilityCategory
+import com.brain.capability.CapabilityDefinition
+import com.brain.capability.CapabilityProvenance
+import com.brain.capability.CapabilityRegistry
+
 /**
  * Agent amarrado do BrainCode.
  *
@@ -65,7 +71,9 @@ interface AgentExecutionContext {
 }
 
 class AgentRegistry(agents: List<BoundAgent>) {
-    private val byId = agents.associateBy { it.id }
+    private val byId = agents.groupBy { it.id }.also { groups ->
+        require(groups.values.all { it.size == 1 }) { "ids de Agent duplicados" }
+    }.mapValues { it.value.single() }
 
     fun get(id: String): BoundAgent? = byId[id]
 
@@ -73,6 +81,35 @@ class AgentRegistry(agents: List<BoundAgent>) {
         byId.values.filter { it.accepts(mission) }
 
     fun ids(): List<String> = byId.keys.sorted()
+
+    /**
+     * Publica os agents bounded no registry universal. O mapa local continua
+     * sendo o índice de objetos executáveis; o registry universal é a fonte
+     * declarativa para descoberta e não concede autorização.
+     */
+    fun publishTo(registry: CapabilityRegistry) {
+        byId.values.forEach { agent ->
+            registry.register(
+                CapabilityDefinition(
+                    id = "agent.${agent.id}",
+                    name = agent.id,
+                    description = "Agent bounded sem LLM próprio",
+                    category = CapabilityCategory.AGENT,
+                    ownerId = agent.id,
+                    origin = "agent-registry",
+                    providedCapabilities = agent.capabilities.map { it.name.lowercase() }.toSet(),
+                    availability = CapabilityAvailability.AVAILABLE,
+                    provenance = listOf(
+                        CapabilityProvenance(
+                            sourceId = agent.id,
+                            sourceType = "bounded-agent",
+                            evidence = "mission + allowed capabilities"
+                        )
+                    )
+                )
+            )
+        }
+    }
 }
 
 /** Agente de pesquisa: somente capabilities de pesquisa, sem LLM. */

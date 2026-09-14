@@ -54,3 +54,7 @@ O `PolicyBroker` existente foi evoluído, sem duplicação, para consultar o `Ca
 ## Fase 5 — Action Gateway
 
 Foi criado `com.brain.gateway.ActionGateway` no módulo `:brain` como contrato agnóstico de execução. Ele resolve a capability no registry, consulta o `PolicyBroker`, valida o token/recursos, não aceita comando bruto, chama somente um `ActionExecutor` injetado e registra `actionId`, actor, capability, parâmetros redigidos, decisão, início/fim, resultado, erro, evidence e provenance. `AuthorizedCapabilityExecutor` e `PolicyGatedExecutor` Android foram preservados como backends especializados; nenhum deles foi removido ou contornado.
+
+## Fase 6 — Agent Registry
+
+O `AgentRegistry` bounded existente foi preservado e passou a publicar definições `CapabilityCategory.AGENT` no registry universal por meio de `publishTo`. O índice local continua armazenando objetos executáveis e a publicação é apenas declarativa; missão, allowlist e evidência continuam obrigatórias. O teste do módulo Android não pôde ser executado porque o ambiente não possui Android SDK configurado (`ANDROID_HOME`/`sdk.dir` ausentes); `:brain:test` permaneceu verde.

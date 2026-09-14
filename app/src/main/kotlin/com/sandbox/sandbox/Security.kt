@@ -42,7 +42,7 @@ data class ProcessSnapshot(val pid: Long, val command: String, val state: String
 
 class SandboxDiagnostics(private val executor: SandboxCommandExecutor) {
     fun processes(): List<ProcessSnapshot> {
-        val result = executor.execute(listOf("bash", "-c", "ps -eo pid=,stat=,args="), 30)
+        val result = executor.execute(listOf("ps", "-eo", "pid=,stat=,args="), 30)
         return result.stdout.lineSequence().mapNotNull { line ->
             val parts = line.trim().split(Regex("\\s+"), limit = 3)
             if (parts.size < 3) null else ProcessSnapshot(parts[0].toLongOrNull() ?: return@mapNotNull null, parts[2], parts[1], parts[1].contains("Z"))

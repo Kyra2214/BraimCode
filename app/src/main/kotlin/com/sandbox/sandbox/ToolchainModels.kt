@@ -61,7 +61,7 @@ class ToolchainDetector(private val executor: SandboxCommandExecutor) {
         val command = if (profile.id == "java") {
             // On Android/proot the default 256 MiB JVM heap may be impossible to
             // reserve even when Java is installed. Keep this probe lightweight.
-            listOf("bash", "-c", "export JAVA_TOOL_OPTIONS='-Xmx64m -XX:MaxMetaspaceSize=32m'; exec java --version")
+            listOf("java", "--version")
         } else {
             listOf(profile.executable) + profile.versionArguments
         }
@@ -74,15 +74,11 @@ class ToolchainDetector(private val executor: SandboxCommandExecutor) {
             diagnostic.contains("memory", ignoreCase = true) ||
             diagnostic.contains("heap", ignoreCase = true)
         if (memoryProbeFailure) {
-            val presence = executor.execute(
-                listOf("bash", "-c", "command -v ${profile.executable}"),
-                timeoutSeconds = 10
-            )
-            if (presence.succeeded && presence.stdout.isNotBlank()) {
+            if (result.exitCode != 127) {
                 return ToolchainDetection(
                     profile,
                     installed = true,
-                    versionOutput = "binário instalado: ${presence.stdout.trim()}",
+                    versionOutput = "binário instalado: ${profile.executable}",
                     diagnostic = "probe de versão bloqueado por memória: $diagnostic"
                 )
             }
@@ -92,22 +88,15 @@ class ToolchainDetector(private val executor: SandboxCommandExecutor) {
 
     /** Captura somente versões dos pacotes do próprio perfil que já estavam instalados. */
     fun snapshotInstalledPackages(profile: ToolchainProfile): List<String> {
-        val packageArgs = profile.packages.joinToString(" ") { shellQuote(it) }
-        val script = "for p in $packageArgs; do v=\$(dpkg-query -W -f='\${'$'}{db:Status-Status} \${'$'}{Version}' \"\${'$'}p\" 2>/dev/null || true); case \"\${'$'}v\" in installed\\ *) echo \"\${'$'}p=\${'$'}{v#installed }\";; esac; done"
-        val result = executor.execute(listOf("bash", "-c", script), timeoutSeconds = 30)
-        check(result.succeeded) { result.stderr.ifBlank { "não foi possível capturar estado dos pacotes" } }
-        return result.stdout.lineSequence()
-            .map(String::trim)
-            .filter { it.matches(Regex("[A-Za-z0-9][A-Za-z0-9+._:-]*=.+")) }
-            .distinct()
-            .sorted()
+        return profile.packages.mapNotNull { packageName ->
+            val result = executor.execute(listOf("dpkg-query", "-W", "-f=\${db:Status-Status} \${Version}", packageName), timeoutSeconds = 30)
+            if (result.succeeded && result.stdout.startsWith("installed ")) "$packageName=${result.stdout.substringAfter(' ').trim()}" else null
+        }.sorted()
             .toList()
     }
 
     fun planInstall(profile: ToolchainProfile): ToolchainInstallPlan {
-        val packages = profile.packages.joinToString(" ")
-        val script = "set -o pipefail; export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get -o Dpkg::Use-Pty=0 install -y --no-install-recommends $packages"
-        return ToolchainInstallPlan(profile, listOf("bash", "-c", script))
+        return ToolchainInstallPlan(profile, listOf("apt-get", "-o", "Dpkg::Use-Pty=0", "install", "-y", "--no-install-recommends") + profile.packages)
     }
 
     private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"

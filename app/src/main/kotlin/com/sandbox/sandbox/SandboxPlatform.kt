@@ -1,5 +1,6 @@
 package com.sandbox.sandbox
 
+import com.brain.policy.PolicyBroker
 import com.sandbox.runtime.ManagedSandboxRuntime
 import java.io.File
 
@@ -13,7 +14,13 @@ class SandboxPlatform(
     networkPolicy: NetworkPolicy = NetworkPolicy(),
     trustedRemotePluginSourceIds: Set<String> = emptySet()
 ) {
-    private val securedExecutor = SecureCommandExecutor(ManagedRuntimeExecutor(runtime), policy)
+    private val policyBroker = PolicyBroker(
+        allowedCapabilities = setOf("sandbox.git", "sandbox.toolchain", "sandbox.test", "sandbox.diagnostics", "sandbox.plugin"),
+        actorCapabilities = mapOf("sandbox-platform" to setOf("sandbox.git", "sandbox.toolchain", "sandbox.test", "sandbox.diagnostics", "sandbox.plugin"))
+    )
+    private val securedExecutor = SecureCommandExecutor(
+        PolicyGatedExecutor(ManagedRuntimeExecutor(runtime), policyBroker), policy
+    )
     private val remotePluginCatalog = RemotePluginCatalog(trustedRemotePluginSourceIds)
     private val componentJsonFile = File(componentStateFile.parentFile, "components.json")
     private val pluginSnapshotStore = PluginSnapshotStore(

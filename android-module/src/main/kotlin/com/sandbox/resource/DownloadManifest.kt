@@ -18,3 +18,13 @@ data class LocalModelManifest(
     val license: String,
     val minAppVersion: String
 ) : DownloadManifest
+
+data class InferenceEngineManifest(
+    val id: String,
+    val version: String,
+    val architecture: String,
+    override val url: String,
+    override val sizeBytes: Long,
+    override val sha256: String,
+    val license: String
+) : DownloadManifest

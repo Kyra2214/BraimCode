@@ -34,6 +34,20 @@ class EventStoreTest {
     }
 
     @Test
+    fun `rotates segments and preserves hash chain`() {
+        val dir = Files.createTempDirectory("event-rotation").toFile()
+        try {
+            val file = java.io.File(dir, "events.jsonl")
+            val store = FileEventStore(file, maxBytes = 1)
+            val first = store.append(event(payload = mapOf("message" to "one")))
+            val second = store.append(event(payload = mapOf("message" to "two")))
+            assertTrue(file.parentFile!!.listFiles()!!.any { it.name.startsWith("events.jsonl.segment.") })
+            assertEquals(first.hash, second.previousHash)
+            assertTrue(store.verifyIntegrity())
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test
     fun `redacted payload hides secret-like values`() {
         val redacted = event(payload = mapOf("api_key" to "api_key=super-secret", "safe" to "ok")).redactedPayload()
         assertTrue(redacted["api_key"]!!.contains("[REDACTED]"))

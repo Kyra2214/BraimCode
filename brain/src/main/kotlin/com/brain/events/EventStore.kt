@@ -46,33 +46,43 @@ class InMemoryEventStore : EventStore {
     @Synchronized override fun verifyIntegrity(): Boolean = verify(events)
 }
 
-class FileEventStore(private val file: File) : EventStore {
+class FileEventStore(private val file: File, private val maxBytes: Long = Long.MAX_VALUE) : EventStore {
     init { file.parentFile?.mkdirs() }
     @Synchronized override fun append(event: BrainEvent): BrainEvent {
         val current = readAll()
         event.idempotencyKey?.let { key -> current.firstOrNull { it.idempotencyKey == key }?.let { return it } }
         val stored = event.copy(payload = event.redactedPayload()).finalized(current.lastOrNull()?.hash ?: "GENESIS", current.size.toLong())
         file.parentFile?.mkdirs()
+        if (maxBytes != Long.MAX_VALUE && file.exists() && file.length() >= maxBytes) rotate()
         file.appendText(toJson(stored).toString() + "\n")
         return stored
     }
     @Synchronized override fun replay(runId: String?): List<BrainEvent> = readAll().filter { runId == null || it.runId == runId }
     @Synchronized override fun verifyIntegrity(): Boolean = verify(readAll())
 
+    /** Arquiva o segmento ativo sem quebrar a cadeia lógica de hashes. */
+    @Synchronized fun rotate() {
+        if (!file.exists() || file.length() == 0L) return
+        val archive = File(file.parentFile, "${file.name}.segment.${System.currentTimeMillis()}")
+        check(file.renameTo(archive)) { "não foi possível rotacionar EventStore" }
+    }
+
     private fun readAll(): List<BrainEvent> {
-        if (!file.exists()) return emptyList()
-        val lines = file.readLines()
+        val sources = segmentFiles() + listOf(file).filter { it.exists() }
         val valid = mutableListOf<String>()
-        for ((index, line) in lines.withIndex()) {
+        for (source in sources) for ((index, line) in source.readLines().withIndex()) {
             if (line.isBlank()) continue
             val parsed = runCatching { JSONObject(line) }.getOrNull()
-            if (parsed == null && index == lines.lastIndex && file.readBytes().lastOrNull() != '\n'.code.toByte()) break
-            if (parsed == null) error("evento inválido na linha ${index + 1}")
+            if (parsed == null && index == source.readLines().lastIndex && source.readBytes().lastOrNull() != '\n'.code.toByte()) break
+            if (parsed == null) error("evento inválido na linha ${index + 1} de ${source.name}")
             valid += line
         }
-        if (valid.size < lines.count { it.isNotBlank() } && file.exists()) file.writeText(valid.joinToString("\n") + if (valid.isEmpty()) "" else "\n")
         return valid.map { fromJson(JSONObject(it)) }
     }
+
+    private fun segmentFiles(): List<File> = file.parentFile?.listFiles { candidate ->
+        candidate.name.startsWith("${file.name}.segment.")
+    }?.sortedBy { it.name } ?: emptyList()
 }
 
 private fun toJson(e: BrainEvent) = JSONObject().apply {

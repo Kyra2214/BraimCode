@@ -41,4 +41,14 @@ class WorkflowEngineTest {
             assertTrue(!executed)
         } finally { file.delete() }
     }
+
+    @Test(expected = IllegalStateException::class)
+    fun `lease impede owner concorrente`() {
+        val file = Files.createTempFile("workflow-lease", ".json").toFile()
+        try {
+            val leases = WorkflowLeaseStore(file, ttlMs = 60_000)
+            leases.acquire("wf", "worker-a")
+            leases.acquire("wf", "worker-b")
+        } finally { file.delete() }
+    }
 }

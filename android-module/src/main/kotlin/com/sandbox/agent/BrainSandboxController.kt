@@ -5,6 +5,7 @@ import com.brain.planner.PlanoExecucao
 import com.brain.execution.RiskClass
 import com.brain.policy.PolicyBroker
 import com.brain.policy.FileApprovalStore
+import com.brain.router.ApiCatalogRegistry
 import com.brain.router.DefaultAIRouter
 import com.brain.router.InMemoryApiCatalog
 import com.sandbox.runtime.ManagedSandboxRuntime
@@ -13,10 +14,9 @@ import java.io.File
 /**
  * Primeira fatia vertical da unificação Brain + Sandbox.
  *
- * O app cria este controlador somente depois de preparar o runtime real. A
- * execução passa pelo mesmo caminho que os testes exercitam: plano -> Policy
- * -> sessão autorizada -> capability catalogada -> runtime proot -> evidência.
- * Não existe um executor paralelo para esta operação.
+ * O catálogo de APIs é instalado pelo app através do ApiCatalogRegistry. Se o
+ * app ainda não tiver carregado as chaves/catálogo, mantém o catálogo vazio
+ * como fallback seguro — nunca inventa provider/modelo.
  */
 class BrainSandboxController(
     runtime: ManagedSandboxRuntime,
@@ -29,12 +29,13 @@ class BrainSandboxController(
         allowedCapabilities = setOf("sandbox.health"),
         actorCapabilities = mapOf(actor to setOf("sandbox.health"))
     )
+    private val apiCatalog = ApiCatalogRegistry.current() ?: InMemoryApiCatalog(emptyList())
     private val bridge = BrainSandboxExecutionBridge(
         CicloExecucaoPlano(
             policyBroker = policy,
             sandbox = sandbox,
             router = DefaultAIRouter(),
-            catalog = InMemoryApiCatalog(emptyList()),
+            catalog = apiCatalog,
             approvalStore = approvals
         )
     )

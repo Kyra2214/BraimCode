@@ -66,3 +66,7 @@ O `SkillRegistry` especializado existente foi preservado para validação de man
 ## Fase 8 — Retrieval
 
 Foi criado `com.brain.retrieval.Retrieval` sobre contratos existentes de memória, skills, prompt library, agents e APIs. A ordem é fixa e explícita: `MEMORY → SKILLS → PROMPT_LIBRARY → TOOLS → AGENTS → APIS`. Memory e Skills exigem hits validados; o primeiro hit válido encerra a busca e impede chamadas de fontes posteriores. Retrieval não armazena conhecimento nem autoriza execução.
+
+## Fase 9 — Knowledge Compiler
+
+O `KnowledgeCompiler` foi consolidado sobre `KnowledgeLearningCycle` e `ConservativeKnowledgeCritic`. O fluxo explícito é `KnowledgeEvidence → candidate KnowledgeEntry → Critic → validated knowledge`; resposta externa sem fonte permanece incerta. A criação de `SkillCandidate` só ocorre para conhecimento validado, e o registro de Skill exige chamada explícita de validação no `SkillRegistry`.

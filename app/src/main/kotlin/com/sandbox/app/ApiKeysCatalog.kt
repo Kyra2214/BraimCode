@@ -1,6 +1,7 @@
 package com.sandbox.app
 
 import android.content.Context
+import com.brain.memory.KnowledgeMemoryRegistry
 import com.brain.router.ApiCatalogRegistry
 import com.brain.router.DynamicApiProvider
 import com.brain.router.DynamicFreeApiCatalog
@@ -89,6 +90,7 @@ object ApiKeyCatalogLoader {
             }
         }
 
+        KnowledgeMemoryRegistry.install(AndroidKnowledgeMemory(context))
         installBrainCatalog(providers, context)
         return providers
     }

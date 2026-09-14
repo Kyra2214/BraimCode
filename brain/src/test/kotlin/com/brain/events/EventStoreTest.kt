@@ -48,6 +48,21 @@ class EventStoreTest {
     }
 
     @Test
+    fun `checkpoint detects truncated tail`() {
+        val file = Files.createTempFile("event-checkpoint", ".log").toFile()
+        try {
+            val store = FileEventStore(file)
+            store.append(event(payload = mapOf("message" to "one")))
+            assertTrue(store.verifyIntegrity())
+            file.writeText("")
+            assertTrue(!store.verifyIntegrity())
+        } finally {
+            file.delete()
+            java.io.File(file.parentFile, "${file.name}.checkpoint").delete()
+        }
+    }
+
+    @Test
     fun `redacted payload hides secret-like values`() {
         val redacted = event(payload = mapOf("api_key" to "api_key=super-secret", "safe" to "ok")).redactedPayload()
         assertTrue(redacted["api_key"]!!.contains("[REDACTED]"))

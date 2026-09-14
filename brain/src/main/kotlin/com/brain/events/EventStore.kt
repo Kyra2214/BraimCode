@@ -47,6 +47,7 @@ class InMemoryEventStore : EventStore {
 }
 
 class FileEventStore(private val file: File, private val maxBytes: Long = Long.MAX_VALUE) : EventStore {
+    private val checkpointFile = File(file.parentFile, "${file.name}.checkpoint")
     init { file.parentFile?.mkdirs() }
     @Synchronized override fun append(event: BrainEvent): BrainEvent {
         val current = readAll()
@@ -55,10 +56,17 @@ class FileEventStore(private val file: File, private val maxBytes: Long = Long.M
         file.parentFile?.mkdirs()
         if (maxBytes != Long.MAX_VALUE && file.exists() && file.length() >= maxBytes) rotate()
         file.appendText(toJson(stored).toString() + "\n")
+        checkpointFile.writeText("${stored.sequence}\t${stored.hash}\n")
         return stored
     }
     @Synchronized override fun replay(runId: String?): List<BrainEvent> = readAll().filter { runId == null || it.runId == runId }
-    @Synchronized override fun verifyIntegrity(): Boolean = verify(readAll())
+    @Synchronized override fun verifyIntegrity(): Boolean {
+        val events = readAll()
+        if (!verify(events)) return false
+        val last = events.lastOrNull() ?: return !checkpointFile.exists()
+        val checkpoint = checkpointFile.takeIf { it.isFile }?.readText()?.trim()?.split('\t') ?: return false
+        return checkpoint.size == 2 && checkpoint[0] == last.sequence.toString() && checkpoint[1] == last.hash
+    }
 
     /** Arquiva o segmento ativo sem quebrar a cadeia lógica de hashes. */
     @Synchronized fun rotate() {

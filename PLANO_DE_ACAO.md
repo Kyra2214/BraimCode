@@ -1,90 +1,77 @@
 # Plano de Ação — BrainCode
 
-> Gerado a partir da auditoria de 2026-09-12 (ver `AUDITORIA_PESADA.md`). Este documento existe para não repetir o erro que a auditoria encontrou: marcar algo como "concluído" sem que esteja de fato ligado ao app que roda no device. Nenhum item aqui deve ser marcado `[x]` sem: implementação + teste automatizado + **uso real por quem chama** (não só pelo próprio teste).
+**Atualizado:** 2026-09-14.  
+Base principal: `docs/AUDITORIA_30_COMMITS_2026-09-14.md`.
 
-## Diagnóstico em uma frase
+## Objetivo
 
-O repositório contém **dois produtos que não se falam**: o Sandbox Mobile (roda de verdade — rootfs, plugins locais, 3 abas) e o Brain em Kotlin/`:brain` (biblioteca robusta e testada, mas nunca chamada pelo app). Dentro do próprio `app`, vários subsistemas (Git, Workspace, Services, TestLab, Security*, Toolchains, RemotePluginCatalog) também estão implementados e testados, mas sem nenhuma tela ou botão que os alcance.
+Fechar o ciclo real do Brain sem confundir biblioteca testada com produto integrado.
 
----
+## Fase 1 — Catálogo e execução de APIs
 
-## Fase A — Verdade documental (sem risco, fazer primeiro)
+- [x] Catálogo runtime dinâmico por provider.
+- [x] Política automática free-only.
+- [x] Refresh antes do routing.
+- [x] Substituição de modelo removido quando houver alternativa compatível.
+- [x] Waterfall/fallback gratuito.
+- [x] Gateway Android para requests internos.
+- [x] Classificação básica de falhas HTTP.
 
-Objetivo: nenhum documento do repo deve alegar integração que não existe. Isso é pré-requisito pra qualquer decisão de arquitetura, porque hoje `ROADMAP_UNIFICADO.md` e `AUDITORIA_PESADA.md` estão desalinhados com o código.
+## Fase 2 — Conhecimento
 
-- [x] Corrigir `README.md`: contagem de testes, estado real de integração e referência aos gates Android/produção.
-- [x] Reescrever `AUDITORIA_PESADA.md`: atualizar o estado Android, a contagem de testes e o achado central sobre a integração parcial Brain ↔ app.
-- [x] Corrigir `ROADMAP_UNIFICADO.md`: distinguir caminhos acionados pela UI de componentes ainda parciais ou dependentes de infraestrutura.
-- [x] Atualizar `TAREFAS_PENDENTES.md` com as pendências novas listadas na Fase B abaixo.
+- [x] Contrato `KnowledgeMemory`.
+- [x] Persistência Android.
+- [x] Candidate knowledge separado de recall.
+- [x] Proveniência de provider/model/URI/GitHub.
+- [x] `KnowledgeLearningCycle`.
+- [x] `KnowledgeCritic` automático.
+- [ ] Retrieval executor usando `retrievalHints` antes de consultar API novamente.
+- [ ] Deduplicação/fingerprint.
+- [ ] Versionamento e histórico de correções.
+- [ ] Escopos global/usuário/projeto para futura versão servidor.
+- [ ] Índice escalável.
 
-*(Estas quatro edições já estão aplicadas neste pacote — ver arquivos atualizados.)*
+## Fase 3 — Critic semântico
 
----
+- [ ] Código: Sandbox → build/test/lint → Critic.
+- [ ] Fatos externos: fonte/cross-check.
+- [ ] Respostas determinísticas: validação local.
+- [ ] Contrato estruturado de citações/referências.
 
-## Fase B — Decidir o destino de cada peça órfã
+## Fase 4 — Integração Android
 
-Cada linha é uma decisão de produto, não técnica: **integrar** (fazer o app chamar de verdade) ou **arquivar** (remover ou mover pra um lugar que deixe claro que não faz parte do build ativo). Nada deve ficar no meio-termo atual (implementado, testado, mas solto).
+- [x] `sandbox.health` no caminho Brain → Policy → Capability → Sandbox.
+- [ ] Comprovar caller real do `BrainApiGateway` na conversa Android.
+- [ ] Integrar `BrainExecutionCoordinator` quando existir caso de uso real.
+- [ ] Expor `DefaultPromptGenerator` quando houver ação de UI real.
+- [ ] Fechar EventStore Android persistente no caminho principal.
+- [ ] Fechar Security Regression Corpus pelo caminho principal da UI.
 
-| Componente | Onde está | Situação hoje | Opção A: Integrar | Opção B: Arquivar |
-|---|---|---|---|---|
-| `BrainSandboxExecutionBridge` + `CicloExecucaoPlano` + `BrainExecutionCoordinator` | `android-module`, `brain` | Bridge, health, planos e aprovações já são acionáveis; o coordenador avançado ainda não é necessário no fluxo offline atual | **Implementação futura local:** ligar planos avançados ao fluxo Operações quando houver necessidade de múltiplas etapas | — |
-| Todo o `:brain` (Skills, Workflows, APIs, Discovery, Memory, Events) | `brain/src/main` | Skills, Workflows, Memory e Discovery já são acionáveis pela fachada offline; APIs/Events avançados ainda não fazem parte do caminho de produto | **Manter e expandir localmente** conforme casos de uso offline; APIs/Events avançados ficam para próxima implementação | — |
-| `WorkspaceManager`, `GitManager`, `ServiceManager`, `TestLab` | `app/sandbox` | Instanciados pela fachada e acionados na aba Operações; fluxo básico implementado | Expandir operações Git e adicionar terminal dedicado | — |
-| `SecurityTestLab`, `SecurityAssessmentEngine`, `SecurityProjectScanner` | `app/sandbox` | Instanciados pela fachada e avaliação acionável na aba Operações | Completar executor adversarial, corpus e readiness gate | — |
-| `ToolchainManager`/`ToolchainDetector` | `app/sandbox` | Instanciados pela fachada e acionados na aba Operações | Adicionar SDK/NDK, rollback transacional e cache | — |
-| `SecurityScenarioCatalog` | `app/sandbox` | Conectado à avaliação de segurança como catálogo baseline | Expandir cenários e evidências | — |
-| `RemotePluginCatalog` | `app/sandbox` | Catálogo composto já ligado ao `PluginManager`; importação de snapshot é explícita e sem rede implícita | **Implementação futura:** transporte remoto e autorização local acionada pela UI | — |
-| `GitOperation` (enum) | `GitManager.kt` | Não usado nem pelo próprio arquivo | — | Removido nesta rodada |
-| `ObservableDelivery` | `brain` | Entrega local com hash e recibo, agora acionada pelo botão **Recibo local** na aba Operações | **Integrado localmente**: gera recibo de artefatos do workspace sem rede | — |
-| `InMemoryExperienceMemory` | `brain` | Implementação volátil; o app já usa `FileExperienceMemory` persistente | **Manter como fallback/teste local**, sem substituir a persistência do app | — |
-| `DefaultPromptGenerator` | `brain` | Gerador determinístico local, sem dependência de servidor | **Implementação futura local** quando a UI expuser geração de prompts/planos | — |
-| `HttpProviderClient` | `brain` | Depende de endpoint, credenciais e rede; não pertence ao modo Android offline | — | **Implementação futura condicionada a transporte/servidor** |
-| `reference/braincode-python/` | raiz | Snapshot congelado, nada importa dele | — | Mover pra fora do repo de build ou marcar com `.buildignore`/README já existe, mas deixar isso explícito no `README.md` principal |
-| `__pycache__/*.pyc` no zip | `tests/`, `brain_runtime/` | Contradiz o próprio `.gitignore` | — | Apagar antes do próximo commit/export |
+## Fase 5 — Segurança P0
 
-**Decisão de produto para Android offline:** manter no caminho ativo tudo que é local e persistente — Workspace, Git básico, Services, TestLab, Security, Toolchains, Skills, Workflows, Memory, Discovery, `ObservableDelivery` e catálogo built-in/remoto por snapshot explícito. Marcar como implementação futura o `BrainExecutionCoordinator` avançado, `DefaultPromptGenerator` exposto, transporte remoto de plugins e `HttpProviderClient`; os dois últimos dependem de rede/servidor ou credenciais e não devem ser simulados como offline.
+- [ ] Isolamento de rede OS-level.
+- [ ] Jail filesystem OS-level.
+- [ ] Process group/session.
+- [ ] Enforcement OS-level de CPU/memória/PIDs/FDs/disco.
+- [ ] Trust chain autenticada dos RootFS.
 
-### Primeira fatia implementada — 2026-09-12
+## Fase 6 — Segurança P1
 
-O botão **Verificar pelo Brain**, na tela de Validação, agora percorre o caminho real `SandboxViewModel → BrainSandboxController → BrainSandboxExecutionBridge → CicloExecucaoPlano → PolicyBroker → AgentSandboxSession → CapabilityResolver → ManagedSandboxRuntime`. O caso de uso atual é deliberadamente pequeno: executar `sandbox.health` com autorização deny-by-default e exibir o resultado aprovado ou reprovado na UI. Isso prova a ligação fora de teste, mas não representa a unificação completa: o comando livre existente, plugins, Workspace, Git, Services, TestLab, Security* e Toolchains ainda têm caminhos próprios ou não estão expostos.
+- [ ] Planner → ExecutionPlan → Policy → AuthorizedPlan → Agent → Sandbox por teste arquitetural.
+- [ ] Credential binding completo.
+- [ ] SSRF/DNS rebinding.
+- [ ] EventStore rotation/hash-chain.
+- [ ] Fencing de workflow leases.
+- [ ] Wiring/orphan tests.
 
-Validação desta fatia: `./gradlew :brain:test`, `./gradlew :android-module:test :app:test :app:assembleDebug --no-daemon --rerun-tasks` e a suíte Python com 134 testes passaram com JDK 17 e Android SDK 34. A validação em device/emulador e os gates de produção permanecem pendentes.
+## Fase 7 — Validação do HEAD
 
----
+- [ ] Suíte Python.
+- [ ] `:brain`.
+- [ ] `:android-module`.
+- [ ] `:app`.
+- [ ] Build Debug.
+- [ ] Preflight release.
+- [ ] Device/emulador ARM64.
 
-## Fase C — Higiene imediata (baixo risco, pode ir junto com a Fase A)
-
-- [x] Remover `__pycache__/` e `*.pyc` do pacote antes de qualquer commit/export novo; a árvore atual está limpa.
-- [x] Confirmar que `config/providers|routing|research|policy|execution/` (somente `.gitkeep`) são placeholders vazios, não "configuração pronta"; isso está documentado em `config/README.md`.
-- [x] Registrar explicitamente no `README.md` que `reference/braincode-python/` é arquivo histórico, não faz parte do build (`:brain`/`brain_runtime` atual é o que vale).
-
----
-
-## Fase D — Releases (sem pendência crítica, um ajuste de escopo)
-
-- [x] As três releases RootFS (`0.3.3`, `0.4.1`, `0.5.0`) estão migradas e documentadas corretamente — nenhuma ação necessária aqui.
-- [x] Documentar explicitamente que o app hoje só baixa/consome a `0.3.3` via `rootfs_manifest.json`; `0.4.1` e `0.5.0` existem como releases, mas não têm manifest nem seleção de perfil no app. A evidência está em `docs/SANDBOX_RELEASE_MIGRATION.md` e `TAREFAS_PENDENTES.md`.
-
-### Backlog local — execução offline sem servidor
-
-- [x] Criar e executar o preflight de release `scripts/validate-release-readiness.sh`, verificando manifests, tamanhos publicados e sidecars SHA-256 dos três RootFS.
-- [x] Validar os releases RootFS/proot dos perfis `0.3.3`, `0.4.1` e `0.5.0` — validação e hardening já realizados no Sandbox de origem; os artefatos foram migrados byte-a-byte para o BrainCode e permanecem imutáveis.
-- [x] Expandir o gerenciamento offline de plugins com snapshots versionados, rollback local do estado persistido e histórico JSONL de instalações/remoções; a reversão de pacotes já alterados no RootFS não é simulada.
-- [ ] Expandir Toolchains locais com rollback transacional e cache de metadados.
-- [ ] Completar o Security Test Lab offline com attack simulation determinística, corpus local persistente e readiness gate.
-- [ ] Expor o `BrainExecutionCoordinator` para planos offline avançados de múltiplas etapas.
-- [ ] Expor o `DefaultPromptGenerator` pela UI usando a biblioteca local de prompts.
-- [ ] Integrar APIs/Events locais avançados ao fluxo de Operações sem provider externo.
-
-- [x] Atualizar o status consolidado: releases RootFS homologados, preflight de distribuição aprovado e build/testes Android aprovados no host. O único gate restante do escopo offline é device/emulador; assinatura e infraestrutura externa estão registradas como futuro em `docs/RELEASE_READINESS.md`.
-
-O SDK já foi validado. O gate de device pertence ao fechamento do escopo offline. Assinatura e infraestrutura externa permanecem apenas como futuro em `docs/RELEASE_READINESS.md`; não fazem parte do backlog de implementação offline.
-
----
-
-## Critério de "concluído" daqui pra frente
-
-Uma linha só vira ✅ em qualquer documento do repo quando houver:
-1. Implementação.
-2. Teste automatizado.
-3. **Uma chamada real, fora do próprio teste, a partir do caminho que o usuário final aciona** (UI, ViewModel, ou orquestrador Python que o `README.md` ensina a rodar). Item 3 é o que faltou até agora e é o que esta auditoria adiciona ao critério já existente no `ROADMAP_UNIFICADO.md`.
+**Regra:** nenhum item vira concluído somente porque existe ou passa em teste próprio. É necessário caller real e evidência quando a feature fizer parte do produto.

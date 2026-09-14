@@ -62,3 +62,7 @@ O `AgentRegistry` bounded existente foi preservado e passou a publicar definiç�
 ## Fase 7 — Skill Registry
 
 O `SkillRegistry` especializado existente foi preservado para validação de manifests, assinatura, trust e revogação. Ele passou a publicar somente Skills habilitadas no `CapabilityRegistry` por `publishTo`; a publicação não concede autorização e mantém as capabilities declaradas descobríveis.
+
+## Fase 8 — Retrieval
+
+Foi criado `com.brain.retrieval.Retrieval` sobre contratos existentes de memória, skills, prompt library, agents e APIs. A ordem é fixa e explícita: `MEMORY → SKILLS → PROMPT_LIBRARY → TOOLS → AGENTS → APIS`. Memory e Skills exigem hits validados; o primeiro hit válido encerra a busca e impede chamadas de fontes posteriores. Retrieval não armazena conhecimento nem autoriza execução.

@@ -142,3 +142,30 @@ Primeiro, executar `./gradlew test` e `./gradlew :app:assembleDebug` em um ambie
 [2]: docs/BRAINCODE_2.0_AUDITORIA_CONSOLIDACAO_2026-09-14.md "Auditoria técnica da consolidação incremental"
 
 [3]: README.md "README e matriz de validação do BrainCode"
+
+
+## Matriz honesta contra o plano mestre original
+
+A implementação realizada cobre o núcleo arquitetural, mas não deve ser descrita como conclusão integral de todos os itens do plano mestre. A comparação direta com as Fases 0–14 do documento original é:
+
+| Fase do plano original | Estado real | Lacuna ou observação |
+|---|---|---|
+| Fase 0 — Consolidação | **Concluída** | Auditoria inicial, mapa de componentes e decisões de não duplicação foram registrados. |
+| Fase 1 — Universal Capability Model | **Parcialmente concluída** | Modelo, registry, candidate e discovery foram criados; `CapabilityProvider` como contrato separado e o caso completo `GITHUB_READ` ainda não foram fechados como integração de produção. |
+| Fase 2 — Policy Broker | **Parcialmente concluída** | Há outcomes `ALLOW`, `DENY`, `REQUIRE_APPROVAL` e `SANDBOX_ONLY`; o plano pede explicitamente `ALLOW_WITH_LIMITS`, que ainda deve ser normalizado como resultado próprio. |
+| Fase 3 — Action Gateway | **Parcialmente concluída** | Gateway agnóstico e auditoria existem, mas o wiring comprovado de todos os tipos `Agent`, `Tool`, `API`, `Skill`, `Sandbox`, `Workflow` e `Job` ainda não foi demonstrado end-to-end. |
+| Fase 4 — Agent Registry | **Parcialmente concluída** | Agents bounded publicam metadados; `ResearchAgent` e `CodeAgent` concretos do plano ainda não foram entregues como agentes declarativos comprovados. |
+| Fase 5 — Skill Registry | **Parcialmente concluída** | Registry, trust, revogação e publicação existem; as skills candidatas nomeadas no plano (`research`, `github-research`, `code-test`, `android-build`, `project-audit`, `debug`) ainda não foram materializadas e validadas. |
+| Fase 6 — Retrieval Executor | **Parcialmente concluída** | Retrieval cobre memória, skills, prompt library, tools, agents e APIs; fontes explícitas de `Knowledge` e `Workflow`, como listadas na fase, ainda precisam de adapters próprios. |
+| Fase 7 — Knowledge Compiler | **Parcialmente concluída** | Knowledge validado e skill candidate foram implementados; saídas `Prompt`, `Workflow` e `Rule` ainda não possuem compiladores/promotores explícitos. |
+| Fase 8 — Planner + Function Splitter | **Parcialmente concluída** | Planner, `ExecutionPlan`, dependências e splitter existem; contratos separados de `Intent` e `Task`, assumptions, policies, fallback e validação por tarefa ainda são incompletos. |
+| Fase 9 — Dispatcher | **Concluída no núcleo** | Dispatcher recebe tarefa, consulta Discovery e encaminha ao Action Gateway; o wiring de produção permanece pendente. |
+| Fase 10 — Workflow/DAG | **Parcialmente concluída** | Dependências, paralelismo limitado, retry, falha, cancelamento, timeout e evidência existem; recuperação retomável de execução intermediária e critérios de conclusão ricos ainda precisam ser endurecidos. |
+| Fase 11 — Durable Jobs | **Parcialmente concluída** | `JobStore` persistente e transições existem; integração operacional com retomada de workflows, workers e leases ainda não foi fechada. |
+| Fase 12 — Auto-Skill Learning | **Parcialmente concluída** | Detector gera propostas conservadoras; pipeline `Sandbox → Test → Critic → PASS → Validated Skill` ainda não é uma operação integrada. |
+| Fase 13 — Capability Discovery Hierárquico | **Parcialmente concluída** | Categorias, ranking e limite de candidatos existem; carregamento sob demanda/lazy loading para catálogos grandes ainda não existe. |
+| Fase 14 — Observabilidade | **Pendente** | O Action Gateway registra eventos básicos, mas não existe ainda a visualização técnica completa `Task → Plan → Capabilities → Policy → Agent → Sandbox → Evidence → Critic`. |
+
+Há ainda quatro itens transversais do plano que permanecem parciais: **Fast Intent Classifier**, adapters de APIs como capabilities com bootstrap no registry, integração completa do Provider Router com seleção `free-first`, e uma política explícita que escolha deterministicamente quando LLM é necessário. O `ApiCatalog` e o router foram preservados, mas a integração universal de produção não foi concluída.
+
+Portanto, o status correto é: **núcleo arquitetural consolidado e validado; plano mestre integral ainda não concluído**. As próximas prioridades são Observabilidade, contratos `Intent`/`Task`, adapters `Knowledge`/`Workflow`, agentes concretos, skill validation end-to-end, `ALLOW_WITH_LIMITS`, discovery lazy e wiring Android/produção.

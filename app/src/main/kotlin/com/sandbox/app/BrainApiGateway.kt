@@ -1,8 +1,9 @@
 package com.sandbox.app
 
-import com.brain.provider.HttpProviderClient
+import com.brain.provider.ProviderClient
 import com.brain.provider.ProviderDispatcher
 import com.brain.provider.ProviderRequest
+import com.brain.provider.ProviderResponse
 import com.brain.router.ApiCatalogRegistry
 import com.brain.router.DefaultAIRouter
 import com.brain.router.DynamicFreeApiCatalog
@@ -10,7 +11,8 @@ import com.brain.router.PapelPipeline
 import com.brain.router.ProviderModel
 import com.brain.router.RoutingDecision
 import org.json.JSONObject
-import java.net.URI
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Ponte real Brain -> APIs gratuitas.
@@ -84,7 +86,10 @@ class BrainApiGateway(
                 continue
             }
 
-            val client = HttpProviderClient(model.providerId, URI(chatCompletionsEndpoint(baseEndpoint)))
+            val client = AndroidProviderClient(
+                providerId = model.providerId,
+                endpoint = chatCompletionsEndpoint(baseEndpoint)
+            )
             val request = ProviderRequest(
                 model = model.modeloId,
                 prompt = prompt,
@@ -117,4 +122,40 @@ class BrainApiGateway(
             ?: first.optString("text").takeIf { it.isNotBlank() }
             ?: ""
     }.getOrDefault("")
+}
+
+/** Cliente HTTP Android sem java.net.http, compatível com o runtime do APK. */
+private class AndroidProviderClient(
+    private val providerId: String,
+    private val endpoint: String,
+    private val timeoutMs: Int = 30_000
+) : ProviderClient {
+    override fun complete(request: ProviderRequest): Result<ProviderResponse> = runCatching {
+        require(request.model.isNotBlank()) { "model não pode ser vazio" }
+        require(request.prompt.isNotBlank()) { "prompt não pode ser vazio" }
+        val started = System.nanoTime()
+        val payload = JSONObject().apply {
+            put("model", request.model)
+            put("messages", org.json.JSONArray().put(JSONObject().put("role", "user").put("content", request.prompt)))
+        }.toString()
+
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = timeoutMs
+            readTimeout = timeoutMs
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            request.headers.filterKeys { it.lowercase() !in setOf("host", "content-length") }
+                .forEach { (key, value) -> setRequestProperty(key, value) }
+        }
+        try {
+            connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            ProviderResponse(status, body, (System.nanoTime() - started) / 1_000_000, providerId)
+        } finally {
+            connection.disconnect()
+        }
+    }
 }

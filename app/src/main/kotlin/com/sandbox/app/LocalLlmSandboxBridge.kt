@@ -6,6 +6,7 @@ import com.sandbox.resource.SandboxResourceManager
 import com.sandbox.runtime.TarGzExtractor
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Paths
 
 /**
  * Ponte entre o modelo GGUF baixado pelo app e o sandbox proot.
@@ -104,7 +105,10 @@ class LocalLlmSandboxBridge(private val context: Context) {
         if (destination.exists() || Files.isSymbolicLink(destination.toPath())) {
             destination.delete()
         }
-        Files.createSymbolicLink(destination.toPath(), "/${executable.relativeTo(rootfsDir).invariantSeparatorsPath}")
+        Files.createSymbolicLink(
+            destination.toPath(),
+            Paths.get("/${executable.relativeTo(rootfsDir).invariantSeparatorsPath}")
+        )
     }
 
     private fun loadManifest(): InferenceEngineManifest {

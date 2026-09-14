@@ -11,6 +11,8 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Armazena credenciais cifradas em repouso; a chave nunca sai do Android Keystore. */
 class ApiKeyStore(context: Context) {
+    internal val appContext: Context = context.applicationContext
+
     private companion object {
         private const val PREFS_NAME = "api_keys_secure"
         private const val KEY_ALIAS = "braincode-api-keys-v1"
@@ -24,7 +26,6 @@ class ApiKeyStore(context: Context) {
     fun get(providerId: String): String? {
         val encoded = prefs.getString(providerId, null)
         if (encoded != null) return decrypt(encoded)
-        // Migração única de valores antigos em texto claro.
         val legacy = legacyPrefs.getString(providerId, null) ?: return null
         save(providerId, legacy)
         legacyPrefs.edit().remove(providerId).apply()

@@ -50,3 +50,7 @@ Foi consolidado `CapabilityDiscovery` sobre o registry único. A descoberta segu
 ## Fase 4 — Policy Broker
 
 O `PolicyBroker` existente foi evoluído, sem duplicação, para consultar o `CapabilityRegistry` como fonte de registro quando fornecido e avaliar actor, capability, recurso, classificação de dados, ambiente, risco, sandbox, rede, filesystem, orçamento, TTL e aprovação. `PolicyOutcome` expõe `ALLOW`, `DENY`, `REQUIRE_APPROVAL` e `SANDBOX_ONLY`; `Decision.ASK` permanece como compatibilidade interna. O broker continua deny-by-default e não executa ações.
+
+## Fase 5 — Action Gateway
+
+Foi criado `com.brain.gateway.ActionGateway` no módulo `:brain` como contrato agnóstico de execução. Ele resolve a capability no registry, consulta o `PolicyBroker`, valida o token/recursos, não aceita comando bruto, chama somente um `ActionExecutor` injetado e registra `actionId`, actor, capability, parâmetros redigidos, decisão, início/fim, resultado, erro, evidence e provenance. `AuthorizedCapabilityExecutor` e `PolicyGatedExecutor` Android foram preservados como backends especializados; nenhum deles foi removido ou contornado.

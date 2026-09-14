@@ -4,17 +4,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Carrega o catálogo real reaproveitado do IaBrain (assets/ai_api_catalog.json —
- * 11 provedores gratuitos: DeepSeek, Qwen, Moonshot, Z.ai, MiniMax, StepFun,
- * Volcengine, SiliconFlow, ModelScope, Tencent, OpenRouter).
+ * Carrega o catálogo operacional de APIs gratuitas.
  *
- * O JSON não traz janela de limite (rate limit) por modelo — só id, nome,
- * capabilities e endpoint. Isso é intencional pro desenho do Brain: quem
- * manda na decisão é o LiveStats observado em tempo real (ver ApiCatalog.kt),
- * não uma janela estática declarada. JanelaLimite fica neutra (nulls) até
- * existir esse dado real (Fase G).
+ * O Brain só pode receber modelos com access FREE_TIER ou FREE_PERMANENT.
+ * Créditos promocionais e PAYG são deliberadamente descartados aqui como
+ * segunda barreira, mesmo que alguém acrescente um provider pago ao JSON.
  */
 object ApiCatalogLoader {
+    private val FREE_ACCESS = setOf("FREE_TIER", "FREE_PERMANENT")
 
     fun fromJson(json: String): List<ProviderModel> {
         val root = JSONObject(json)
@@ -28,6 +25,8 @@ object ApiCatalogLoader {
 
             for (j in 0 until models.length()) {
                 val modelo = models.getJSONObject(j)
+                val access = modelo.optString("access", "FREE_TIER")
+                if (access !in FREE_ACCESS) continue
                 resultado += ProviderModel(
                     providerId = providerId,
                     modeloId = modelo.getString("id"),

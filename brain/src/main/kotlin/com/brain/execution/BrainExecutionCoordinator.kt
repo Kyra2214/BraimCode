@@ -50,8 +50,25 @@ class BrainExecutionCoordinator(
 
             if (candidates.isEmpty()) {
                 emit(runId, step.id, "AgentDispatched", mapOf("provider" to "local"))
-                result = executor.execute(step, null)
-                attempts[step.id] = 1
+                for (retry in 0..maxRetries) {
+                    attempts[step.id] = (attempts[step.id] ?: 0) + 1
+                    val attempt = executor.execute(step, null)
+                    result = attempt
+                    if (attempt.success) break
+                    emit(
+                        runId,
+                        step.id,
+                        if (retry < maxRetries) "Retry" else "ProviderFailed",
+                        mapOf(
+                            "attempt" to (attempts[step.id] ?: 1).toString(),
+                            "provider" to "local",
+                            "error" to (attempt.error ?: "failed")
+                        )
+                    )
+                    if (retry < maxRetries) {
+                        emit(runId, step.id, "CorrectionRequested", mapOf("reason" to (attempt.error ?: "failed")))
+                    }
+                }
             } else {
                 for ((candidateIndex, candidate) in candidates.withIndex()) {
                     if (candidateIndex > 0) {
@@ -97,10 +114,18 @@ class BrainExecutionCoordinator(
 
                 if (result?.success != true) {
                     emit(runId, step.id, "LocalFallback", mapOf("reason" to "todos os provedores gratuitos falharam ou atingiram o limite"))
-                    val localAttempt = executor.execute(step, null)
-                    result = localAttempt
-                    attempts[step.id] = (attempts[step.id] ?: 0) + 1
-                    if (localAttempt.success) selectedProvider = null
+                    var localAttempt: StepAttempt? = null
+                    for (retry in 0..maxRetries) {
+                        attempts[step.id] = (attempts[step.id] ?: 0) + 1
+                        localAttempt = executor.execute(step, null)
+                        result = localAttempt
+                        if (localAttempt.success) break
+                        if (retry < maxRetries) {
+                            emit(runId, step.id, "Retry", mapOf("attempt" to (attempts[step.id] ?: 1).toString(), "provider" to "local", "error" to (localAttempt.error ?: "failed")))
+                            emit(runId, step.id, "CorrectionRequested", mapOf("reason" to (localAttempt.error ?: "failed")))
+                        }
+                    }
+                    if (localAttempt?.success == true) selectedProvider = null
                 }
             }
 

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
@@ -55,7 +56,16 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
         if (sidebarOpen) {
             TaskSidebar(viewModel, onClose = { sidebarOpen = false })
         } else {
-            if (searchOpen) OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar na thread") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+            if (searchOpen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(onClick = { searchOpen = false }, modifier = Modifier.weight(0.28f)) { Text("← Voltar") }
+                    OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar na thread") }, modifier = Modifier.weight(0.72f), singleLine = true)
+                }
+            }
             StatusSection(viewModel)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
@@ -102,21 +112,20 @@ private fun eventText(event: ThreadEvent): String = when (event) {
 
 @Composable
 private fun ThreadTopBar(viewModel: SandboxViewModel, searchOpen: Boolean, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth().padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = onToggleSidebar) { Text("Tarefas") }
-            Column {
-            Text("BrainCode", style = MaterialTheme.typography.titleLarge)
-            Text("Converse. Execute. Comprove.", style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            Column(modifier = Modifier.padding(start = 8.dp)) {
+                Text("BrainCode", style = MaterialTheme.typography.titleLarge)
+                Text("Converse. Execute. Comprove.", style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onSearch) { Text(if (searchOpen) "Fechar" else "Buscar") }
-            TextButton(onClick = onOpenSettings) { Text("Config") }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onSearch) { Text(if (searchOpen) "Fechar busca" else "Buscar") }
+            OutlinedButton(onClick = onOpenSettings, modifier = Modifier.padding(start = 8.dp)) { Text("Configurações") }
             AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
         }
     }

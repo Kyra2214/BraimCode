@@ -192,14 +192,18 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
             }
         }
         is ThreadEvent.Diff -> Card {
+            var expanded by remember(event.files) { mutableStateOf(false) }
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Git diff · ${event.files.size} arquivo(s)", style = MaterialTheme.typography.titleSmall)
-                event.files.forEach { file ->
+                val files = if (expanded) event.files else event.files.take(3)
+                files.forEach { file ->
                     Text(file.path, style = MaterialTheme.typography.labelMedium)
-                    file.lines.forEach { line ->
+                    val lines = if (expanded) file.lines else file.lines.take(12)
+                    lines.forEach { line ->
                         Text("${line.prefix}${line.text}", color = if (line.prefix == '+') androidx.compose.ui.graphics.Color(0xFF4CAF50) else if (line.prefix == '-') MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     }
                 }
+                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Recolher" else "Mostrar diff completo") }
             }
         }
     }

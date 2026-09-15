@@ -7,6 +7,7 @@ import com.brain.capability.CapabilityProvenance
 import com.brain.capability.CapabilityProvider
 import com.brain.execution.RiskClass
 import com.sandbox.sandbox.BuiltInCatalog
+import com.sandbox.sandbox.InstallationState
 import com.sandbox.sandbox.SandboxComponent
 
 /**
@@ -16,6 +17,7 @@ import com.sandbox.sandbox.SandboxComponent
  */
 class PluginCatalogCapabilityProvider(
     private val components: () -> List<SandboxComponent> = { BuiltInCatalog.all },
+    private val statusOf: (String) -> InstallationState? = { null },
     override val providerId: String = "builtin-plugin-catalog"
 ) : CapabilityProvider {
     override fun capabilities(): Sequence<CapabilityDefinition> = components().asSequence().map { component ->
@@ -29,7 +31,13 @@ class PluginCatalogCapabilityProvider(
             origin = providerId,
             supportsCode = component.kind.name == "TOOL",
             risk = RiskClass.LOW,
-            availability = CapabilityAvailability.AVAILABLE,
+            // O catálogo descreve o que pode existir; somente uma instalação
+            // confirmada deve ser anunciada como disponível para execução.
+            availability = if (statusOf(component.id) == InstallationState.INSTALLED) {
+                CapabilityAvailability.AVAILABLE
+            } else {
+                CapabilityAvailability.UNAVAILABLE
+            },
             version = component.version ?: "catalog",
             providedCapabilities = setOf(capabilityId),
             metadata = buildMap {

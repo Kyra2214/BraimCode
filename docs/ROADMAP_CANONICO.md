@@ -17,7 +17,7 @@ Este arquivo substitui listas paralelas de ideias como referência para o próxi
 ## Marco 1 — Fechar o caminho de execução
 
 - [x] mapear cada entrada real do Chat até Brain;
-- [x] garantir que ações reais passem por Discovery → Policy → Gateway;
+- [ ] garantir que todas as ações reais, incluindo slash-commands operacionais, passem por Discovery → Policy → Gateway;
 - [ ] garantir que nenhum caminho paralelo execute capacidade diretamente;
 - [ ] adicionar testes de wiring/orphan para os componentes do núcleo;
 - [ ] registrar evidência observável de cada execução relevante.

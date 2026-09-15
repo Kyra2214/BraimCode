@@ -417,14 +417,19 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                 val promptLibrary = InMemoryPromptLibrary(
                     PromptLibraryLoader.fromJson(getApplication<Application>().assets.open("prompts_biblioteca.json").bufferedReader().use { it.readText() })
                 )
+                val preparedPlatform = SandboxPlatform(prepared, File(dir, "workspace"), File(dir, "components.tsv"), File(dir, "services"))
+                platform = preparedPlatform
+                val installedStates = preparedPlatform.plugins.components()
+                    .associate { component -> component.id to preparedPlatform.plugins.status(component.id)?.state }
                 brainController = BrainSandboxController(
                     prepared,
                     File(dir, "rootfs"),
                     promptLibrary = promptLibrary,
-                    capabilityProviders = listOf(PluginCatalogCapabilityProvider())
+                    capabilityProviders = listOf(
+                        PluginCatalogCapabilityProvider(statusOf = { id -> installedStates[id] })
+                    )
                 )
                 brainIntegration = BrainIntegrationFacade(File(dir, "brain"))
-                platform = SandboxPlatform(prepared, File(dir, "workspace"), File(dir, "components.tsv"), File(dir, "services"))
                 pluginListVersion++; refreshStatusCache(); refreshPluginAudit(); phase = SandboxPhase.Ready; refreshToolchains()
             } catch (e: Exception) { runtime = null; phase = SandboxPhase.Blocked(e.message ?: "Falha ao preparar o runtime") }
         }

@@ -355,7 +355,7 @@ fun StatusSection(viewModel: SandboxViewModel) {
                     }
                 }
                 is SandboxPhase.Blocked -> {
-                    Text("Bloqueado: ${phase.reason}", color = MaterialTheme.colorScheme.error)
+                    Text(phase.reason, color = MaterialTheme.colorScheme.error)
                     Button(onClick = { viewModel.prepareSandbox() }) { Text("Tentar de novo") }
                 }
             }

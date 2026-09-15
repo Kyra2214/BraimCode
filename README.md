@@ -2,7 +2,7 @@
 
 BrainCode é um runtime local-first que combina **Policy, approval, eventos auditáveis, Sandbox, workflows, memória, routing, skills, QA, descoberta de APIs e readiness** com um cliente Android offline baseado em RootFS/proot.
 
-> **Estado real em 2026-09-14:** os últimos 30 commits adicionaram descoberta dinâmica de modelos, política free-only, waterfall/fallback entre APIs, gateway Android de providers, memória persistente de conhecimento, proveniência e Critic automático. A integração vertical Android → Brain → Policy → Capability → Sandbox continua comprovada para `sandbox.health`; o novo `BrainApiGateway` existe e executa APIs, mas a integração da conversa Android com esse gateway ainda não deve ser tratada como comprovada até existir caller real no fluxo de chat. Consulte `docs/AUDITORIA_30_COMMITS_2026-09-14.md`.
+> **Estado real em 2026-09-14:** o núcleo BrainCode 2.0, o E2E JVM e o pipeline policy-gated foram consolidados. O app Android agora usa uma thread agent-centric com sessões persistentes, sidebar, configurações de projeto, diff viewer, saída de execução ao vivo, busca e citação de eventos; o chat foi conectado ao pipeline Brain/Gateway no código de produção. A validação final Android ainda depende de o CI concluir sem falhas. Consulte `docs/BRAINCODE_2.0_RELATORIO_FINAL_CONSOLIDACAO_2026-09-14.md`.
 
 ## Arquitetura
 
@@ -63,7 +63,7 @@ O fallback é automático e classifica falhas como chave inválida, limite, time
 
 `BrainApiGateway` é a camada Android para execução interna dos providers gratuitos. Ele usa `ApiCatalogRegistry`, `DefaultAIRouter`, `ProviderDispatcher`, `ApiKeyStore` e transporte HTTP compatível com Android.
 
-**Limite importante:** o gateway está implementado, mas a existência dele não significa que a tela de conversa já esteja roteada por ele. Essa integração só será marcada como concluída após comprovação de caller real no fluxo Android.
+**Limite importante:** o caller de produção está conectado no `SandboxViewModel`/`BrainApiGateway`, mas a execução Android end-to-end ainda deve ser validada por build, testes e execução em ambiente Android configurado.
 
 ## Memória e aprendizado
 
@@ -120,7 +120,7 @@ O workflow da aba Operações continua local/demonstrativo e não representa uma
 
 ## Validação
 
-Os documentos anteriores registram uma matriz aprovada em 2026-09-13. Como houve código novo depois dela, essa aprovação não é automaticamente válida para o HEAD de 2026-09-14.
+O núcleo JVM foi revalidado no HEAD atual. O CI do GitHub está sendo usado para fechar a matriz Android; a última execução compilou até os testes Android e falhou em `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`, caso já corrigido no working tree seguinte.
 
 Para uma nova validação completa:
 

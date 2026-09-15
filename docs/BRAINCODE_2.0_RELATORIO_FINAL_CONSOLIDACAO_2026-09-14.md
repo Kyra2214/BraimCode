@@ -3,7 +3,8 @@
 **Data:** 2026-09-14  
 **Repositório:** `Kyra2214/BrainCode`  
 **Base:** `origin/main` em `d477004`  
-**HEAD consolidado:** branch `main` publicado e verificado no GitHub  
+**HEAD documentado:** `58a3f46` (`fix: restore Android CI compilation`)
+**CI mais recente:** run `34913686614` falhou somente em `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`; a correção seguinte está em preparação.
 **Histórico:** commits pequenos e lógicos por fase, listados abaixo  
 **Autor:** Manus AI
 
@@ -11,7 +12,7 @@
 
 A consolidação incremental definida no plano mestre foi implementada nas 15 fases ordenadas. O trabalho evoluiu componentes existentes sempre que eles já cobriam parte da responsabilidade. Nenhum componente funcional foi removido. O resultado introduz uma autoridade declarativa única para capabilities e conecta discovery, policy, gateway, agentes, skills, retrieval, conhecimento, planejamento, dispatch, workflows, jobs e auto-skills sem criar `Brain2`, `Router2`, `Memory2` ou registries paralelos equivalentes.
 
-A validação do núcleo JVM foi concluída com sucesso: `:brain:check` passou com 113 testes Kotlin, a suíte Python passou com 155 testes, o gate arquitetural passou, `git diff --check` passou e os scripts shell passaram na validação sintática. O build completo do projeto e o assemble Android não foram declarados como aprovados porque o ambiente de validação não possui Android SDK configurado. Portanto, o estado correto é **consolidação do núcleo aprovada; build Android completo bloqueado por infraestrutura**.
+A validação do núcleo JVM foi concluída com sucesso: `:brain:check` passou com 113 testes Kotlin, a suíte Python passou com 155 testes, o gate arquitetural passou, `git diff --check` passou e os scripts shell passaram na validação sintática. O CI do GitHub já possui SDK Android e compilou os módulos, mas ainda encontrou uma falha comportamental no teste de redirect HTTPS após a primeira correção de compilação. Portanto, o estado correto é **consolidação do núcleo aprovada; CI Android ainda em correção, sem declaração de verde**.
 
 ## Arquitetura consolidada
 
@@ -232,6 +233,20 @@ Intent textual
 O teste confirmou `SUCCEEDED` para o Job, uma única auditoria de ação, evidence de origem, Knowledge `VALIDATED`, Skill usável após promoção explícita, reload do JobStore após persistência e ausência de chamada posterior à camada de APIs quando Knowledge validado foi encontrado.
 
 Durante a execução foi detectado e corrigido um defeito real: o Discovery inferia `API` pela linguagem do objetivo e descartava uma implementação `TOOL` mesmo quando a capability requerida era explícita. A correção mantém a categoria inferida para ranking/observabilidade, mas não a usa como filtro rígido nesse caso.
+
+## UI agent-centric e integração do app
+
+A interface Android foi migrada de uma organização centrada em abas fixas para uma experiência centrada na thread de execução. `ThreadScreen` apresenta mensagens do usuário, respostas do agente, aprovações, relatórios, diffs e cartões de terminal em uma sequência única. A navegação lateral mantém sessões persistidas e permite criar e alternar tarefas. As configurações de projeto foram incorporadas ao fluxo da sessão.
+
+As melhorias incrementais da UI foram implementadas e depois preservadas sem a ramificação experimental de mensagens: diff viewer por arquivo com linhas coloridas e colapsáveis, saída de terminal durante a execução, busca dentro da thread, citação de eventos anteriores e indicador de duração e motivo de término. A tentativa de adicionar edição com branching foi revertida para manter o modelo de eventos linear e estável.
+
+O `SandboxViewModel` mantém a ponte entre a thread e o runtime. O chat registra eventos de usuário, encaminha a intenção para o caminho Brain/Gateway e exibe o resultado, enquanto operações de terminal, Git, TestLab, Security Gate, Workspace, serviços e toolchains continuam produzindo eventos observáveis na mesma thread.
+
+## CI: diagnóstico e estado atual
+
+O run `34913330882` inicialmente falhou por três regressões de compilação: `SandboxViewModel` tinha uma chave ausente em `refreshStatusCache`, o teste Android referenciava `LocalModelManifest`, que não existe mais, e `combinedClickable` exigia opt-in explícito. Essas falhas foram corrigidas no commit `58a3f46`.
+
+O run seguinte, `34913686614`, confirmou que o projeto passou da compilação Android e chegou aos testes instrumentados de unidade. A única falha restante registrada nesse run foi `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`, causada pelo `RootfsManifest` do teste exigir assinatura criptográfica sem fornecer um verificador. O teste foi ajustado para declarar explicitamente `signatureRequired = false`, preservando a validação de SHA-256 e HTTPS. O CI deve ser reexecutado após essa correção antes de o projeto ser marcado como verde.
 
 ## Ponte Android → Gateway → Sandbox
 

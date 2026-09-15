@@ -38,7 +38,7 @@ class SandboxResourceTransportTest {
                 target,
                 connectionFactory = { responses.removeFirst() },
                 addressResolver = { arrayOf(java.net.InetAddress.getByName("93.184.216.34")) }
-            ).ensureAvailable(RootfsManifest("1", "arm64-v8a", "test", "https://github.com/start", bytes.size.toLong(), sha, "1", "Apache-2.0", "", "1"))
+            ).ensureAvailable(RootfsManifest("1", "arm64-v8a", "test", "https://github.com/start", bytes.size.toLong(), sha, "1", "Apache-2.0", "", "1", "", false))
             assertTrue(result is SandboxResourceManager.DownloadResult.Success)
             assertTrue(target.readBytes().contentEquals(bytes))
         } finally { target.delete() }

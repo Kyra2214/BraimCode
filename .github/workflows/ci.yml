@@ -43,9 +43,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .ci
-          test -n "$BRAINCODE_KEYSTORE_BASE64"
-          printf '%s' "$BRAINCODE_KEYSTORE_BASE64" | base64 --decode > "$BRAINCODE_KEYSTORE_FILE"
-          chmod 600 "$BRAINCODE_KEYSTORE_FILE"
+          if [ -n "$BRAINCODE_KEYSTORE_BASE64" ] && [ -n "$BRAINCODE_KEYSTORE_PASSWORD" ] && [ -n "$BRAINCODE_KEY_ALIAS" ] && [ -n "$BRAINCODE_KEY_PASSWORD" ]; then
+            printf '%s' "$BRAINCODE_KEYSTORE_BASE64" | base64 --decode > "$BRAINCODE_KEYSTORE_FILE"
+            chmod 600 "$BRAINCODE_KEYSTORE_FILE"
+            echo "Using configured CI development signing key"
+          else
+            rm -f "$BRAINCODE_KEYSTORE_FILE"
+            echo "Signing secrets are not configured; Android debug build will use the ephemeral default debug keystore"
+          fi
 
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4

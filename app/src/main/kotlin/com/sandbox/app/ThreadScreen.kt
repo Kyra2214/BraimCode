@@ -11,10 +11,18 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -112,20 +120,30 @@ private fun eventText(event: ThreadEvent): String = when (event) {
 @Composable
 private fun ThreadTopBar(viewModel: SandboxViewModel, searchOpen: Boolean, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onToggleSidebar) { Text("Tarefas") }
-            Column(modifier = Modifier.padding(start = 8.dp)) {
-                Text("BrainCode", style = MaterialTheme.typography.titleLarge)
+            IconButton(onClick = onToggleSidebar) {
+                Icon(Icons.Default.Menu, contentDescription = "Tarefas")
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {
+                Text("BrainCode", style = MaterialTheme.typography.titleLarge, maxLines = 1)
                 Text("Converse. Execute. Comprove.", style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onSearch) { Text(if (searchOpen) "Fechar busca" else "Buscar") }
-            OutlinedButton(onClick = onOpenSettings, modifier = Modifier.padding(start = 8.dp)) { Text("Configurações") }
-            AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
+            AssistChip(
+                onClick = { viewModel.runDiagnostics() },
+                label = { Text(phaseLabel(viewModel.phase)) },
+                colors = AssistChipDefaults.assistChipColors(
+                    labelColor = if (viewModel.phase is SandboxPhase.Blocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+            IconButton(onClick = onSearch) {
+                Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, contentDescription = if (searchOpen) "Fechar busca" else "Buscar")
+            }
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Default.Settings, contentDescription = "Configurações")
+            }
         }
     }
 }

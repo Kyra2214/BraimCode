@@ -49,6 +49,7 @@ class BrainSandboxController(
     promptLibrary: PromptLibrary? = null,
     capabilityProviders: List<CapabilityProvider> = emptyList()
 ) {
+    private val dynamicCapabilityProviders = capabilityProviders
     private val approvals = FileApprovalStore(File(rootfsDir.parentFile ?: rootfsDir, "approvals.jsonl"))
     private val sandbox = Sandbox(runtime = runtime, rootfsDir = rootfsDir)
     private val capabilities = CapabilityRegistry(
@@ -72,6 +73,17 @@ class BrainSandboxController(
         audit = InMemoryActionAuditLog()
     )
     private val dispatcher = Dispatcher(CapabilityDiscovery(capabilities), actionGateway)
+
+    /** Recalcula metadados dinâmicos, como disponibilidade de plugins instalados. */
+    fun refreshCapabilities() {
+        dynamicCapabilityProviders
+            .flatMap { it.capabilities().toList() }
+            .forEach { definition ->
+                if (capabilities.getById(definition.id) != null) {
+                    capabilities.update(definition)
+                }
+            }
+    }
     private val durableJobs = DurableJobRunner(
         JobStore(File(rootfsDir.parentFile ?: rootfsDir, "brain-jobs.json")),
         WorkflowEngine(File(rootfsDir.parentFile ?: rootfsDir, "brain-workflows.json"))

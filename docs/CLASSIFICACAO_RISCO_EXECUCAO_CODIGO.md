@@ -45,6 +45,12 @@ Ela não deve ser usada para concluir que:
 
 > “qualquer execução de código é segura” ou “nenhuma aprovação é necessária em todos os contextos”.
 
+## Disponibilidade dinâmica de plugins
+
+A disponibilidade do catálogo não é mais um snapshot congelado da preparação inicial. O `PluginCatalogCapabilityProvider` consulta o `statusCache` vivo, e o `BrainSandboxController.refreshCapabilities()` atualiza as definições existentes no `CapabilityRegistry` após refresh, instalação, remoção ou rollback de componentes.
+
+Assim, um plugin instalado durante a sessão pode passar a ser descoberto como `AVAILABLE`, enquanto um plugin removido deixa de ser oferecido pelo discovery. A atualização altera somente metadados de disponibilidade; não concede novas permissões ao actor nem substitui a autorização do `PolicyBroker`.
+
 ## Revisão futura
 
 Essa decisão deve ser revisitada se o CodeAgent passar a:

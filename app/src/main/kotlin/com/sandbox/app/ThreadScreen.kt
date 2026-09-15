@@ -51,7 +51,7 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
     var searchOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxSize()) {
-        ThreadTopBar(viewModel, onToggleSidebar = { sidebarOpen = !sidebarOpen }, onOpenSettings = onOpenSettings, onSearch = { searchOpen = !searchOpen })
+        ThreadTopBar(viewModel, searchOpen = searchOpen, onToggleSidebar = { sidebarOpen = !sidebarOpen }, onOpenSettings = onOpenSettings, onSearch = { searchOpen = !searchOpen })
         if (sidebarOpen) {
             TaskSidebar(viewModel, onClose = { sidebarOpen = false })
         } else {
@@ -101,7 +101,7 @@ private fun eventText(event: ThreadEvent): String = when (event) {
 }
 
 @Composable
-private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
+private fun ThreadTopBar(viewModel: SandboxViewModel, searchOpen: Boolean, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -111,12 +111,12 @@ private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Uni
             OutlinedButton(onClick = onToggleSidebar) { Text("Tarefas") }
             Column {
             Text("BrainCode", style = MaterialTheme.typography.titleLarge)
-            Text("Thread de execução auditável", style = MaterialTheme.typography.bodySmall)
+            Text("Converse. Execute. Comprove.", style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = onSearch) { Text("Buscar") }
-            OutlinedButton(onClick = onOpenSettings) { Text("Config") }
+            TextButton(onClick = onSearch) { Text(if (searchOpen) "Fechar" else "Buscar") }
+            TextButton(onClick = onOpenSettings) { Text("Config") }
             AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
         }
     }

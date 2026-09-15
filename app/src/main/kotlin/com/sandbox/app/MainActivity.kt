@@ -49,7 +49,7 @@ import com.sandbox.runtime.SandboxExecutionResult
 import com.sandbox.sandbox.BuiltInToolchains
 import com.sandbox.sandbox.ComponentKind
 
-class MainActivity : ComponentActivity() {
+open class MainActivity : ComponentActivity() {
     private val viewModel: SandboxViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {

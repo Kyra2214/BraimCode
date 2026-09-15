@@ -66,9 +66,7 @@ data class ThreadSession(
     val createdAt: Long,
     val updatedAt: Long,
     val status: SessionStatus,
-    val events: List<ThreadEvent>,
-    val parentSessionId: String? = null,
-    val branchedFromEventIndex: Int? = null
+    val events: List<ThreadEvent>
 )
 
 data class SessionSummary(
@@ -132,7 +130,6 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     val chatMessages = mutableStateListOf<ChatMessage>()
     var chatInput by mutableStateOf("")
     var chatRunning by mutableStateOf(false); private set
-    var editingMessage by mutableStateOf<String?>(null); private set
 
     private val apiKeyStore = ApiKeyStore(application)
     val apiProviders: List<ApiProvider> = runCatching { ApiKeyCatalogLoader.load(application) }.getOrElse { emptyList() }
@@ -214,45 +211,6 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         chatInput = "Sobre este evento, corrija o problema:\n${eventPreview(event)}\n"
     }
 
-    fun beginEditMessage(message: String) {
-        if (phase == SandboxPhase.Running) return
-        editingMessage = message
-        chatInput = message
-    }
-
-    fun cancelEditMessage() {
-        editingMessage = null
-        chatInput = ""
-    }
-
-    private fun branchAndResend(editedText: String): Boolean {
-        val sourceId = activeSessionId ?: return false
-        val source = sessions.firstOrNull { it.id == sourceId } ?: return false
-        val index = source.events.indexOfFirst { it is ThreadEvent.User && it.text == editingMessage }
-        if (index < 0) return false
-        val now = System.currentTimeMillis()
-        val branch = ThreadSession(
-            id = UUID.randomUUID().toString(),
-            title = editedText.take(48),
-            workspaceProjectName = source.workspaceProjectName,
-            createdAt = now,
-            updatedAt = now,
-            status = SessionStatus.IDLE,
-            events = source.events.take(index),
-            parentSessionId = source.id,
-            branchedFromEventIndex = index
-        )
-        sessions = sessions + branch
-        activeSessionId = branch.id
-        workspaceProjectName = branch.workspaceProjectName.orEmpty()
-        editingMessage = null
-        chatMessages.clear()
-        restoreChatFromActiveSession()
-        persistSessions()
-        chatInput = editedText
-        return true
-    }
-
     fun runGitDiff() {
         val p = platform ?: return
         val project = workspaceProjects.firstOrNull { it.name == workspaceProjectName } ?: run {
@@ -286,7 +244,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         sessions.forEach { session ->
             val events = JSONArray()
             session.events.forEach { event -> events.put(eventToJson(event)) }
-            array.put(JSONObject().put("id", session.id).put("title", session.title).put("workspace", session.workspaceProjectName ?: JSONObject.NULL).put("createdAt", session.createdAt).put("updatedAt", session.updatedAt).put("status", session.status.name).put("parentSessionId", session.parentSessionId ?: JSONObject.NULL).put("branchedFromEventIndex", session.branchedFromEventIndex ?: JSONObject.NULL).put("events", events))
+            array.put(JSONObject().put("id", session.id).put("title", session.title).put("workspace", session.workspaceProjectName ?: JSONObject.NULL).put("createdAt", session.createdAt).put("updatedAt", session.updatedAt).put("status", session.status.name).put("events", events))
         }
         sessionsFile.writeText(JSONObject().put("sessions", array).toString())
     }
@@ -306,7 +264,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         (0 until array.length()).map { index ->
             val item = array.getJSONObject(index)
             val eventsJson = item.optJSONArray("events") ?: JSONArray()
-            ThreadSession(item.getString("id"), item.getString("title"), item.optString("workspace").takeIf { it.isNotBlank() && it != "null" }, item.getLong("createdAt"), item.getLong("updatedAt"), runCatching { SessionStatus.valueOf(item.getString("status")) }.getOrDefault(SessionStatus.IDLE), (0 until eventsJson.length()).mapNotNull { eventFromJson(eventsJson.getJSONObject(it)) }, item.optString("parentSessionId").takeIf { it.isNotBlank() && it != "null" }, if (item.has("branchedFromEventIndex") && !item.isNull("branchedFromEventIndex")) item.optInt("branchedFromEventIndex") else null)
+            ThreadSession(item.getString("id"), item.getString("title"), item.optString("workspace").takeIf { it.isNotBlank() && it != "null" }, item.getLong("createdAt"), item.getLong("updatedAt"), runCatching { SessionStatus.valueOf(item.getString("status")) }.getOrDefault(SessionStatus.IDLE), (0 until eventsJson.length()).mapNotNull { eventFromJson(eventsJson.getJSONObject(it)) })
         }
     }.getOrDefault(emptyList())
 
@@ -514,9 +472,6 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     /** Entrada única do composer Codex-style: texto livre ou comando operacional. */
     fun submitThreadInput() {
         val command = chatInput.trim()
-        if (editingMessage != null && command.isNotBlank() && !command.startsWith("/")) {
-            if (branchAndResend(command)) { sendChatMessage(); return }
-        }
         val lower = command.lowercase()
         when {
             lower == "/testlab" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runTestLab() }

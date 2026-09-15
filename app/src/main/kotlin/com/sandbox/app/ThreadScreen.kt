@@ -162,7 +162,7 @@ private fun phaseLabel(phase: SandboxPhase): String = when (phase) {
 @Composable
 private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
     when (event) {
-        is ThreadEvent.User -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.beginEditMessage(event.text) })) { Column(modifier = Modifier.padding(12.dp)) { Text("Sua mensagem · segure para editar", style = MaterialTheme.typography.labelSmall); Text(event.text, style = MaterialTheme.typography.bodyMedium) } }
+        is ThreadEvent.User -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) { Text(event.text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
         is ThreadEvent.Agent -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) { Column(modifier = Modifier.padding(12.dp)) { Text("Turno do agente", style = MaterialTheme.typography.labelSmall); Text(event.text, style = MaterialTheme.typography.bodyMedium) } }
         is ThreadEvent.System -> Card {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -212,12 +212,6 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
 @Composable
 private fun ThreadComposer(viewModel: SandboxViewModel) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        viewModel.editingMessage?.let {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Editando mensagem — reenviar cria uma nova branch", style = MaterialTheme.typography.labelMedium)
-                TextButton(onClick = { viewModel.cancelEditMessage() }) { Text("Cancelar") }
-            }
-        }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(listOf("/testlab", "/security", "/git status", "/git diff", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
                 AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })

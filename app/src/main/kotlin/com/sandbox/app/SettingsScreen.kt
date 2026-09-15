@@ -1,5 +1,6 @@
 package com.sandbox.app
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.sandbox.sandbox.BuiltInToolchains
@@ -31,7 +33,13 @@ fun SettingsScreen(viewModel: SandboxViewModel, onBack: () -> Unit) {
             Text("Configurações do projeto", style = MaterialTheme.typography.titleLarge)
             OutlinedButton(onClick = onBack) { Text("Voltar") }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             listOf("Provedores", "Extensões", "Workspace", "Toolchains").forEachIndexed { index, label ->
                 FilterChip(selected = section == index, onClick = { section = index }, label = { Text(label) })
             }

@@ -11,19 +11,29 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
 /**
- * Keeps the BrainCode process in the Android foreground while long-running
- * Sandbox work (downloads, extraction, setup, builds and jobs) is active.
- * The actual work remains owned by the existing SandboxViewModel/runtime.
+ * Foreground execution anchor for long-running BrainCode work.
+ *
+ * The SandboxViewModel remains the owner of downloads, extraction, setup,
+ * builds and jobs. This service keeps the application process in the Android
+ * foreground while those operations are running and accepts live stage /
+ * progress updates from the execution layer.
  */
 class BrainCodeExecutionService : Service() {
     companion object {
         const val ACTION_UPDATE = "com.sandbox.app.action.UPDATE_EXECUTION_NOTIFICATION"
+        const val ACTION_STOP = "com.sandbox.app.action.STOP_EXECUTION_NOTIFICATION"
         const val EXTRA_TEXT = "text"
         const val EXTRA_PROGRESS = "progress"
         const val EXTRA_MAX = "max"
+        const val EXTRA_INDETERMINATE = "indeterminate"
 
         private const val CHANNEL_ID = "braincode_execution"
         private const val NOTIFICATION_ID = 4202
+
+        fun start(context: android.content.Context) {
+            val intent = Intent(context, BrainCodeExecutionService::class.java)
+            androidx.core.content.ContextCompat.startForegroundService(context, intent)
+        }
 
         fun update(context: android.content.Context, text: String, progress: Int? = null, max: Int = 100) {
             val intent = Intent(context, BrainCodeExecutionService::class.java).apply {
@@ -31,27 +41,44 @@ class BrainCodeExecutionService : Service() {
                 putExtra(EXTRA_TEXT, text)
                 progress?.let { putExtra(EXTRA_PROGRESS, it) }
                 putExtra(EXTRA_MAX, max)
+                putExtra(EXTRA_INDETERMINATE, progress == null)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun stop(context: android.content.Context) {
+            context.stopService(Intent(context, BrainCodeExecutionService::class.java))
         }
     }
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("BrainCode ativo — processos continuam em segundo plano", null))
+        startForeground(
+            NOTIFICATION_ID,
+            buildNotification("BrainCode ativo — processos continuam em segundo plano", null)
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_UPDATE) {
-            val text = intent.getStringExtra(EXTRA_TEXT)
-                ?: "BrainCode ativo — processos continuam em segundo plano"
-            val progress = if (intent.hasExtra(EXTRA_PROGRESS)) intent.getIntExtra(EXTRA_PROGRESS, 0) else null
-            val max = intent.getIntExtra(EXTRA_MAX, 100)
-            getSystemService(NotificationManager::class.java)
-                .notify(NOTIFICATION_ID, buildNotification(text, progress, max))
+        when (intent?.action) {
+            ACTION_STOP -> {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_UPDATE -> {
+                val text = intent.getStringExtra(EXTRA_TEXT)
+                    ?: "BrainCode ativo — processos continuam em segundo plano"
+                val progress = if (intent.hasExtra(EXTRA_PROGRESS)) {
+                    intent.getIntExtra(EXTRA_PROGRESS, 0)
+                } else null
+                val max = intent.getIntExtra(EXTRA_MAX, 100)
+                getSystemService(NotificationManager::class.java)
+                    .notify(NOTIFICATION_ID, buildNotification(text, progress, max))
+            }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun buildNotification(text: String, progress: Int?, max: Int = 100): Notification {
@@ -71,7 +98,8 @@ class BrainCodeExecutionService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
 
         if (progress != null) {
-            builder.setProgress(max.coerceAtLeast(1), progress.coerceIn(0, max.coerceAtLeast(1)), false)
+            val safeMax = max.coerceAtLeast(1)
+            builder.setProgress(safeMax, progress.coerceIn(0, safeMax), false)
         } else {
             builder.setProgress(0, 0, true)
         }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -39,10 +40,10 @@ sealed interface ThreadEvent {
 }
 
 @Composable
-fun ThreadScreen(viewModel: SandboxViewModel) {
+fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
     var sidebarOpen by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize()) {
-        ThreadTopBar(viewModel, onToggleSidebar = { sidebarOpen = !sidebarOpen })
+        ThreadTopBar(viewModel, onToggleSidebar = { sidebarOpen = !sidebarOpen }, onOpenSettings = onOpenSettings)
         if (sidebarOpen) {
             TaskSidebar(viewModel, onClose = { sidebarOpen = false })
         } else {
@@ -85,7 +86,7 @@ private fun threadEvents(viewModel: SandboxViewModel): List<ThreadEvent> = build
 }
 
 @Composable
-private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Unit) {
+private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -98,7 +99,10 @@ private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Uni
             Text("Thread de execução auditável", style = MaterialTheme.typography.bodySmall)
             }
         }
-        AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onOpenSettings) { Text("Config") }
+            AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
+        }
     }
 }
 
@@ -170,8 +174,8 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
 @Composable
 private fun ThreadComposer(viewModel: SandboxViewModel) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("/testlab", "/security", "/git status", "/workflow").forEach { command ->
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(listOf("/testlab", "/security", "/git status", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
                 AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })
             }
         }

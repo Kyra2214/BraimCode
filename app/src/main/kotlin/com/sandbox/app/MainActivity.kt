@@ -64,32 +64,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TAB_TITLES = listOf("Validação", "Plugins", "Ferramentas", "Operações")
-
 @Composable
 fun SandboxMobileApp(viewModel: SandboxViewModel) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            "Sandbox Mobile",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(16.dp, 16.dp, 16.dp, 4.dp)
-        )
-        TabRow(selectedTabIndex = selectedTab) {
-            TAB_TITLES.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
-                    text = { Text(title) }
-                )
-            }
-        }
-        when (selectedTab) {
-            0 -> ThreadScreen(viewModel)
-            1 -> PluginsScreen(viewModel, ComponentKind.PLUGIN)
-            2 -> ToolsAndApiScreen(viewModel)
-            else -> OperationsScreen(viewModel)
-        }
+    var settingsOpen by remember { mutableStateOf(false) }
+    if (settingsOpen) {
+        SettingsScreen(viewModel, onBack = { settingsOpen = false })
+    } else {
+        ThreadScreen(viewModel, onOpenSettings = { settingsOpen = true })
     }
 }
 

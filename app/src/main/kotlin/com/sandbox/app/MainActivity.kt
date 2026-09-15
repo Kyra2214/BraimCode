@@ -85,7 +85,7 @@ fun SandboxMobileApp(viewModel: SandboxViewModel) {
             }
         }
         when (selectedTab) {
-            0 -> SandboxValidationScreen(viewModel)
+            0 -> ThreadScreen(viewModel)
             1 -> PluginsScreen(viewModel, ComponentKind.PLUGIN)
             2 -> ToolsAndApiScreen(viewModel)
             else -> OperationsScreen(viewModel)

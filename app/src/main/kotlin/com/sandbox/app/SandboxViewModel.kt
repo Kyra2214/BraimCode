@@ -276,6 +276,17 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             chatMessages.add(response); chatRunning = false
         }
     }
+    /** Entrada única do composer Codex-style: texto livre ou comando operacional. */
+    fun submitThreadInput() {
+        val command = chatInput.trim()
+        when (command.lowercase()) {
+            "/testlab" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; runTestLab() }
+            "/security" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; runSecurityAssessment() }
+            "/git status" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; inspectGitStatus() }
+            "/workflow" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; runBrainWorkflow() }
+            else -> sendChatMessage()
+        }
+    }
     fun clearChat() { chatMessages.clear() }
 
     fun apiKeyInput(providerId: String): String = apiKeyInputs.getOrPut(providerId) { apiKeyStore.get(providerId).orEmpty() }

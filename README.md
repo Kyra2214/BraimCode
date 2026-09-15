@@ -120,7 +120,7 @@ O workflow da aba Operações continua local/demonstrativo e não representa uma
 
 ## Validação
 
-O núcleo JVM foi revalidado no HEAD atual. O CI do GitHub está sendo usado para fechar a matriz Android; a última execução compilou até os testes Android e falhou em `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`, caso já corrigido no working tree seguinte.
+O núcleo JVM e a matriz Android foram revalidados no HEAD atual. O run verde [34913865530](https://github.com/Kyra2214/BrainCode/actions/runs/34913865530) aprovou testes JVM/unitários, `:app:assembleDebug` e `:app:lintDebug`. O APK debug foi publicado no artefato do run e possui SHA-256 `91f9a4764367438d1dfa4ad1e52d04ad73676355fa762f7ae1f9cfe50162d29a`.
 
 Para uma nova validação completa:
 
@@ -133,7 +133,7 @@ bash scripts/validate-release-readiness.sh
 bash -n scripts/*.sh rootfs-builder/*.sh
 ```
 
-Não declarar novo BUILD/TEST PASS até essa matriz ser executada novamente no HEAD atual.
+O build/test Android foi declarado aprovado somente porque a matriz foi executada com sucesso no CI; a ausência de Android SDK neste sandbox afeta apenas a repetição local.
 
 ## Segurança
 

@@ -4,7 +4,7 @@
 **Repositório:** `Kyra2214/BrainCode`  
 **Base:** `origin/main` em `d477004`  
 **HEAD documentado:** `58a3f46` (`fix: restore Android CI compilation`)
-**CI mais recente:** run `34913686614` falhou somente em `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`; a correção seguinte está em preparação.
+**CI verde:** run `34913865530`, publicado após as correções de compilação e transporte Android.
 **Histórico:** commits pequenos e lógicos por fase, listados abaixo  
 **Autor:** Manus AI
 
@@ -12,7 +12,7 @@
 
 A consolidação incremental definida no plano mestre foi implementada nas 15 fases ordenadas. O trabalho evoluiu componentes existentes sempre que eles já cobriam parte da responsabilidade. Nenhum componente funcional foi removido. O resultado introduz uma autoridade declarativa única para capabilities e conecta discovery, policy, gateway, agentes, skills, retrieval, conhecimento, planejamento, dispatch, workflows, jobs e auto-skills sem criar `Brain2`, `Router2`, `Memory2` ou registries paralelos equivalentes.
 
-A validação do núcleo JVM foi concluída com sucesso: `:brain:check` passou com 113 testes Kotlin, a suíte Python passou com 155 testes, o gate arquitetural passou, `git diff --check` passou e os scripts shell passaram na validação sintática. O CI do GitHub já possui SDK Android e compilou os módulos, mas ainda encontrou uma falha comportamental no teste de redirect HTTPS após a primeira correção de compilação. Portanto, o estado correto é **consolidação do núcleo aprovada; CI Android ainda em correção, sem declaração de verde**.
+A validação do núcleo JVM foi concluída com sucesso: `:brain:check` passou com 113 testes Kotlin, a suíte Python passou com 155 testes, o gate arquitetural passou, `git diff --check` passou e os scripts shell passaram na validação sintática. O CI do GitHub confirmou a matriz Android completa, incluindo testes, assemble debug e lint. Portanto, o estado correto é **consolidação do núcleo aprovada e CI Android verde**.
 
 ## Arquitetura consolidada
 
@@ -118,23 +118,24 @@ Os arquivos de contrato e documentação também foram atualizados, especialment
 | `bash scripts/architecture-gate.sh` | **PASS** | Superfícies de execução continuam policy-gated. |
 | `git diff --check` | **PASS** | Nenhum erro de whitespace. |
 | `bash -n scripts/*.sh rootfs-builder/*.sh` | **PASS** | Scripts sintaticamente válidos. |
-| `./gradlew test` | **BLOCKED** | Falta Android SDK e `sdk.dir`/`ANDROID_HOME`. |
-| `./gradlew :android-module:test` | **BLOCKED** | Falta Android SDK e `sdk.dir`/`ANDROID_HOME`. |
-| `./gradlew :app:assembleDebug` | **BLOCKED** | Falta Android SDK e `sdk.dir`/`ANDROID_HOME`. |
+| `./gradlew test` | **PASS no CI** | Run `34913865530`; testes JVM e Android concluídos. |
+| `./gradlew :android-module:testDebugUnitTest` | **PASS no CI** | Testes de transporte RootFS e demais testes Android aprovados. |
+| `./gradlew :app:assembleDebug` | **PASS no CI** | APK debug gerado e publicado como artefato. |
+| `./gradlew :app:lintDebug` | **PASS no CI** | Lint Android aprovado. |
 
 A falha transitória observada anteriormente no teste Python de process tree foi reproduzida como limitação de processos durante a execução simultânea de daemons Gradle. Depois de parar os daemons, o teste isolado e a suíte completa passaram. Não há falha Python pendente no HEAD final.
 
 ## Blockers restantes
 
-O principal blocker de build é ambiental: o sandbox não possui Android SDK configurado. Para completar a matriz, é necessário executar em ambiente com SDK instalado e apontar `local.properties` para `sdk.dir` ou definir `ANDROID_HOME`/`ANDROID_SDK_ROOT`.
+O build Android não está mais bloqueado no CI. A execução local neste sandbox continua sem Android SDK, mas isso não impede a validação oficial do commit, pois o run `34913865530` executou a matriz em `ubuntu-latest`.
 
-A integração de chat Android com `BrainApiGateway` continua exigindo comprovação de caller real antes de ser declarada completa. A existência do gateway não foi usada como prova dessa integração.
+A integração de chat Android com `BrainApiGateway` está conectada no código de produção; a validação funcional completa em dispositivo/emulador continua sendo uma etapa distinta do build e dos testes unitários.
 
 O isolamento OS-level de produção do Sandbox permanece uma limitação documentada do projeto. Esta consolidação não afirma que proot sozinho fornece jail completo de filesystem, namespace de rede, isolamento de processos ou enforcement integral de recursos do host.
 
 ## Próximos passos recomendados
 
-Primeiro, executar `./gradlew test` e `./gradlew :app:assembleDebug` em um ambiente Android configurado. Em seguida, validar o wiring real `Chat → Brain → Retrieval → Discovery → Dispatcher → Policy → ActionGateway → Sandbox/Provider`. Por fim, adicionar adapters de produção que publiquem os catálogos dinâmicos de APIs e manifests Android no registry universal durante o bootstrap, mantendo `ApiCatalogRegistry` apenas como estado operacional.
+Como próximos passos, executar validação funcional em dispositivo/emulador e manter o CI verde. O wiring `Chat → Brain → Retrieval → Discovery → Dispatcher → Policy → ActionGateway → Sandbox/Provider` já possui implementação e cobertura no núcleo; adapters adicionais de produção devem continuar publicando catálogos dinâmicos no registry universal sem duplicar `ApiCatalogRegistry`.
 
 ## Referências
 
@@ -246,10 +247,12 @@ O `SandboxViewModel` mantém a ponte entre a thread e o runtime. O chat registra
 
 O run `34913330882` inicialmente falhou por três regressões de compilação: `SandboxViewModel` tinha uma chave ausente em `refreshStatusCache`, o teste Android referenciava `LocalModelManifest`, que não existe mais, e `combinedClickable` exigia opt-in explícito. Essas falhas foram corrigidas no commit `58a3f46`.
 
-O run seguinte, `34913686614`, confirmou que o projeto passou da compilação Android e chegou aos testes instrumentados de unidade. A única falha restante registrada nesse run foi `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`, causada pelo `RootfsManifest` do teste exigir assinatura criptográfica sem fornecer um verificador. O teste foi ajustado para declarar explicitamente `signatureRequired = false`, preservando a validação de SHA-256 e HTTPS. O CI deve ser reexecutado após essa correção antes de o projeto ser marcado como verde.
+O run seguinte, `34913686614`, confirmou que o projeto passou da compilação Android e encontrou uma falha em `SandboxResourceTransportTest.segue redirect HTTPS e preserva validacao SHA256`. A causa era o `RootfsManifest` do teste exigir assinatura criptográfica sem fornecer um verificador. O teste foi ajustado para declarar explicitamente `signatureRequired = false`, preservando a validação de SHA-256 e HTTPS.
+
+O run final `34913865530` terminou com sucesso em 3 minutos e 28 segundos. Foram aprovados `Run all JVM/unit tests`, `Assemble Android debug APK` e `Run Android lint`. O artefato `app-debug.apk` foi publicado com aproximadamente 18 MB e SHA-256 `91f9a4764367438d1dfa4ad1e52d04ad73676355fa762f7ae1f9cfe50162d29a`.
 
 ## Ponte Android → Gateway → Sandbox
 
 Foi adicionada `GatewayBackedSandboxExecutor` no módulo Android. A ponte classifica o executável em capabilities allowlisted, constrói `ActionRequest` com parâmetros declarados, chama `ActionGateway`, usa `SandboxActionExecutor` para invocar o `ManagedRuntimeExecutor` real e recupera o `ExecutionLog`. `SandboxPlatform` foi atualizado para instalar esse caminho antes dos serviços, Git, diagnostics, TestLab e toolchains. O `PolicyGatedExecutor` deixa de ser o ponto paralelo de autorização para essa fachada; a autorização central passa pelo ActionGateway, enquanto `SecureCommandExecutor` continua impondo limites Android locais.
 
-A ponte Android não pôde ser compilada neste sandbox porque o projeto não possui Android SDK configurado. Portanto, o E2E executado é completo no núcleo JVM, e o trecho Android→Sandbox está implementado no código, mas requer uma execução final em ambiente com `ANDROID_HOME`/`sdk.dir`.
+A ponte Android foi compilada e validada pelo CI verde `34913865530`. O E2E completo continua sendo o cenário executado no núcleo JVM; a validação em dispositivo/emulador permanece separada da validação de build e testes unitários.

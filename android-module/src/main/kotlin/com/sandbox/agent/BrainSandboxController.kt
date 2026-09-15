@@ -7,6 +7,7 @@ import com.brain.capability.CapabilityCategory
 import com.brain.capability.CapabilityDefinition
 import com.brain.capability.CapabilityDiscovery
 import com.brain.capability.CapabilityProvenance
+import com.brain.capability.CapabilityProvider
 import com.brain.capability.CapabilityRegistry
 import com.brain.dispatch.Dispatcher
 import com.brain.gateway.ActionGateway
@@ -45,7 +46,8 @@ class BrainSandboxController(
     runtime: ManagedSandboxRuntime,
     rootfsDir: File,
     private val actor: String = "android-app",
-    promptLibrary: PromptLibrary? = null
+    promptLibrary: PromptLibrary? = null,
+    capabilityProviders: List<CapabilityProvider> = emptyList()
 ) {
     private val approvals = FileApprovalStore(File(rootfsDir.parentFile ?: rootfsDir, "approvals.jsonl"))
     private val sandbox = Sandbox(runtime = runtime, rootfsDir = rootfsDir)
@@ -57,7 +59,7 @@ class BrainSandboxController(
             capability("sandbox.test", setOf("sandbox.code")),
             capability("sandbox.diagnose", setOf("brain.analyze")),
             capability("sandbox.clean", emptySet())
-        )
+        ) + capabilityProviders.flatMap { it.capabilities().toList() }
     )
     private val policy = PolicyBroker(
         allowedCapabilities = capabilities.all().flatMap { listOf(it.id) + it.providedCapabilities },

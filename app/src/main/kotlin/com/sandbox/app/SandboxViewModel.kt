@@ -417,7 +417,12 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                 val promptLibrary = InMemoryPromptLibrary(
                     PromptLibraryLoader.fromJson(getApplication<Application>().assets.open("prompts_biblioteca.json").bufferedReader().use { it.readText() })
                 )
-                brainController = BrainSandboxController(prepared, File(dir, "rootfs"), promptLibrary = promptLibrary)
+                brainController = BrainSandboxController(
+                    prepared,
+                    File(dir, "rootfs"),
+                    promptLibrary = promptLibrary,
+                    capabilityProviders = listOf(PluginCatalogCapabilityProvider())
+                )
                 brainIntegration = BrainIntegrationFacade(File(dir, "brain"))
                 platform = SandboxPlatform(prepared, File(dir, "workspace"), File(dir, "components.tsv"), File(dir, "services"))
                 pluginListVersion++; refreshStatusCache(); refreshPluginAudit(); phase = SandboxPhase.Ready; refreshToolchains()

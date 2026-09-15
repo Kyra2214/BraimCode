@@ -18,7 +18,7 @@ object BuiltInAgentDefinitions {
         name = "CodeAgent",
         description = "Agente bounded para análise, implementação e testes em Sandbox",
         provided = setOf("code.edit", "code.test"),
-        risk = RiskClass.HIGH,
+        risk = RiskClass.LOW,
         code = true
     )
 

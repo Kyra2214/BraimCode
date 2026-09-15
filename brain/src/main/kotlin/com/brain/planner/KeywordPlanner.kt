@@ -32,7 +32,7 @@ class KeywordFunctionSplitter : FunctionSplitter {
             passos += PassoPlano(
                 "executar", "sandbox.code", "execução e testes concluídos",
                 dependeDe = passos.map { it.id }, papel = PapelPipeline.EXECUCAO_CODIGO,
-                riskClass = RiskClass.HIGH
+                riskClass = RiskClass.LOW
             )
         }
         if (passos.isEmpty()) {

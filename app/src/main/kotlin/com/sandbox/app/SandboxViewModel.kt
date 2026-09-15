@@ -203,8 +203,40 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         is ThreadEvent.Report -> "${event.title}: ${event.body}"
         is ThreadEvent.Approval -> "Aprovação pendente"
         is ThreadEvent.Terminal -> "Terminal: exit ${event.result.exitCode}"
+        is ThreadEvent.Diff -> "Diff: ${event.files.size} arquivo(s)"
         null -> "Sem eventos"
     }.take(60)
+
+    fun quoteEvent(event: ThreadEvent) {
+        chatInput = "Sobre este evento, corrija o problema:\n${eventPreview(event)}\n"
+    }
+
+    fun runGitDiff() {
+        val p = platform ?: return
+        val project = workspaceProjects.firstOrNull { it.name == workspaceProjectName } ?: run {
+            appendThreadEvent(ThreadEvent.System("Crie ou selecione um workspace antes de usar /git diff")); return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val log = p.git.diff("/home/sandbox/workspace/projects/${project.name}")
+            val files = parseDiff(log.stdout)
+            withContext(Dispatchers.Main) { appendThreadEvent(ThreadEvent.Diff(files)) }
+        }
+    }
+
+    private fun parseDiff(text: String): List<DiffFile> {
+        val result = mutableListOf<DiffFile>()
+        var path: String? = null
+        var lines = mutableListOf<DiffLine>()
+        fun flush() { path?.let { result += DiffFile(it, lines.toList()) }; lines = mutableListOf() }
+        text.lineSequence().forEach { line ->
+            if (line.startsWith("diff --git ")) {
+                flush(); path = Regex(" b/(.+)$").find(line)?.groupValues?.get(1) ?: line
+            } else if (path != null && (line.startsWith("+") || line.startsWith("-") || line.startsWith(" "))) {
+                if (!line.startsWith("+++") && !line.startsWith("---")) lines += DiffLine(line.first(), line.drop(1))
+            }
+        }
+        flush(); return result
+    }
 
     private fun persistSessions() {
         sessionsFile.parentFile?.mkdirs()
@@ -224,6 +256,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         is ThreadEvent.Report -> JSONObject().put("type", "report").put("title", event.title).put("body", event.body)
         is ThreadEvent.Approval -> JSONObject().put("type", "approval").put("id", event.id)
         is ThreadEvent.Terminal -> JSONObject().put("type", "terminal").put("text", "exit ${event.result.exitCode}: ${event.result.stdout.take(500)}")
+        is ThreadEvent.Diff -> JSONObject().put("type", "diff").put("files", JSONArray(event.files.map { file -> JSONObject().put("path", file.path).put("lines", JSONArray(file.lines.map { line -> "${line.prefix}${line.text}" })) }))
     }
 
     private fun loadSessions(): List<ThreadSession> = runCatching {
@@ -242,6 +275,13 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         "report" -> ThreadEvent.Report(item.optString("title"), item.optString("body"))
         "approval" -> ThreadEvent.Approval(item.optString("id"))
         "terminal" -> ThreadEvent.System(item.optString("text"))
+        "diff" -> ThreadEvent.Diff((0 until item.optJSONArray("files").length()).map { index ->
+            val file = item.optJSONArray("files").getJSONObject(index)
+            DiffFile(file.optString("path"), (0 until file.optJSONArray("lines").length()).map { lineIndex ->
+                val value = file.optJSONArray("lines").getString(lineIndex)
+                DiffLine(value.firstOrNull() ?: ' ', value.drop(1))
+            })
+        })
         else -> null
     }
 
@@ -258,6 +298,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var commandInput by mutableStateOf("echo hello from sandbox")
     var lastResult by mutableStateOf<com.sandbox.runtime.SandboxExecutionResult?>(null); private set
     var lastExecution by mutableStateOf<ExecutionLog?>(null); private set
+    var liveTerminalOutput by mutableStateOf(""); private set
     fun clearTerminal() { commandInput = ""; lastResult = null; lastExecution = null }
     var diagnosticsReport by mutableStateOf<String?>(null); private set
     var lastBrainCycle by mutableStateOf<ResultadoCiclo?>(null); private set
@@ -390,8 +431,14 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         val command = commandInput.trim()
         if (command.isEmpty()) return
         viewModelScope.launch {
-            phase = SandboxPhase.Running
-            val e = withContext(Dispatchers.IO) { runCatching { active.execute(listOf("/bin/bash", "-c", command), 60, "/home/sandbox") }.getOrNull() }
+            phase = SandboxPhase.Running; liveTerminalOutput = ""
+            val e = withContext(Dispatchers.IO) {
+                runCatching {
+                    active.execute(listOf("/bin/bash", "-c", command), 60, "/home/sandbox", onOutput = { line, stderr ->
+                        viewModelScope.launch { liveTerminalOutput = (liveTerminalOutput + if (stderr) "[stderr] $line\n" else "$line\n").takeLast(12000) }
+                    })
+                }.getOrNull()
+            }
             if (e != null) { lastExecution = e; lastResult = e.toUiResult() }
             phase = SandboxPhase.Ready
         }
@@ -430,6 +477,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
             lower == "/testlab" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runTestLab() }
             lower == "/security" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runSecurityAssessment() }
             lower == "/git status" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; inspectGitStatus() }
+            lower == "/git diff" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runGitDiff() }
             lower == "/workflow" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runBrainWorkflow() }
             lower == "/approval demo" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; requestApprovalDemo() }
             lower.startsWith("/workspace new ") -> { val name = command.substringAfter(" ").substringAfter(" ").trim(); if (name.isNotBlank()) { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; workspaceProjectName = name; createWorkspaceProject() } }

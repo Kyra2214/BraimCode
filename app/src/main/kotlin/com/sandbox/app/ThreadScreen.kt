@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -30,28 +31,35 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.sandbox.runtime.SandboxExecutionResult
 
+data class DiffLine(val prefix: Char, val text: String)
+data class DiffFile(val path: String, val lines: List<DiffLine>)
+
 sealed interface ThreadEvent {
     data class User(val text: String) : ThreadEvent
     data class Agent(val text: String) : ThreadEvent
     data class Terminal(val result: SandboxExecutionResult, val execution: com.sandbox.runtime.ExecutionLog?) : ThreadEvent
     data class Approval(val id: String) : ThreadEvent
     data class Report(val title: String, val body: String) : ThreadEvent
+    data class Diff(val files: List<DiffFile>) : ThreadEvent
     data class System(val text: String, val progress: Float? = null) : ThreadEvent
 }
 
 @Composable
 fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
     var sidebarOpen by remember { mutableStateOf(false) }
+    var searchOpen by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
     Column(modifier = Modifier.fillMaxSize()) {
-        ThreadTopBar(viewModel, onToggleSidebar = { sidebarOpen = !sidebarOpen }, onOpenSettings = onOpenSettings)
+        ThreadTopBar(viewModel, onToggleSidebar = { sidebarOpen = !sidebarOpen }, onOpenSettings = onOpenSettings, onSearch = { searchOpen = !searchOpen })
         if (sidebarOpen) {
             TaskSidebar(viewModel, onClose = { sidebarOpen = false })
         } else {
+            if (searchOpen) OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar na thread") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val events = threadEvents(viewModel)
+                val events = threadEvents(viewModel, query)
                 items(events) { event -> ThreadEventCard(event, viewModel) }
             }
             ThreadComposer(viewModel)
@@ -59,7 +67,7 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
     }
 }
 
-private fun threadEvents(viewModel: SandboxViewModel): List<ThreadEvent> = buildList {
+private fun threadEvents(viewModel: SandboxViewModel, query: String = ""): List<ThreadEvent> = buildList {
     when (val phase = viewModel.phase) {
         SandboxPhase.NotReady -> add(ThreadEvent.System("Sandbox não preparado"))
         is SandboxPhase.Downloading -> add(ThreadEvent.System("Baixando RootFS…", (phase.bytesDownloaded.toFloat() / phase.totalBytes.coerceAtLeast(1)).coerceIn(0f, 1f)))
@@ -69,6 +77,9 @@ private fun threadEvents(viewModel: SandboxViewModel): List<ThreadEvent> = build
         is SandboxPhase.Blocked -> add(ThreadEvent.System("Sandbox bloqueado: ${phase.reason}"))
     }
     addAll(viewModel.activeThreadEvents)
+    if (viewModel.phase == SandboxPhase.Running && viewModel.liveTerminalOutput.isNotBlank()) {
+        add(ThreadEvent.Report("Terminal · ao vivo", viewModel.liveTerminalOutput))
+    }
     viewModel.lastExecution?.let { execution ->
         viewModel.lastResult?.let { add(ThreadEvent.Terminal(it, execution)) }
     }
@@ -83,10 +94,20 @@ private fun threadEvents(viewModel: SandboxViewModel): List<ThreadEvent> = build
         viewModel.lastGitStatus?.let { add(ThreadEvent.Report("Git status", it)) }
     }
     viewModel.diagnosticsReport?.let { add(ThreadEvent.Report("Diagnóstico", it)) }
+}.filter { query.isBlank() || eventText(it).contains(query, ignoreCase = true) }
+
+private fun eventText(event: ThreadEvent): String = when (event) {
+    is ThreadEvent.User -> event.text
+    is ThreadEvent.Agent -> event.text
+    is ThreadEvent.System -> event.text
+    is ThreadEvent.Terminal -> "${event.execution?.command?.joinToString(" ")} ${event.result.stdout} ${event.result.stderr}"
+    is ThreadEvent.Approval -> event.id
+    is ThreadEvent.Report -> "${event.title} ${event.body}"
+    is ThreadEvent.Diff -> event.files.joinToString(" ") { file -> "${file.path} ${file.lines.joinToString { it.text }}" }
 }
 
 @Composable
-private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit) {
+private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -100,6 +121,7 @@ private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Uni
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = onSearch) { Text("Buscar") }
             OutlinedButton(onClick = onOpenSettings) { Text("Config") }
             AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
         }
@@ -140,8 +162,8 @@ private fun phaseLabel(phase: SandboxPhase): String = when (phase) {
 @Composable
 private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
     when (event) {
-        is ThreadEvent.User -> Card { Text(event.text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
-        is ThreadEvent.Agent -> Card { Text(event.text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
+        is ThreadEvent.User -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) { Text(event.text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
+        is ThreadEvent.Agent -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) { Column(modifier = Modifier.padding(12.dp)) { Text("Turno do agente", style = MaterialTheme.typography.labelSmall); Text(event.text, style = MaterialTheme.typography.bodyMedium) } }
         is ThreadEvent.System -> Card {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(event.text, color = if (event.text.contains("bloqueado", true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -152,6 +174,7 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
         is ThreadEvent.Terminal -> Card {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Terminal · ${if (event.result.exitCode == 0) "sucesso" else "falha"}", style = MaterialTheme.typography.titleSmall)
+                event.execution?.let { Text("${it.durationMs} ms · ${it.terminationReason.name}", style = MaterialTheme.typography.labelSmall) }
                 event.execution?.let { Text("$ ${it.command.joinToString(" ")}\nexit=${it.exitCode}\n${it.stdout.take(600)}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
             }
         }
@@ -168,6 +191,17 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
                 Text(event.body.take(1000), fontFamily = if (event.title == "Git status") FontFamily.Monospace else FontFamily.Default, style = MaterialTheme.typography.bodySmall)
             }
         }
+        is ThreadEvent.Diff -> Card {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Git diff · ${event.files.size} arquivo(s)", style = MaterialTheme.typography.titleSmall)
+                event.files.forEach { file ->
+                    Text(file.path, style = MaterialTheme.typography.labelMedium)
+                    file.lines.forEach { line ->
+                        Text("${line.prefix}${line.text}", color = if (line.prefix == '+') androidx.compose.ui.graphics.Color(0xFF4CAF50) else if (line.prefix == '-') MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -175,7 +209,7 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
 private fun ThreadComposer(viewModel: SandboxViewModel) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(listOf("/testlab", "/security", "/git status", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
+            items(listOf("/testlab", "/security", "/git status", "/git diff", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
                 AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })
             }
         }

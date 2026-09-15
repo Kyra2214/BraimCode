@@ -32,7 +32,7 @@ class ManagedSandboxRuntime(
      * that explicitly need a network namespace may still pass false; the
      * launcher treats that isolation as best-effort on Android.
      */
-    fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox", networkAllowed: Boolean = true): ExecutionLog {
+    fun execute(command: List<String>, timeoutSeconds: Long = 60, workingDir: String = "/home/sandbox", networkAllowed: Boolean = true, onOutput: (line: String, stderr: Boolean) -> Unit = { _, _ -> }): ExecutionLog {
         require(command.isNotEmpty()) { "command não pode ser vazio" }
         require(timeoutSeconds > 0) { "timeoutSeconds deve ser > 0" }
         val id = FileExecutionLogRepository.newId()
@@ -60,7 +60,7 @@ class ManagedSandboxRuntime(
                 return failed
             }
         }
-        return finish(active.get()!!, command, workingDir, started, timeoutSeconds)
+        return finish(active.get()!!, command, workingDir, started, timeoutSeconds, onOutput)
     }
 
     fun cancel(): Boolean = terminateActive(TerminationReason.CANCELLED, RuntimeEventType.PROCESS_CANCELLED)
@@ -112,12 +112,12 @@ class ManagedSandboxRuntime(
 
     override fun close() { shutdown() }
 
-    private fun finish(a: ActiveExecution, command: List<String>, workingDir: String, started: Long, timeoutSeconds: Long): ExecutionLog {
+    private fun finish(a: ActiveExecution, command: List<String>, workingDir: String, started: Long, timeoutSeconds: Long, onOutput: (String, Boolean) -> Unit): ExecutionLog {
         val stdout = StringCollector(maxOutputChars) { emit(RuntimeEventType.STREAM_READ_ERROR, a.id, it) }
         val stderr = StringCollector(maxOutputChars) { emit(RuntimeEventType.STREAM_READ_ERROR, a.id, it) }
         val latch = CountDownLatch(2)
-        val outThread = stream(a.process.inputStream, stdout, latch)
-        val errThread = stream(a.process.errorStream, stderr, latch)
+        val outThread = stream(a.process.inputStream, stdout, latch, false, onOutput)
+        val errThread = stream(a.process.errorStream, stderr, latch, true, onOutput)
         var forcedKill = a.forcedKill.get()
         try {
             if (!a.process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
@@ -208,8 +208,8 @@ class ManagedSandboxRuntime(
         (method.invoke(process) as? Number)?.toLong()
     }.getOrNull()
 
-    private fun stream(input: java.io.InputStream, collector: StringCollector, latch: CountDownLatch): Thread = Thread {
-        try { input.bufferedReader().forEachLine { collector.append(it) } }
+    private fun stream(input: java.io.InputStream, collector: StringCollector, latch: CountDownLatch, stderr: Boolean, onOutput: (String, Boolean) -> Unit): Thread = Thread {
+        try { input.bufferedReader().forEachLine { collector.append(it); runCatching { onOutput(it, stderr) } } }
         catch (t: Throwable) { collector.error(t.message ?: t.javaClass.simpleName) }
         finally { runCatching { input.close() }; latch.countDown() }
     }.apply { isDaemon = true; start() }

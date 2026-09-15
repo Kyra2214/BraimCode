@@ -74,11 +74,11 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
                 }
             }
             StatusSection(viewModel)
+            val events = threadEvents(viewModel, query)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val events = threadEvents(viewModel, query)
                 items(events) { event -> ThreadEventCard(event, viewModel) }
             }
             ThreadComposer(viewModel)

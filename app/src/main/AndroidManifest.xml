@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Permite que o Sandbox continue executando enquanto a Activity está minimizada. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Mantém CPU ativa durante downloads, extração e builds longos com a tela apagada. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:allowBackup="false"

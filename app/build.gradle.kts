@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val ciVersionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+val configuredVersionCode = System.getenv("BRAINCODE_VERSION_CODE")?.toIntOrNull()
+val resolvedVersionCode = maxOf(7, configuredVersionCode ?: ciVersionCode ?: 7)
+
 android {
     namespace = "com.sandbox.app"
     compileSdk = 34
@@ -10,24 +14,35 @@ android {
     defaultConfig {
         applicationId = "com.sandbox.app"
         minSdk = 26
-        // Fixado em 28 de propósito, mais baixo que o compileSdk.
-        // A partir de targetSdk 29, o SELinux do Android bloqueia
-        // execve()/dlopen() em qualquer arquivo que o próprio app tenha
-        // gravado depois de instalado (política W^X) — e é exatamente
-        // isso que o rootfs extraído em filesDir precisa fazer o tempo
-        // todo (bash, git, python3, node, gcc...). Apps com targetSdk <=28
-        // ficam num domínio SELinux de compatibilidade
-        // (untrusted_app_27) que ainda permite isso; é a mesma saída que
-        // o Termux usou por anos (ver docs/proot-embedding.md).
-        // Trade-off consciente: não instala/atualiza via Google Play (que
-        // hoje exige targetSdk bem mais alto) — mas para instalação
-        // manual/sideload, que é como este app é distribuído, funciona
-        // normalmente. Ver alternativa "termux-exec" nesse mesmo doc caso
-        // no futuro seja necessário publicar na Play mantendo um
-        // targetSdk moderno.
+        // Fixado em 28 de propósito.
         targetSdk = 28
-        versionCode = 6
-        versionName = "0.5.0" // Semanas 2 e 3: catálogo e gerenciamento de plugins
+        versionCode = resolvedVersionCode
+        versionName = "0.5.0-dev.$resolvedVersionCode"
+    }
+
+    // Desenvolvimento: a assinatura é fornecida pelo CI via GitHub Secrets.
+    // Não usar uma chave privada versionada no repositório.
+    val signingStoreFile = System.getenv("BRAINCODE_KEYSTORE_FILE")
+    val signingStorePassword = System.getenv("BRAINCODE_KEYSTORE_PASSWORD")
+    val signingKeyAlias = System.getenv("BRAINCODE_KEY_ALIAS")
+    val signingKeyPassword = System.getenv("BRAINCODE_KEY_PASSWORD")
+
+    if (!signingStoreFile.isNullOrBlank() && !signingStorePassword.isNullOrBlank() &&
+        !signingKeyAlias.isNullOrBlank() && !signingKeyPassword.isNullOrBlank()) {
+        signingConfigs.create("devCi") {
+            storeFile = file(signingStoreFile)
+            storePassword = signingStorePassword
+            keyAlias = signingKeyAlias
+            keyPassword = signingKeyPassword
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (signingConfigs.findByName("devCi") != null) {
+                signingConfig = signingConfigs.getByName("devCi")
+            }
+        }
     }
 
     buildFeatures {
@@ -59,9 +74,6 @@ android {
     }
 
     lint {
-        // targetSdk 28 is intentional: the proot runtime executes binaries
-        // extracted into filesDir and currently relies on Android's legacy
-        // SELinux compatibility domain (see the architecture notes).
         disable += "ExpiredTargetSdkVersion"
     }
 }

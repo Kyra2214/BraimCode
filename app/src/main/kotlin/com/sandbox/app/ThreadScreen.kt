@@ -19,6 +19,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -36,16 +40,21 @@ sealed interface ThreadEvent {
 
 @Composable
 fun ThreadScreen(viewModel: SandboxViewModel) {
+    var sidebarOpen by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize()) {
-        ThreadTopBar(viewModel)
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val events = threadEvents(viewModel)
-            items(events) { event -> ThreadEventCard(event, viewModel) }
+        ThreadTopBar(viewModel, onToggleSidebar = { sidebarOpen = !sidebarOpen })
+        if (sidebarOpen) {
+            TaskSidebar(viewModel, onClose = { sidebarOpen = false })
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val events = threadEvents(viewModel)
+                items(events) { event -> ThreadEventCard(event, viewModel) }
+            }
+            ThreadComposer(viewModel)
         }
-        ThreadComposer(viewModel)
     }
 }
 
@@ -58,35 +67,60 @@ private fun threadEvents(viewModel: SandboxViewModel): List<ThreadEvent> = build
         SandboxPhase.Running -> add(ThreadEvent.System("Executando…"))
         is SandboxPhase.Blocked -> add(ThreadEvent.System("Sandbox bloqueado: ${phase.reason}"))
     }
-    viewModel.chatMessages.forEach { message ->
-        when (message.role) {
-            ChatRole.USER -> add(ThreadEvent.User(message.content))
-            ChatRole.ASSISTANT -> add(ThreadEvent.Agent(message.content))
-            ChatRole.ERROR -> add(ThreadEvent.System(message.content))
-        }
-    }
+    addAll(viewModel.activeThreadEvents)
     viewModel.lastExecution?.let { execution ->
         viewModel.lastResult?.let { add(ThreadEvent.Terminal(it, execution)) }
     }
     viewModel.pendingApprovalId?.let { add(ThreadEvent.Approval(it)) }
-    viewModel.lastTestLabReport?.let { add(ThreadEvent.Report("TestLab", "${if (it.success) "PASS" else "FAIL"} — ${it.passed}/${it.steps.size} etapas")) }
-    viewModel.lastSecurityAssessment?.let { add(ThreadEvent.Report("Security gate", "${if (it.readiness.ready) "APROVADO" else "BLOQUEADO"} — ${it.findings.size} achado(s)")) }
-    viewModel.lastGitStatus?.let { add(ThreadEvent.Report("Git status", it)) }
+    if (viewModel.activeThreadEvents.none { it is ThreadEvent.Report && it.title == "TestLab" }) {
+        viewModel.lastTestLabReport?.let { add(ThreadEvent.Report("TestLab", "${if (it.success) "PASS" else "FAIL"} — ${it.passed}/${it.steps.size} etapas")) }
+    }
+    if (viewModel.activeThreadEvents.none { it is ThreadEvent.Report && it.title == "Security gate" }) {
+        viewModel.lastSecurityAssessment?.let { add(ThreadEvent.Report("Security gate", "${if (it.readiness.ready) "APROVADO" else "BLOQUEADO"} — ${it.findings.size} achado(s)")) }
+    }
+    if (viewModel.activeThreadEvents.none { it is ThreadEvent.Report && it.title == "Git status" }) {
+        viewModel.lastGitStatus?.let { add(ThreadEvent.Report("Git status", it)) }
+    }
     viewModel.diagnosticsReport?.let { add(ThreadEvent.Report("Diagnóstico", it)) }
 }
 
 @Composable
-private fun ThreadTopBar(viewModel: SandboxViewModel) {
+private fun ThreadTopBar(viewModel: SandboxViewModel, onToggleSidebar: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onToggleSidebar) { Text("Tarefas") }
+            Column {
             Text("BrainCode", style = MaterialTheme.typography.titleLarge)
             Text("Thread de execução auditável", style = MaterialTheme.typography.bodySmall)
+            }
         }
         AssistChip(onClick = { viewModel.runDiagnostics() }, label = { Text(phaseLabel(viewModel.phase)) })
+    }
+}
+
+@Composable
+private fun TaskSidebar(viewModel: SandboxViewModel, onClose: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Tarefas", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(onClick = { viewModel.createSession() }) { Text("+ Nova") }
+                TextButton(onClick = onClose) { Text("Thread") }
+            }
+        }
+        viewModel.sessionSummaries.forEach { session ->
+            Card(onClick = { viewModel.switchSession(session.id); onClose() }, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(session.title, style = MaterialTheme.typography.titleSmall)
+                    Text("${session.status.name} · ${session.workspaceProjectName ?: "sem workspace"}", style = MaterialTheme.typography.labelSmall)
+                    Text(session.lastEventPreview, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+                }
+            }
+        }
     }
 }
 

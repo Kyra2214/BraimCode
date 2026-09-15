@@ -39,6 +39,9 @@ import com.sandbox.runtime.NamespaceSupport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 sealed interface SandboxPhase {
     data object NotReady : SandboxPhase
@@ -53,6 +56,27 @@ data class QuickCommand(val label: String, val command: String)
 
 enum class ChatRole { USER, ASSISTANT, ERROR }
 data class ChatMessage(val role: ChatRole, val content: String)
+
+enum class SessionStatus { IDLE, RUNNING, AWAITING_APPROVAL, DONE, FAILED, BLOCKED }
+
+data class ThreadSession(
+    val id: String,
+    val title: String,
+    val workspaceProjectName: String?,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val status: SessionStatus,
+    val events: List<ThreadEvent>
+)
+
+data class SessionSummary(
+    val id: String,
+    val title: String,
+    val workspaceProjectName: String?,
+    val status: SessionStatus,
+    val lastEventPreview: String,
+    val updatedAt: Long
+)
 
 sealed interface ApiKeyTestUiState {
     data object Idle : ApiKeyTestUiState
@@ -88,6 +112,19 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     private var platform: SandboxPlatform? = null
     private var brainController: BrainSandboxController? = null
     private var brainIntegration: BrainIntegrationFacade? = null
+    var workspaceProjectName by mutableStateOf("demo-project")
+    private val sessionsFile = File(application.filesDir, "brain/thread-sessions.json")
+    var sessions by mutableStateOf(loadSessions())
+        private set
+    var activeSessionId by mutableStateOf<String?>(null)
+        private set
+    val activeThreadEvents: List<ThreadEvent>
+        get() = sessions.firstOrNull { it.id == activeSessionId }?.events.orEmpty()
+    val sessionSummaries: List<SessionSummary>
+        get() = sessions.sortedByDescending { it.updatedAt }.map { session ->
+            val currentStatus = if (session.id == activeSessionId) statusForCurrentState() else session.status
+            SessionSummary(session.id, session.title, session.workspaceProjectName, currentStatus, eventPreview(session.events.lastOrNull()), session.updatedAt)
+        }
 
     var phase by mutableStateOf<SandboxPhase>(SandboxPhase.NotReady); private set
     val chatMessages = mutableStateListOf<ChatMessage>()
@@ -99,6 +136,114 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
 
     /** UI -> Brain. O chat não chama runtime, llama.cpp, provider ou HTTP diretamente. */
     private val brainApiGateway = BrainApiGateway(apiProviders, apiKeyStore)
+
+    init {
+        if (sessions.isEmpty()) createSession()
+        else if (activeSessionId == null) {
+            activeSessionId = sessions.maxByOrNull { it.updatedAt }?.id
+            restoreChatFromActiveSession()
+        }
+    }
+
+    fun createSession() {
+        val now = System.currentTimeMillis()
+        val session = ThreadSession(UUID.randomUUID().toString(), "Nova tarefa", workspaceProjectName.takeIf { it.isNotBlank() }, now, now, SessionStatus.IDLE, emptyList())
+        sessions = sessions + session
+        activeSessionId = session.id
+        chatMessages.clear()
+        persistSessions()
+    }
+
+    fun switchSession(id: String): Boolean {
+        if (phase == SandboxPhase.Running) return false
+        val target = sessions.firstOrNull { it.id == id } ?: return false
+        activeSessionId = target.id
+        workspaceProjectName = target.workspaceProjectName.orEmpty()
+        restoreChatFromActiveSession()
+        return true
+    }
+
+    fun appendThreadEvent(event: ThreadEvent) {
+        val id = activeSessionId ?: return
+        sessions = sessions.map { session ->
+            if (session.id != id) session else session.copy(
+                title = if (session.title == "Nova tarefa" && event is ThreadEvent.User) event.text.take(48) else session.title,
+                updatedAt = System.currentTimeMillis(),
+                status = statusForCurrentState(),
+                events = session.events + event
+            )
+        }
+        persistSessions()
+    }
+
+    private fun statusForCurrentState(): SessionStatus = when {
+        pendingApprovalId != null -> SessionStatus.AWAITING_APPROVAL
+        phase == SandboxPhase.Running -> SessionStatus.RUNNING
+        phase is SandboxPhase.Blocked -> SessionStatus.BLOCKED
+        chatMessages.lastOrNull()?.role == ChatRole.ERROR -> SessionStatus.FAILED
+        else -> SessionStatus.DONE
+    }
+
+    private fun restoreChatFromActiveSession() {
+        chatMessages.clear()
+        activeThreadEvents.forEach { event ->
+            when (event) {
+                is ThreadEvent.User -> chatMessages.add(ChatMessage(ChatRole.USER, event.text))
+                is ThreadEvent.Agent -> chatMessages.add(ChatMessage(ChatRole.ASSISTANT, event.text))
+                is ThreadEvent.System -> chatMessages.add(ChatMessage(ChatRole.ERROR, event.text))
+                else -> Unit
+            }
+        }
+    }
+
+    private fun eventPreview(event: ThreadEvent?): String = when (event) {
+        is ThreadEvent.User -> event.text
+        is ThreadEvent.Agent -> event.text
+        is ThreadEvent.System -> event.text
+        is ThreadEvent.Report -> "${event.title}: ${event.body}"
+        is ThreadEvent.Approval -> "Aprovação pendente"
+        is ThreadEvent.Terminal -> "Terminal: exit ${event.result.exitCode}"
+        null -> "Sem eventos"
+    }.take(60)
+
+    private fun persistSessions() {
+        sessionsFile.parentFile?.mkdirs()
+        val array = JSONArray()
+        sessions.forEach { session ->
+            val events = JSONArray()
+            session.events.forEach { event -> events.put(eventToJson(event)) }
+            array.put(JSONObject().put("id", session.id).put("title", session.title).put("workspace", session.workspaceProjectName ?: JSONObject.NULL).put("createdAt", session.createdAt).put("updatedAt", session.updatedAt).put("status", session.status.name).put("events", events))
+        }
+        sessionsFile.writeText(JSONObject().put("sessions", array).toString())
+    }
+
+    private fun eventToJson(event: ThreadEvent): JSONObject = when (event) {
+        is ThreadEvent.User -> JSONObject().put("type", "user").put("text", event.text)
+        is ThreadEvent.Agent -> JSONObject().put("type", "agent").put("text", event.text)
+        is ThreadEvent.System -> JSONObject().put("type", "system").put("text", event.text)
+        is ThreadEvent.Report -> JSONObject().put("type", "report").put("title", event.title).put("body", event.body)
+        is ThreadEvent.Approval -> JSONObject().put("type", "approval").put("id", event.id)
+        is ThreadEvent.Terminal -> JSONObject().put("type", "terminal").put("text", "exit ${event.result.exitCode}: ${event.result.stdout.take(500)}")
+    }
+
+    private fun loadSessions(): List<ThreadSession> = runCatching {
+        val array = JSONObject(sessionsFile.readText()).optJSONArray("sessions") ?: JSONArray()
+        (0 until array.length()).map { index ->
+            val item = array.getJSONObject(index)
+            val eventsJson = item.optJSONArray("events") ?: JSONArray()
+            ThreadSession(item.getString("id"), item.getString("title"), item.optString("workspace").takeIf { it.isNotBlank() && it != "null" }, item.getLong("createdAt"), item.getLong("updatedAt"), runCatching { SessionStatus.valueOf(item.getString("status")) }.getOrDefault(SessionStatus.IDLE), (0 until eventsJson.length()).mapNotNull { eventFromJson(eventsJson.getJSONObject(it)) })
+        }
+    }.getOrDefault(emptyList())
+
+    private fun eventFromJson(item: JSONObject): ThreadEvent? = when (item.optString("type")) {
+        "user" -> ThreadEvent.User(item.optString("text"))
+        "agent" -> ThreadEvent.Agent(item.optString("text"))
+        "system" -> ThreadEvent.System(item.optString("text"))
+        "report" -> ThreadEvent.Report(item.optString("title"), item.optString("body"))
+        "approval" -> ThreadEvent.Approval(item.optString("id"))
+        "terminal" -> ThreadEvent.System(item.optString("text"))
+        else -> null
+    }
 
     private val apiKeyInputs = mutableStateMapOf<String, String>()
     val apiKeyTestState = mutableStateMapOf<String, ApiKeyTestUiState>()
@@ -122,7 +267,6 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var pendingApprovalId by mutableStateOf<String?>(null); private set
     private var pendingApprovalPlan: PlanoExecucao? = null
     private var pendingApprovalRunId: String? = null
-    var workspaceProjectName by mutableStateOf("demo-project")
     var workspaceProjects by mutableStateOf<List<Project>>(emptyList()); private set
     var lastGitStatus by mutableStateOf<String?>(null); private set
     var sqliteServiceStatus by mutableStateOf<ServiceStatus?>(null); private set
@@ -257,6 +401,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     fun sendChatMessage() {
         val prompt = chatInput.trim(); if (prompt.isEmpty() || chatRunning) return
         chatMessages.add(ChatMessage(ChatRole.USER, prompt)); chatInput = ""; chatRunning = true
+        appendThreadEvent(ThreadEvent.User(prompt))
         viewModelScope.launch {
             val response = withContext(Dispatchers.IO) {
                 runCatching {
@@ -274,16 +419,17 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     .getOrElse { ChatMessage(ChatRole.ERROR, "Brain não conseguiu responder: ${it.message ?: it.javaClass.simpleName}") }
             }
             chatMessages.add(response); chatRunning = false
+            appendThreadEvent(if (response.role == ChatRole.ASSISTANT) ThreadEvent.Agent(response.content) else ThreadEvent.System(response.content))
         }
     }
     /** Entrada única do composer Codex-style: texto livre ou comando operacional. */
     fun submitThreadInput() {
         val command = chatInput.trim()
         when (command.lowercase()) {
-            "/testlab" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; runTestLab() }
-            "/security" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; runSecurityAssessment() }
-            "/git status" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; inspectGitStatus() }
-            "/workflow" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); chatInput = ""; runBrainWorkflow() }
+            "/testlab" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runTestLab() }
+            "/security" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runSecurityAssessment() }
+            "/git status" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; inspectGitStatus() }
+            "/workflow" -> { chatMessages.add(ChatMessage(ChatRole.USER, command)); appendThreadEvent(ThreadEvent.User(command)); chatInput = ""; runBrainWorkflow() }
             else -> sendChatMessage()
         }
     }
@@ -300,15 +446,15 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     }
     fun cancelCommand() { viewModelScope.launch(Dispatchers.IO) { runtime?.cancel() } }
     fun runBrainHealthCheck() { val c = brainController ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; lastBrainCycle = withContext(Dispatchers.IO) { runCatching { c.healthCheck(factory.persistentSessionId()) }.getOrNull() }; phase = SandboxPhase.Ready } }
-    fun runTestLab(projectPath: String = "/home/sandbox/workspace") { val p = platform ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; lastTestLabReport = withContext(Dispatchers.IO) { runCatching { p.testLab.run(projectPath) }.getOrNull() }; phase = SandboxPhase.Ready } }
-    fun runSecurityAssessment() { val p = platform ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; lastSecurityAssessment = withContext(Dispatchers.IO) { runCatching { val root = File(getApplication<Application>().filesDir, "sandbox/workspace"); val scan = p.securityScanner.scan(root); p.security.evaluate(scan, p.securityScenarios, emptyList()) }.getOrNull() }; phase = SandboxPhase.Ready } }
+    fun runTestLab(projectPath: String = "/home/sandbox/workspace") { val p = platform ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; lastTestLabReport = withContext(Dispatchers.IO) { runCatching { p.testLab.run(projectPath) }.getOrNull() }; phase = SandboxPhase.Ready; lastTestLabReport?.let { appendThreadEvent(ThreadEvent.Report("TestLab", "${if (it.success) "PASS" else "FAIL"} — ${it.passed}/${it.steps.size} etapas")) } } }
+    fun runSecurityAssessment() { val p = platform ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; lastSecurityAssessment = withContext(Dispatchers.IO) { runCatching { val root = File(getApplication<Application>().filesDir, "sandbox/workspace"); val scan = p.securityScanner.scan(root); p.security.evaluate(scan, p.securityScenarios, emptyList()) }.getOrNull() }; phase = SandboxPhase.Ready; lastSecurityAssessment?.let { appendThreadEvent(ThreadEvent.Report("Security gate", "${if (it.readiness.ready) "APROVADO" else "BLOQUEADO"} — ${it.findings.size} achado(s)")) } } }
     fun refreshToolchains() { val p = platform ?: return; viewModelScope.launch(Dispatchers.IO) { val s = com.sandbox.sandbox.BuiltInToolchains.all.associate { it.id to runCatching { p.toolchains.refreshStatus(it.id) }.getOrElse { e -> ToolchainStatus(it.id, com.sandbox.sandbox.ToolchainState.FAILED, error = e.message ?: e.javaClass.simpleName) } }; withContext(Dispatchers.Main) { toolchainStatuses = s } } }
     fun installToolchain(id: String) { val p = platform ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; val s = withContext(Dispatchers.IO) { runCatching { p.toolchains.install(id) }.getOrNull() }; if (s != null) toolchainStatuses = toolchainStatuses + (id to s); phase = SandboxPhase.Ready } }
     fun requestApprovalDemo() { val c = brainController ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; val plan = c.approvalDemoPlan(); val runId = "approval-${System.currentTimeMillis()}"; val cycle = withContext(Dispatchers.IO) { c.executePlan(plan, runId) }; pendingApprovalPlan = plan; pendingApprovalRunId = runId; pendingApprovalId = cycle.passos.firstOrNull()?.approvalId; lastBrainCycle = cycle; phase = SandboxPhase.Ready } }
     fun approveAndResume() { val c = brainController ?: return; val plan = pendingApprovalPlan ?: return; val runId = pendingApprovalRunId ?: return; val id = pendingApprovalId ?: return; if (phase != SandboxPhase.Ready) return; viewModelScope.launch { phase = SandboxPhase.Running; lastBrainCycle = withContext(Dispatchers.IO) { c.resumePlan(plan, runId, id) }; pendingApprovalId = null; pendingApprovalPlan = null; pendingApprovalRunId = null; phase = SandboxPhase.Ready } }
     fun refreshWorkspace() { val p = platform ?: return; workspaceProjects = p.workspace.listProjects(); sqliteServiceStatus = p.services.status(BuiltInServices.sqlite("/home/sandbox/workspace")) }
     fun createWorkspaceProject() { val p = platform ?: return; workspaceError = null; runCatching { p.workspace.createProject(workspaceProjectName) }.onSuccess { refreshWorkspace() }.onFailure { workspaceError = it.message ?: "Falha ao criar projeto" } }
-    fun inspectGitStatus() { val p = platform ?: return; val project = workspaceProjects.firstOrNull { it.name == workspaceProjectName } ?: run { workspaceError = "Crie ou selecione um projeto antes de consultar o Git."; return }; viewModelScope.launch(Dispatchers.IO) { val s = p.git.status("/home/sandbox/workspace/projects/${project.name}"); withContext(Dispatchers.Main) { lastGitStatus = s.stdout.ifBlank { s.stderr } } } }
+    fun inspectGitStatus() { val p = platform ?: return; val project = workspaceProjects.firstOrNull { it.name == workspaceProjectName } ?: run { workspaceError = "Crie ou selecione um projeto antes de consultar o Git."; return }; viewModelScope.launch(Dispatchers.IO) { val s = p.git.status("/home/sandbox/workspace/projects/${project.name}"); withContext(Dispatchers.Main) { lastGitStatus = s.stdout.ifBlank { s.stderr }; appendThreadEvent(ThreadEvent.Report("Git status", lastGitStatus.orEmpty())) } } }
     fun startSqliteService() { val p = platform ?: return; viewModelScope.launch(Dispatchers.IO) { val s = runCatching { p.services.start(BuiltInServices.sqlite("/home/sandbox/workspace")) }.getOrNull(); withContext(Dispatchers.Main) { sqliteServiceStatus = s } } }
     fun stopSqliteService() { val p = platform ?: return; viewModelScope.launch(Dispatchers.IO) { val s = p.services.stop(BuiltInServices.sqlite("/home/sandbox/workspace")); withContext(Dispatchers.Main) { sqliteServiceStatus = s } } }
     fun refreshBrainCatalogs() { val i = brainIntegration ?: return; brainSkillSummary = i.enabledSkills().map { "${it.manifest.id} (${it.manifest.capabilities.joinToString()})" }; viewModelScope.launch(Dispatchers.IO) { val r = i.memoryRate(); withContext(Dispatchers.Main) { memorySuccessRate = r } } }

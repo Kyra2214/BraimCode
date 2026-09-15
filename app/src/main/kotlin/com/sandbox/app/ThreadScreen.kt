@@ -56,6 +56,7 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
             TaskSidebar(viewModel, onClose = { sidebarOpen = false })
         } else {
             if (searchOpen) OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Buscar na thread") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+            StatusSection(viewModel)
             LazyColumn(
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -69,14 +70,6 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
 }
 
 private fun threadEvents(viewModel: SandboxViewModel, query: String = ""): List<ThreadEvent> = buildList {
-    when (val phase = viewModel.phase) {
-        SandboxPhase.NotReady -> add(ThreadEvent.System("Sandbox não preparado"))
-        is SandboxPhase.Downloading -> add(ThreadEvent.System("Baixando RootFS…", (phase.bytesDownloaded.toFloat() / phase.totalBytes.coerceAtLeast(1)).coerceIn(0f, 1f)))
-        is SandboxPhase.Preparing -> add(ThreadEvent.System(phase.stage, (phase.bytesCompleted.toFloat() / phase.totalBytes.coerceAtLeast(1)).coerceIn(0f, 1f)))
-        SandboxPhase.Ready -> Unit
-        SandboxPhase.Running -> add(ThreadEvent.System("Executando…"))
-        is SandboxPhase.Blocked -> add(ThreadEvent.System("Sandbox bloqueado: ${phase.reason}"))
-    }
     addAll(viewModel.activeThreadEvents)
     if (viewModel.phase == SandboxPhase.Running && viewModel.liveTerminalOutput.isNotBlank()) {
         add(ThreadEvent.Report("Terminal · ao vivo", viewModel.liveTerminalOutput))
@@ -214,9 +207,11 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
 @Composable
 private fun ThreadComposer(viewModel: SandboxViewModel) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(listOf("/testlab", "/security", "/git status", "/git diff", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
-                AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })
+        if (viewModel.phase == SandboxPhase.Ready) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(listOf("/testlab", "/security", "/git status", "/git diff", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
+                    AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })
+                }
             }
         }
         OutlinedTextField(

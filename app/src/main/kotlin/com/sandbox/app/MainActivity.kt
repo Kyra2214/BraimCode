@@ -290,7 +290,7 @@ private fun SelfCheckReportSection(report: com.sandbox.sandbox.SelfCheckReport) 
 }
 
 @Composable
-private fun StatusSection(viewModel: SandboxViewModel) {
+fun StatusSection(viewModel: SandboxViewModel) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (viewModel.namespaceSupport.compatibilityMode) {

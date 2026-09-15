@@ -2,7 +2,8 @@ package com.brain.memory
 
 /** Ciclo que separa candidato externo de conhecimento validado. */
 class KnowledgeLearningCycle(private val memory: KnowledgeMemory = KnowledgeMemoryRegistry.current()) {
-    fun recall(problem: String): KnowledgeEntry? = memory.findValidated(problem)
+    fun recall(problem: String, scope: KnowledgeScope = KnowledgeScope.GLOBAL, ownerId: String? = null, projectId: String? = null): KnowledgeEntry? =
+        memory.findValidated(problem, scope = scope, ownerId = ownerId, projectId = projectId)
 
     fun observeExternal(
         problem: String,
@@ -10,7 +11,11 @@ class KnowledgeLearningCycle(private val memory: KnowledgeMemory = KnowledgeMemo
         source: KnowledgeSource?,
         retrievalHints: List<String>,
         tags: List<String>,
-        providerConfidence: Double = 0.0
+        providerConfidence: Double = 0.0,
+        citations: List<KnowledgeCitation> = emptyList(),
+        scope: KnowledgeScope = KnowledgeScope.GLOBAL,
+        ownerId: String? = null,
+        projectId: String? = null
     ): KnowledgeEntry = memory.saveCandidate(
         KnowledgeEntry(
             problem = problem,
@@ -19,7 +24,11 @@ class KnowledgeLearningCycle(private val memory: KnowledgeMemory = KnowledgeMemo
             retrievalHints = retrievalHints.distinct(),
             tags = tags.distinct(),
             confidence = providerConfidence.coerceIn(0.0, 1.0),
-            validated = false
+            validated = false,
+            citations = citations.distinctBy { it.uri + "|" + it.quote },
+            scope = scope,
+            ownerId = ownerId,
+            projectId = projectId
         )
     )
 

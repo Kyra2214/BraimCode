@@ -4,6 +4,9 @@ import android.content.Context
 import com.brain.memory.KnowledgeEntry
 import com.brain.memory.KnowledgeMemory
 import com.brain.memory.KnowledgeSource
+import com.brain.memory.KnowledgeScope
+import com.brain.memory.KnowledgeCorrection
+import com.brain.memory.fingerprintFor
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -12,9 +15,11 @@ class AndroidKnowledgeMemory(context: Context) : KnowledgeMemory {
     private val prefs = context.applicationContext.getSharedPreferences("brain_knowledge", Context.MODE_PRIVATE)
     private val lock = Any()
 
-    override fun findValidated(problem: String, minScore: Double): KnowledgeEntry? = synchronized(lock) {
+    override fun findValidated(problem: String, minScore: Double, scope: KnowledgeScope, ownerId: String?, projectId: String?): KnowledgeEntry? = synchronized(lock) {
         load().asSequence()
-            .filter { it.validated }
+            .filter { it.validated && it.scope == scope }
+            .filter { scope != KnowledgeScope.USER || it.ownerId == ownerId }
+            .filter { scope != KnowledgeScope.PROJECT || it.projectId == projectId }
             .map { it to similarity(problem, it.problem) }
             .filter { it.second >= minScore }
             .maxByOrNull { it.second }?.first
@@ -22,7 +27,7 @@ class AndroidKnowledgeMemory(context: Context) : KnowledgeMemory {
 
     override fun saveCandidate(entry: KnowledgeEntry): KnowledgeEntry = synchronized(lock) {
         val entries = load().associateBy { it.id }.toMutableMap()
-        entries[entry.id] = entry
+        if (entries.values.none { it.fingerprint == entry.fingerprint }) entries[entry.id] = entry
         save(entries.values.toList())
         entry
     }
@@ -45,7 +50,9 @@ class AndroidKnowledgeMemory(context: Context) : KnowledgeMemory {
             answer = correctedAnswer,
             confidence = confidence.coerceIn(0.0, 1.0),
             validated = true,
-            confirmations = current.confirmations + 1
+            confirmations = current.confirmations + 1,
+            fingerprint = fingerprintFor(current.problem, correctedAnswer),
+            correctionHistory = current.correctionHistory + KnowledgeCorrection(current.answer, correctedAnswer, confidence)
         )
         save(load().map { if (it.id == id) updated else it })
         updated
@@ -74,6 +81,10 @@ class AndroidKnowledgeMemory(context: Context) : KnowledgeMemory {
         put("validated", entry.validated)
         put("createdAtEpochMs", entry.createdAtEpochMs)
         put("confirmations", entry.confirmations)
+        put("fingerprint", entry.fingerprint)
+        put("scope", entry.scope.name)
+        entry.ownerId?.let { put("ownerId", it) }
+        entry.projectId?.let { put("projectId", it) }
         put("retrievalHints", JSONArray(entry.retrievalHints))
         put("tags", JSONArray(entry.tags))
         entry.source?.let { source ->
@@ -109,7 +120,11 @@ class AndroidKnowledgeMemory(context: Context) : KnowledgeMemory {
         confidence = json.optDouble("confidence", 0.0),
         validated = json.optBoolean("validated", false),
         createdAtEpochMs = json.optLong("createdAtEpochMs", 0L),
-        confirmations = json.optInt("confirmations", 0)
+        confirmations = json.optInt("confirmations", 0),
+        fingerprint = json.optString("fingerprint").takeIf { it.isNotBlank() } ?: fingerprintFor(json.getString("problem"), json.getString("answer")),
+        scope = runCatching { KnowledgeScope.valueOf(json.optString("scope", "GLOBAL")) }.getOrDefault(KnowledgeScope.GLOBAL),
+        ownerId = json.optString("ownerId").takeIf { it.isNotBlank() },
+        projectId = json.optString("projectId").takeIf { it.isNotBlank() }
     )
 
     private fun JSONArray?.toStringList(): List<String> {

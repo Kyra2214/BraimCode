@@ -31,6 +31,9 @@ import com.sandbox.sandbox.SelfCheckStatus
 import com.brain.planner.PlanoExecucao
 import com.brain.prompt.InMemoryPromptLibrary
 import com.brain.prompt.PromptLibraryLoader
+import com.brain.memory.FileKnowledgeMemory
+import com.brain.memory.KnowledgeLearningCycle
+import com.brain.events.FileEventStore
 import com.sandbox.sandbox.Project
 import com.sandbox.sandbox.ServiceStatus
 import com.sandbox.sandbox.BuiltInServices
@@ -135,7 +138,11 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     val apiProviders: List<ApiProvider> = runCatching { ApiKeyCatalogLoader.load(application) }.getOrElse { emptyList() }
 
     /** UI -> Brain. O chat não chama runtime, llama.cpp, provider ou HTTP diretamente. */
-    private val brainApiGateway = BrainApiGateway(apiProviders, apiKeyStore)
+    private val brainApiGateway = BrainApiGateway(
+        apiProviders,
+        apiKeyStore,
+        learning = KnowledgeLearningCycle(FileKnowledgeMemory(File(application.filesDir, "brain/knowledge.jsonl")))
+    )
 
     init {
         if (sessions.isEmpty()) createSession()
@@ -425,7 +432,8 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
                     promptLibrary = promptLibrary,
                     capabilityProviders = listOf(
                         PluginCatalogCapabilityProvider(statusOf = { id -> statusCache[id]?.state })
-                    )
+                    ),
+                    events = FileEventStore(File(dir, "brain/chat-events.jsonl"))
                 )
                 brainIntegration = BrainIntegrationFacade(File(dir, "brain"))
                 pluginListVersion++; refreshStatusCache(); refreshPluginAudit(); phase = SandboxPhase.Ready; refreshToolchains()

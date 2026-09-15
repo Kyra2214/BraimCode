@@ -27,10 +27,14 @@ import com.brain.workflow.WorkflowManifest
 import com.brain.workflow.WorkflowNode
 import com.brain.workflow.WorkflowStepResult
 import com.brain.prompt.PromptLibrary
+import com.brain.events.BrainEvent
+import com.brain.events.EventStore
+import com.brain.events.InMemoryEventStore
 import com.brain.retrieval.PromptLibraryRetrievalSource
 import com.brain.retrieval.Retrieval
 import com.brain.retrieval.RetrievalQuery
 import java.io.File
+import java.time.Instant
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
@@ -47,7 +51,8 @@ class BrainSandboxController(
     rootfsDir: File,
     private val actor: String = "android-app",
     promptLibrary: PromptLibrary? = null,
-    capabilityProviders: List<CapabilityProvider> = emptyList()
+    capabilityProviders: List<CapabilityProvider> = emptyList(),
+    private val events: EventStore = InMemoryEventStore()
 ) {
     private val dynamicCapabilityProviders = capabilityProviders
     private val approvals = FileApprovalStore(File(rootfsDir.parentFile ?: rootfsDir, "approvals.jsonl"))
@@ -119,10 +124,10 @@ class BrainSandboxController(
     }
 
     fun executePlan(plano: PlanoExecucao, runId: String = "plan-${System.currentTimeMillis()}"): ResultadoCiclo =
-        bridge.authorizeAndExecute(plano, runId = runId, actor = actor)
+        executeWithEvents(plano, runId) { bridge.authorizeAndExecute(plano, runId = runId, actor = actor) }
 
     fun resumePlan(plano: PlanoExecucao, runId: String, approvalId: String): ResultadoCiclo =
-        bridge.resume(plano, runId = runId, actor = actor, approvalId = approvalId)
+        executeWithEvents(plano, runId) { bridge.resume(plano, runId = runId, actor = actor, approvalId = approvalId) }
 
     fun approvalDemoPlan(): PlanoExecucao = PlanoExecucao(
         objetivo = "executar plano de demonstração com aprovação humana",
@@ -138,6 +143,7 @@ class BrainSandboxController(
 
     /** Entrada real do chat: objetivo → planner no caller → ciclo autorizado → dispatcher/gateway/sandbox. */
     fun executeObjective(objective: String, runId: String = "chat-${System.currentTimeMillis()}"): ResultadoCiclo {
+        emit(runId, "chat", "TaskCreated", mapOf("objective" to objective.take(500)))
         val classification = intentClassifier.classify(objective)
         val planner = com.brain.planner.KeywordPlanner()
         val basePlan = runBlockingPlanner { planner.planejar(classification.intent.objective) }
@@ -151,7 +157,7 @@ class BrainSandboxController(
             manifest = WorkflowManifest("brain-plan", "1.0.0", listOf(WorkflowNode("plan", "brain.plan"))),
             authorize = { it == "brain.plan" },
             execute = { node, attempt ->
-                cycle = bridge.authorizeAndExecute(plan, runId, actor)
+                cycle = executeWithEvents(plan, runId) { bridge.authorizeAndExecute(plan, runId, actor) }
                 WorkflowStepResult(
                     nodeId = node.id,
                     success = cycle?.aprovado == true,
@@ -161,6 +167,21 @@ class BrainSandboxController(
             }
         )
         return requireNotNull(cycle) { "Workflow não produziu resultado do plano" }
+    }
+
+    fun localEvents(runId: String? = null) = events.replay(runId)
+    fun localEventsHealthy(): Boolean = events.verifyIntegrity()
+
+    private fun executeWithEvents(plan: PlanoExecucao, runId: String, action: () -> ResultadoCiclo): ResultadoCiclo {
+        emit(runId, "plan", "PlanCreated", mapOf("steps" to plan.passos.size.toString()))
+        val result = runCatching { action() }.onFailure { emit(runId, "execution", "ExecutionFailed", mapOf("error" to (it.message ?: "unknown").take(500))) }.getOrThrow()
+        emit(runId, "execution", if (result.aprovado) "Delivered" else "ValidationFailed", mapOf("approved" to result.aprovado.toString()))
+        return result
+    }
+
+    private fun emit(runId: String, taskId: String, type: String, payload: Map<String, String>) {
+        val sequence = events.replay().size.toLong()
+        events.append(BrainEvent(runId, "android-local", taskId, type, sequence, timestamp = Instant.now(), payload = payload, idempotencyKey = "$runId:$taskId:$type:$sequence"))
     }
 
     private fun capability(id: String, provided: Set<String>) = CapabilityDefinition(

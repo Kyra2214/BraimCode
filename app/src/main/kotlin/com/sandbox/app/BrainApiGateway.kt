@@ -4,6 +4,7 @@ import com.brain.memory.ConservativeKnowledgeCritic
 import com.brain.memory.KnowledgeCritic
 import com.brain.memory.KnowledgeCriticDecision
 import com.brain.memory.KnowledgeEntry
+import com.brain.memory.KnowledgeCitation
 import com.brain.memory.KnowledgeLearningCycle
 import com.brain.memory.KnowledgeSource
 import com.brain.provider.ProviderClient
@@ -101,7 +102,8 @@ class BrainApiGateway(
                 if (text.isNotBlank()) {
                     val source = buildSource(response, model, text)
                     val urls = extractUrls(response.body + "\n" + text)
-                    val knowledge = learning.observeExternal(prompt, text, source, urls, tagsFor(papel, prompt))
+                    val citations = urls.map { uri -> KnowledgeCitation(uri, text.take(400)) }
+                    val knowledge = learning.observeExternal(prompt, text, source, urls, tagsFor(papel, prompt), citations = citations)
                     val verdict = critic.evaluate(knowledge)
                     val validated = when (verdict.decision) {
                         KnowledgeCriticDecision.ACCEPT -> learning.confirm(knowledge.id, verdict.confidence, source) != null

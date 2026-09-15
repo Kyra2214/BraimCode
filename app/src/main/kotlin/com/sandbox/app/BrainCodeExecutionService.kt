@@ -35,7 +35,11 @@ class BrainCodeExecutionService : Service() {
 
         fun start(context: android.content.Context) {
             val intent = Intent(context, BrainCodeExecutionService::class.java)
-            androidx.core.content.ContextCompat.startForegroundService(context, intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(context, intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun update(context: android.content.Context, text: String, progress: Int? = null, max: Int = 100) {
@@ -81,8 +85,10 @@ class BrainCodeExecutionService : Service() {
                     intent.getIntExtra(EXTRA_PROGRESS, 0)
                 } else null
                 val max = intent.getIntExtra(EXTRA_MAX, 100)
-                getSystemService(NotificationManager::class.java)
-                    .notify(NOTIFICATION_ID, buildNotification(text, progress, max))
+                getSystemService(NotificationManager::class.java)?.notify(
+                    NOTIFICATION_ID,
+                    buildNotification(text, progress, max)
+                )
             }
         }
         return START_STICKY

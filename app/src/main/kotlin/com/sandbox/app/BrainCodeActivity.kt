@@ -8,7 +8,7 @@ import android.os.Bundle
  */
 class BrainCodeActivity : MainActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        BrainCodeExecutionService.start(this)
         super.onCreate(savedInstanceState)
+        runCatching { BrainCodeExecutionService.start(this) }
     }
 }

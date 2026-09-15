@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Permite que o Sandbox continue executando enquanto a Activity está minimizada. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Mantém CPU ativa durante downloads, extração e builds longos com a tela apagada. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -25,7 +26,8 @@
 
         <service
             android:name=".BrainCodeExecutionService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 

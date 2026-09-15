@@ -1,177 +1,152 @@
-# BrainCode — runtime Brain + Sandbox Mobile
+# BrainCode
 
-BrainCode é um runtime local-first que combina **Policy, approval, eventos auditáveis, Sandbox, workflows, memória, routing, skills, QA, descoberta de APIs e readiness** com um cliente Android offline baseado em RootFS/proot.
+BrainCode é um runtime local-first para Android/JVM em que o **Brain decide**, capacidades são descobertas dinamicamente, a **Policy autoriza**, o **Gateway executa**, o **Sandbox protege**, evidências são registradas e o **Critic valida**.
 
-> **Estado real em 2026-09-14:** o núcleo BrainCode 2.0, o E2E JVM e o pipeline policy-gated foram consolidados. O app Android agora usa uma thread agent-centric com sessões persistentes, sidebar, configurações de projeto, diff viewer, saída de execução ao vivo, busca e citação de eventos; o chat foi conectado ao pipeline Brain/Gateway no código de produção. A validação final Android ainda depende de o CI concluir sem falhas. Consulte `docs/BRAINCODE_2.0_RELATORIO_FINAL_CONSOLIDACAO_2026-09-14.md`.
+> **Estado do HEAD documentado:** `26ab43afede8c05c6bcb4e981a0e98f70c42c8a6`.
 
-## Arquitetura
-
-```text
-BrainCode
-├── brain_runtime/       # runtime Python de referência
-├── brain/               # Brain Kotlin/JVM
-├── android-module/      # bridge, policy/capabilities e Sandbox
-├── app/                 # cliente Android Compose
-├── contracts/           # contratos e invariantes
-├── tests/               # testes Python
-└── docs/                # auditorias, roadmap e documentação operacional
-```
-
-Fronteira conceitual:
+## Visão curta
 
 ```text
-Brain pensa / roteia / autoriza
-        ↓
-Agent / Capability
-        ↓
-Sandbox executa sob limites
-        ↓
-Evidence / Events / Delivery
-```
-
-Para conhecimento externo, o fluxo atual é:
-
-```text
-Problema
+Chat
   ↓
-Memória validada
-  ├─ encontrou → reutiliza
-  └─ não encontrou
+Brain
+  ├── Memory: resposta validada já existe?
+  │      └── sim → responde
+  │
+  └── não
        ↓
-   Router / API gratuita
+   Intent / Plan
        ↓
- resposta + proveniência
+   Capability Discovery
        ↓
- candidato de conhecimento
+   Agent / Skill / Tool / API / Sandbox
        ↓
-      Critic
+   PolicyBroker
        ↓
- conhecimento validado
+   ActionGateway
+       ↓
+   Sandbox / Provider
+       ↓
+   Evidence / Events
+       ↓
+   Critic
+       ↓
+   Memory
+       ↓
+   Chat
 ```
 
-O Brain não treina pesos de LLM externo. Ele registra, valida e corrige conhecimento próprio.
+O usuário conversa com **Chat**. O usuário não escolhe diretamente provider, modelo, Agent, Tool ou comando interno.
+
+## Princípios que não devem ser quebrados
+
+1. **Brain é o orquestrador.** Não executar comandos arbitrários vindos do usuário.
+2. **Capability é a unidade de execução autorizável.** Providers, APIs, Agents, Skills, Tools, Commands e Sandbox podem fornecer capacidades.
+3. **Policy vem antes da execução.** Uma capacidade descoberta não significa que ela está autorizada.
+4. **ActionGateway é a fronteira de execução.** Toda ação relevante deve possuir identidade, decisão, parâmetros controlados e evidência.
+5. **Agents são bounded.** Um Agent recebe missão, capacidades permitidas, policy e ambiente; não ganha um LLM próprio nem redefine o objetivo do usuário.
+6. **Memória não transforma resposta externa em verdade automaticamente.** Evidência e Critic são obrigatórios para promoção.
+7. **Proveniência importa.** Quando disponível, guardar URI, provider/model, repositório, caminho e commit.
+8. **Descoberta é dinâmica.** Catálogos estáticos podem servir como bootstrap, mas não são autoridade sobre disponibilidade atual.
+9. **Free-first/free-only continua sendo política operacional quando o provider estiver sujeito a essa regra.** Não inventar fallback pago.
+10. **Código existente não é órfão só porque não aparece no fluxo principal.** Remoção de código atual exige confirmação; esta limpeza remove apenas legado/referência explicitamente identificado.
+
+## Módulos
+
+```text
+brain/           Brain Kotlin/JVM: capability, policy, gateway, planning, routing,
+                 memory/learning, skills, dispatch e workflows.
+
+android-module/  integração Android, Sandbox, agents bounded, execução e bridges.
+
+app/             cliente Android/Compose e experiência de Chat/threads.
+
+brain_runtime/   runtime Python de referência e componentes de suporte existentes.
+
+contracts/       contratos e invariantes públicos da arquitetura.
+
+tests/           testes Python.
+
+docs/            documentação canônica e operacional.
+```
+
+## Núcleo 2.0 atualmente consolidado
+
+- `CapabilityDefinition` / modelo universal de capacidade;
+- `CapabilityRegistry`;
+- `CapabilityDiscovery` e candidatos por adequação;
+- `CapabilityProvider` / descoberta lazy;
+- `PolicyBroker`;
+- `ActionGateway` + ciclo/auditoria da ação;
+- `AgentRegistry` / Agents bounded;
+- `SkillRegistry`;
+- memória de conhecimento e ciclo de aprendizado;
+- routing dinâmico de APIs/providers;
+- integração do Sandbox com capability/policy;
+- Planner/Dispatcher e componentes de execução existentes.
+
+Esses componentes são o runtime atual. As ideias de projetos externos serviram apenas como fonte de arquitetura e **não são dependências do BrainCode**.
 
 ## APIs e modelos
 
-O catálogo operacional é dinâmico. O Brain consulta endpoints de descoberta dos providers, filtra modelos ativos/chat-capable e aplica a política atual **free-only**.
+O Brain pode descobrir modelos disponíveis nos providers e selecionar candidatos compatíveis com a capacidade solicitada. O modelo não é a identidade do sistema: ele é um recurso de execução escolhido pelo routing.
 
-O catálogo estático/seed serve apenas como bootstrap. O runtime pode atualizar o provider antes do routing e substituir um modelo que tenha desaparecido por outro modelo atual compatível com o papel solicitado.
+O usuário não precisa escolher manualmente provider/modelo. Falhas de disponibilidade devem permitir nova seleção quando houver candidato compatível e autorizado.
 
-O fallback é automático e classifica falhas como chave inválida, limite, timeout e erro de servidor quando aplicável. O usuário não precisa escolher manualmente o provider.
+## Conhecimento
 
-## Execução Android de APIs
+A memória diferencia:
 
-`BrainApiGateway` é a camada Android para execução interna dos providers gratuitos. Ele usa `ApiCatalogRegistry`, `DefaultAIRouter`, `ProviderDispatcher`, `ApiKeyStore` e transporte HTTP compatível com Android.
+- resposta candidata;
+- evidência/proveniência;
+- conhecimento validado;
+- hints de recuperação;
+- correções/confirmações.
 
-**Limite importante:** o caller de produção está conectado no `SandboxViewModel`/`BrainApiGateway`, mas a execução Android end-to-end ainda deve ser validada por build, testes e execução em ambiente Android configurado.
-
-## Memória e aprendizado
-
-A memória de conhecimento registra:
-
-- problema e resposta;
-- fonte/URI;
-- provider/model;
-- repository/path/commit quando identificáveis;
-- retrieval hints;
-- tags;
-- confiança;
-- estado de validação;
-- confirmações/correções.
-
-No Android, o conhecimento é persistido localmente por `AndroidKnowledgeMemory`.
-
-Respostas externas entram primeiro como **candidatas**. O `ConservativeKnowledgeCritic` pode confirmar automaticamente somente quando há resposta não vazia e fonte verificável; candidatos sem evidência permanecem fora do recall automático.
-
-O Critic atual é estrutural/evidencial, não uma prova semântica completa. Código deverá futuramente passar por Sandbox/build/test/lint ou segunda fonte antes de receber confiança mais alta.
-
-## Proveniência e recuperação futura
-
-Quando uma resposta contém GitHub, o Brain tenta guardar repository, path, commit/tree/blob e URI. Isso é a base para o próximo estágio: o Brain aprender **onde e como procurar** uma solução, e não apenas armazenar a resposta.
-
-Ainda falta o executor que use automaticamente esses `retrievalHints` para procurar e validar a fonte antes de consultar uma API/LLM novamente.
-
-## Local LLM
-
-O engine local é instalado no RootFS e reutilizado enquanto a versão instalada corresponde ao marker esperado. Depois da primeira instalação, o BrainCode não baixa novamente o arquivo do engine apenas para iniciar outra conversa.
-
-## Integração Android real
-
-O caminho vertical comprovado no código é:
+O fluxo correto é:
 
 ```text
-SandboxViewModel.runBrainHealthCheck()
-  → BrainSandboxController.healthCheck()
-  → BrainSandboxExecutionBridge
-  → CicloExecucaoPlano
-  → PolicyBroker
-  → AgentSandboxSession
-  → CapabilityResolver
-  → ManagedSandboxRuntime / proot
+fonte externa → candidato → Critic/validação → conhecimento validado → recall futuro
 ```
 
-A UI também possui operações reais para Plugins, Workspace, Git status, Services/SQLite, TestLab, Security assessment e Toolchains.
+O Brain aprende também **onde procurar** quando a proveniência permitir: GitHub repository/path/commit, URI, provider/model e retrieval hints.
 
-O workflow da aba Operações continua local/demonstrativo e não representa uma execução real no Sandbox. Caminhos que não passam por Policy/Capability não devem ser usados como prova de segurança do núcleo.
+## Sandbox e segurança
 
-## Python runtime
+O Sandbox é uma fronteira de execução, não um simples executor de strings. Proot não deve ser descrito como isolamento OS-level completo. Hardening, policy e testes reduzem risco, mas isolamento de filesystem/rede/processos/recursos em nível de kernel continua sendo uma categoria separada.
 
-`brain_runtime/` continua sendo a implementação de referência com PolicyBroker, approval, pipeline, binding, sandbox, workflows, APIs, skills, memory/learning, observabilidade, Project Intelligence, readiness e release intelligence.
+## O que não existe mais como arquitetura
 
-## Validação
+- download/engine de LLM local como parte do Chat;
+- Agent autônomo com LLM próprio;
+- lista fixa de modelos como autoridade;
+- slash command como cérebro do sistema;
+- cópia das entidades/DAOs/Room do IaBrain como banco do BrainCode;
+- promoção automática de respostas sem validação;
+- integração de código de terceiros apenas por estar disponível em `reference/`.
 
-O núcleo JVM e a matriz Android foram revalidados no HEAD atual. O run verde [34913865530](https://github.com/Kyra2214/BrainCode/actions/runs/34913865530) aprovou testes JVM/unitários, `:app:assembleDebug` e `:app:lintDebug`. O APK debug foi publicado no artefato do run e possui SHA-256 `91f9a4764367438d1dfa4ad1e52d04ad73676355fa762f7ae1f9cfe50162d29a`.
+## Validação atual
 
-Para uma nova validação completa:
+O CI `#101` no commit `26ab43afede8c05c6bcb4e981a0e98f70c42c8a6` passou com:
 
-```bash
-./gradlew test
-./gradlew check
-./gradlew :app:assembleDebug
-python3 -m unittest discover -s tests -p 'test_*.py' -v
-bash scripts/validate-release-readiness.sh
-bash -n scripts/*.sh rootfs-builder/*.sh
-```
+- JVM/unit tests;
+- assemble do APK debug;
+- Android lint;
+- upload do APK;
+- upload dos relatórios.
 
-O build/test Android foi declarado aprovado somente porque a matriz foi executada com sucesso no CI; a ausência de Android SDK neste sandbox afeta apenas a repetição local.
+Artefato APK: `BrainCode-debug-apk-26ab43afede8c05c6bcb4e981a0e98f70c42c8a6`.
 
-## Segurança
+## Documentação canônica
 
-O projeto possui hardening significativo, mas não deve ser tratado como container ou isolamento OS-level de produção. Proot sozinho não fornece jail de filesystem, namespace de rede, isolamento completo de processos ou enforcement completo de recursos do host.
+- `docs/ARQUITETURA_ATUAL.md` — fonte única da arquitetura.
+- `docs/ESTADO_ATUAL.md` — o que existe, o que é parcial e o que é backlog.
+- `docs/ROADMAP_CANONICO.md` — próximos passos sem misturar ideias descartadas.
+- `docs/LEGADO_E_DECISOES.md` — o que foi removido, preservado ou deliberadamente não adotado.
+- `contracts/` — contratos técnicos.
 
-O Security Test Lab usa análise estática e regressão sintética/determinística segura. Isso não equivale a um ataque adversarial real contra o Sandbox.
+Documentos históricos podem permanecer para rastreabilidade, mas **não definem a arquitetura atual**.
 
-## RootFS
+## Regra de documentação
 
-Os RootFS homologados do antigo SandBox foram migrados sem rebuild:
-
-- `0.3.3`
-- `0.4.1`
-- `0.5.0`
-
-Tamanhos, SHA-256, sidecars e manifests foram preservados. Não reconstruir esses artefatos sem nova homologação explícita.
-
-## Documentação principal
-
-- **Auditoria dos últimos 30 commits:** `docs/AUDITORIA_30_COMMITS_2026-09-14.md`
-- **Auditoria técnica:** `AUDITORIA_PESADA.md`
-- **Mapa de integração:** `docs/MAPA_INTEGRACAO_2026-09-14.md`
-- **Apresentação:** `docs/APRESENTACAO_BRAINCODE.md`
-- **Plano de ação:** `PLANO_DE_ACAO.md`
-- **Roadmap:** `ROADMAP_UNIFICADO.md`
-- **Pendências:** `TAREFAS_PENDENTES.md`
-- **Security Test Lab:** `docs/SECURITY_TEST_LAB.md`
-- **Migração RootFS:** `docs/SANDBOX_RELEASE_MIGRATION.md`
-- **Contratos:** `contracts/`
-
-## Critério de conclusão
-
-Uma funcionalidade só deve ser marcada como concluída quando houver:
-
-1. implementação;
-2. teste automatizado;
-3. chamada real fora do próprio teste, a partir da UI, ViewModel ou runtime ensinado pelo README;
-4. evidência observável;
-5. documentação coerente com o comportamento observado.
-
-Esse critério impede que código existente ou testado isoladamente seja apresentado como integração pronta.
+Se código e documentação divergirem, o código atual + testes + evidência de integração vencem documentos antigos. Toda mudança arquitetural deve atualizar a documentação canônica na mesma alteração.

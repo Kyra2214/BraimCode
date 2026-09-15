@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
 /**
@@ -15,8 +16,9 @@ import androidx.core.app.NotificationCompat
  *
  * The SandboxViewModel remains the owner of downloads, extraction, setup,
  * builds and jobs. This service keeps the application process in the Android
- * foreground while those operations are running and accepts live stage /
- * progress updates from the execution layer.
+ * foreground while those operations are running. It also holds a partial
+ * wake lock so long operations are not suspended simply because the screen
+ * turns off.
  */
 class BrainCodeExecutionService : Service() {
     companion object {
@@ -29,6 +31,7 @@ class BrainCodeExecutionService : Service() {
 
         private const val CHANNEL_ID = "braincode_execution"
         private const val NOTIFICATION_ID = 4202
+        private const val WAKE_LOCK_TAG = "BrainCode::Execution"
 
         fun start(context: android.content.Context) {
             val intent = Intent(context, BrainCodeExecutionService::class.java)
@@ -51,6 +54,8 @@ class BrainCodeExecutionService : Service() {
         }
     }
 
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -58,11 +63,13 @@ class BrainCodeExecutionService : Service() {
             NOTIFICATION_ID,
             buildNotification("BrainCode ativo — processos continuam em segundo plano", null)
         )
+        acquireWakeLock()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                releaseWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -79,6 +86,31 @@ class BrainCodeExecutionService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Removing BrainCode from recents must not cancel the execution anchor.
+        start(this)
+        super.onTaskRemoved(rootIntent)
+    }
+
+    override fun onDestroy() {
+        releaseWakeLock()
+        super.onDestroy()
+    }
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val manager = getSystemService(PowerManager::class.java) ?: return
+        wakeLock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
 
     private fun buildNotification(text: String, progress: Int?, max: Int = 100): Notification {

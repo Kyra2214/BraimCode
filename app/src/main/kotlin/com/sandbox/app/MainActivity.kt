@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
@@ -291,75 +294,106 @@ private fun SelfCheckReportSection(report: com.sandbox.sandbox.SelfCheckReport) 
 
 @Composable
 fun StatusSection(viewModel: SandboxViewModel) {
+    var expandedManual by remember { mutableStateOf(false) }
+    val expanded = expandedManual || viewModel.selfCheckStage != null
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (viewModel.namespaceSupport.compatibilityMode) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Modo compatibilidade: user namespaces indisponíveis no kernel. Executando via proot com isolamento reduzido (${viewModel.namespaceSupport.reason}).",
-                    color = MaterialTheme.colorScheme.tertiary,
-                    style = MaterialTheme.typography.bodySmall
+                    statusHeadline(viewModel),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (viewModel.phase is SandboxPhase.Blocked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
                 )
-            } else {
-                Text("User namespaces disponíveis; o runtime continuará usando proot por compatibilidade.", style = MaterialTheme.typography.bodySmall)
-            }
-            when (val phase = viewModel.phase) {
-                is SandboxPhase.NotReady -> {
-                    Text("Sandbox ainda não preparado.")
-                    Button(onClick = { viewModel.prepareSandbox() }) { Text("Preparar sandbox") }
-                }
-                is SandboxPhase.Downloading -> {
-                    Text("Baixando rootfs...")
-                    if (phase.totalBytes > 0) {
-                        val progress = (phase.bytesDownloaded.toFloat() / phase.totalBytes.toFloat()).coerceIn(0f, 1f)
-                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                        Text("${phase.bytesDownloaded / 1024} KB / ${phase.totalBytes / 1024} KB")
-                    } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                }
-                is SandboxPhase.Preparing -> {
-                    Text(phase.stage)
-                    if (phase.totalBytes > 0L) {
-                        val progress = (phase.bytesCompleted.toFloat() / phase.totalBytes.toFloat()).coerceIn(0f, 1f)
-                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                        Text("${(progress * 100).toInt()}% — ${phase.bytesCompleted / (1024 * 1024)} MiB / ${phase.totalBytes / (1024 * 1024)} MiB", style = MaterialTheme.typography.bodySmall)
-                    } else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Text("Não feche o aplicativo durante esta etapa.", style = MaterialTheme.typography.bodySmall)
-                }
-                is SandboxPhase.Ready -> {
-                    Text("Sandbox pronto — lifecycle gerenciado ativo.")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedButton(onClick = { viewModel.resetSandbox() }) { Text("Resetar sandbox") }
-                        OutlinedButton(onClick = { viewModel.runDiagnostics() }, enabled = !viewModel.diagnosticsRunning) { Text("Diagnóstico") }
-                        if (viewModel.diagnosticsRunning) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    }
-                    Button(onClick = { viewModel.runFullSelfCheck() }, enabled = !viewModel.selfCheckRunning) { Text("Teste geral") }
-                    viewModel.selfCheckStage?.let {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Text(it, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Button(onClick = { viewModel.runBrainHealthCheck() }) { Text("Verificar pelo Brain") }
-                    viewModel.lastBrainCycle?.let { cycle ->
-                        val result = cycle.passos.singleOrNull()
-                        Text(
-                            if (cycle.aprovado) "Brain → Policy → Sandbox: aprovado" else "Brain → Policy → Sandbox: ${result?.motivo ?: "reprovado"}",
-                            color = if (cycle.aprovado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-                is SandboxPhase.Running -> {
-                    Text("Executando comando — estado RUNNING")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        CircularProgressIndicator()
-                        OutlinedButton(onClick = { viewModel.cancelCommand() }) { Text("Cancelar") }
-                    }
-                }
-                is SandboxPhase.Blocked -> {
-                    Text(phase.reason, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = { viewModel.prepareSandbox() }) { Text("Tentar de novo") }
+                TextButton(onClick = { expandedManual = !expandedManual }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) {
+                    Text(if (expanded) "menos ▲" else "mais ▼", style = MaterialTheme.typography.labelSmall)
                 }
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusPrimaryActions(viewModel)
+            }
+            if (expanded) {
+                StatusDetails(viewModel)
+            }
+        }
+    }
+}
+
+private fun statusHeadline(viewModel: SandboxViewModel): String {
+    val compat = if (viewModel.namespaceSupport.compatibilityMode) " · modo compatibilidade" else ""
+    return when (val phase = viewModel.phase) {
+        is SandboxPhase.NotReady -> "Sandbox não preparado"
+        is SandboxPhase.Downloading -> {
+            val pct = if (phase.totalBytes > 0) " ${(phase.bytesDownloaded * 100 / phase.totalBytes)}%" else ""
+            "Baixando rootfs…$pct"
+        }
+        is SandboxPhase.Preparing -> {
+            val pct = if (phase.totalBytes > 0) " ${(phase.bytesCompleted * 100 / phase.totalBytes)}%" else ""
+            "${phase.stage}$pct"
+        }
+        is SandboxPhase.Ready -> "Sandbox pronto$compat"
+        is SandboxPhase.Running -> "Executando comando…"
+        is SandboxPhase.Blocked -> "Bloqueado: ${phase.reason}"
+    }
+}
+
+@Composable
+private fun StatusPrimaryActions(viewModel: SandboxViewModel) {
+    when (val phase = viewModel.phase) {
+        is SandboxPhase.NotReady -> Button(onClick = { viewModel.prepareSandbox() }) { Text("Preparar sandbox") }
+        is SandboxPhase.Downloading, is SandboxPhase.Preparing -> LinearProgressIndicator(modifier = Modifier.width(140.dp))
+        is SandboxPhase.Ready -> {
+            OutlinedButton(onClick = { viewModel.resetSandbox() }) { Text("Resetar") }
+            OutlinedButton(onClick = { viewModel.runDiagnostics() }, enabled = !viewModel.diagnosticsRunning) { Text("Diagnóstico") }
+            if (viewModel.diagnosticsRunning) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Button(onClick = { viewModel.runFullSelfCheck() }, enabled = !viewModel.selfCheckRunning) { Text("Teste geral") }
+            if (viewModel.selfCheckRunning) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Button(onClick = { viewModel.runBrainHealthCheck() }) { Text("Verificar Brain") }
+        }
+        is SandboxPhase.Running -> {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            OutlinedButton(onClick = { viewModel.cancelCommand() }) { Text("Cancelar") }
+        }
+        is SandboxPhase.Blocked -> Button(onClick = { viewModel.prepareSandbox() }) { Text("Tentar de novo") }
+    }
+}
+
+@Composable
+private fun StatusDetails(viewModel: SandboxViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            if (viewModel.namespaceSupport.compatibilityMode)
+                "Modo compatibilidade: user namespaces indisponíveis no kernel. Executando via proot com isolamento reduzido (${viewModel.namespaceSupport.reason})."
+            else "User namespaces disponíveis; o runtime continuará usando proot por compatibilidade.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        when (val phase = viewModel.phase) {
+            is SandboxPhase.Downloading -> if (phase.totalBytes > 0) Text("${phase.bytesDownloaded / 1024} KB / ${phase.totalBytes / 1024} KB", style = MaterialTheme.typography.bodySmall)
+            is SandboxPhase.Preparing -> {
+                if (phase.totalBytes > 0L) Text("${phase.bytesCompleted / (1024 * 1024)} MiB / ${phase.totalBytes / (1024 * 1024)} MiB", style = MaterialTheme.typography.bodySmall)
+                Text("Não feche o aplicativo durante esta etapa.", style = MaterialTheme.typography.bodySmall)
+            }
+            else -> {}
+        }
+        viewModel.selfCheckStage?.let {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text(it, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        viewModel.lastBrainCycle?.let { cycle ->
+            val result = cycle.passos.singleOrNull()
+            Text(
+                if (cycle.aprovado) "Brain → Policy → Sandbox: aprovado" else "Brain → Policy → Sandbox: ${result?.motivo ?: "reprovado"}",
+                color = if (cycle.aprovado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }

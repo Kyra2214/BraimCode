@@ -75,7 +75,12 @@ fun ThreadScreen(viewModel: SandboxViewModel, onOpenSettings: () -> Unit = {}) {
             }
             StatusSection(viewModel)
             val events = threadEvents(viewModel, query)
+            val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+            androidx.compose.runtime.LaunchedEffect(events.size) {
+                if (events.isNotEmpty()) listState.animateScrollToItem(events.size - 1)
+            }
             LazyColumn(
+                state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -233,10 +238,14 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
 @Composable
 private fun ThreadComposer(viewModel: SandboxViewModel) {
     Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (viewModel.phase == SandboxPhase.Ready) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(listOf("/testlab", "/security", "/git status", "/git diff", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")) { command ->
-                    AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })
+        val input = viewModel.chatInput
+        if (viewModel.phase == SandboxPhase.Ready && input.startsWith("/")) {
+            val matches = THREAD_SLASH_COMMANDS.filter { it.startsWith(input, ignoreCase = true) && it != input }
+            if (matches.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(matches) { command ->
+                        AssistChip(onClick = { viewModel.chatInput = command }, label = { Text(command) })
+                    }
                 }
             }
         }
@@ -259,3 +268,5 @@ private fun ThreadComposer(viewModel: SandboxViewModel) {
         }
     }
 }
+
+private val THREAD_SLASH_COMMANDS = listOf("/testlab", "/security", "/git status", "/git diff", "/workflow", "/approval demo", "/workspace new", "/sqlite start", "/sqlite stop", "/discovery", "/deliver")

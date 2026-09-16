@@ -7,7 +7,7 @@ import org.junit.Test
 import java.io.File
 
 class ProotProcessLauncherNetworkTest {
-    private fun launcher(unshare: String? = "/system/bin/unshare"): ProotProcessLauncher {
+    private fun launcher(unshare: String? = "/system/bin/unshare", userNamespacesAvailable: Boolean = true): ProotProcessLauncher {
         val rootfs = createTempDir(prefix = "rootfs-")
         val proot = File.createTempFile("proot-", ".bin").apply { setExecutable(true) }
         val tmp = createTempDir(prefix = "tmp-")
@@ -17,7 +17,8 @@ class ProotProcessLauncherNetworkTest {
             tmpDir = tmp,
             executableFinder = { candidates ->
                 if (candidates.contains("/system/bin/unshare")) unshare else "/system/bin/setsid"
-            }
+            },
+            namespaceSupportProvider = { NamespaceSupport(userNamespacesAvailable, null, null, "teste") }
         )
     }
 
@@ -50,5 +51,23 @@ class ProotProcessLauncherNetworkTest {
         assertFalse(args.contains("/system/bin/unshare"))
         assertFalse(args.contains("-n"))
         assertTrue(args.any { it.endsWith(".bin") })
+    }
+
+    @Test
+    fun `modo compatibilidade nao tenta unshare mesmo com binario presente`() {
+        // Regressão: em kernels sem user namespaces (ex.: max_user_namespaces
+        // ausente), o binário unshare existe mas falha com "Operation not
+        // permitted" ao tentar CLONE_NEWNET. Isso não pode derrubar a cadeia
+        // Brain → Policy → Sandbox inteira.
+        val launcher = launcher(unshare = "/system/bin/unshare", userNamespacesAvailable = false)
+
+        assertEquals(null, launcher.resolveUnshare(networkAllowed = false))
+    }
+
+    @Test
+    fun `namespaces disponiveis ainda tenta unshare quando rede proibida`() {
+        val launcher = launcher(unshare = "/system/bin/unshare", userNamespacesAvailable = true)
+
+        assertEquals("/system/bin/unshare", launcher.resolveUnshare(networkAllowed = false))
     }
 }

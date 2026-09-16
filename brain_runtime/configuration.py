@@ -25,6 +25,10 @@ def validate_configuration(config: Mapping[str, Any]) -> dict[str, Any]:
     if execution.get("enforce_readiness") is False and requirements(mode).require_readiness:
         raise ContractError(f"{mode.value} mode cannot disable readiness")
     if "timeout_seconds" in execution and (not isinstance(execution["timeout_seconds"], int) or execution["timeout_seconds"] <= 0): raise ContractError("invalid execution timeout")
+    mode = RuntimeMode(execution.get("mode", RuntimeMode.DEVELOPMENT.value))
+    req = requirements(mode)
+    if req.require_sandbox and execution.get("sandbox_enabled", True) is False: raise ContractError(f"{mode.value} mode cannot disable sandbox")
+    if req.require_readiness and execution.get("readiness_enabled", True) is False: raise ContractError(f"{mode.value} mode cannot disable readiness")
     result = dict(config)
     if "schemaVersion" in config: result["schemaVersion"] = CONFIG_VERSION
     return result

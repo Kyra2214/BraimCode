@@ -308,6 +308,7 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var liveTerminalOutput by mutableStateOf(""); private set
     fun clearTerminal() { commandInput = ""; lastResult = null; lastExecution = null }
     var diagnosticsReport by mutableStateOf<String?>(null); private set
+    var diagnosticsRunning by mutableStateOf(false); private set
     var lastBrainCycle by mutableStateOf<ResultadoCiclo?>(null); private set
     var lastTestLabReport by mutableStateOf<com.sandbox.sandbox.TestLabReport?>(null); private set
     var lastSecurityAssessment by mutableStateOf<SecurityAssessment?>(null); private set
@@ -396,7 +397,14 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun runDiagnostics() { viewModelScope.launch { diagnosticsReport = withContext(Dispatchers.IO) { runCatching { factory.inspectExtractedRootfs() }.getOrElse { "Falha ao inspecionar rootfs: ${it.message}" } } } }
+    fun runDiagnostics() {
+        if (diagnosticsRunning) return
+        viewModelScope.launch {
+            diagnosticsRunning = true
+            diagnosticsReport = withContext(Dispatchers.IO) { runCatching { factory.inspectExtractedRootfs() }.getOrElse { "Falha ao inspecionar rootfs: ${it.message}" } }
+            diagnosticsRunning = false
+        }
+    }
 
     fun prepareSandbox() {
         if (phase is SandboxPhase.Downloading || phase is SandboxPhase.Preparing) return

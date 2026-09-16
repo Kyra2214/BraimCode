@@ -326,9 +326,10 @@ fun StatusSection(viewModel: SandboxViewModel) {
                 }
                 is SandboxPhase.Ready -> {
                     Text("Sandbox pronto — lifecycle gerenciado ativo.")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedButton(onClick = { viewModel.resetSandbox() }) { Text("Resetar sandbox") }
-                        OutlinedButton(onClick = { viewModel.runDiagnostics() }) { Text("Diagnóstico") }
+                        OutlinedButton(onClick = { viewModel.runDiagnostics() }, enabled = !viewModel.diagnosticsRunning) { Text("Diagnóstico") }
+                        if (viewModel.diagnosticsRunning) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     }
                     Button(onClick = { viewModel.runFullSelfCheck() }, enabled = !viewModel.selfCheckRunning) { Text("Teste geral") }
                     viewModel.selfCheckStage?.let {

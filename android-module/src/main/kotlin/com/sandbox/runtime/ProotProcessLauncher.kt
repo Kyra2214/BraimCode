@@ -18,8 +18,17 @@ class ProotProcessLauncher(
     private val nativeLibraryDir: String? = null,
     private val prootLoader: String? = null,
     private val executableFinder: (List<String>) -> String? = { candidates -> candidates.firstOrNull { File(it).canExecute() } },
+    private val namespaceSupportProvider: () -> NamespaceSupport = { NamespaceSupport.detect() },
     override val resourceLimits: ProotResourceLimits = ProotResourceLimits.DEFAULT
 ) : SandboxProcessLauncher {
+
+    // unshare -n (CLONE_NEWNET) exige a mesma capacidade de namespace sem
+    // privilégio que o proot precisa pro isolamento geral. Em modo de
+    // compatibilidade (kernel sem user namespaces) o binário costuma
+    // existir no disco mas falha com "Operation not permitted" em tempo de
+    // execução — então nem tentamos, em vez de deixar isso derrubar a
+    // cadeia inteira Brain → Policy → Sandbox.
+    private val networkNamespaceSupported: Boolean by lazy { namespaceSupportProvider().userNamespacesAvailable }
 
     override val processGroupManaged: Boolean = findSetsid() != null
 
@@ -36,9 +45,7 @@ class ProotProcessLauncher(
 
     override fun launch(command: List<String>, workingDir: String, networkAllowed: Boolean): Process {
         val setsid = findSetsid()
-        // Network isolation is best-effort on Android. If unshare exists we
-        // honor networkAllowed=false; if it does not, keep the runtime usable.
-        val unshare = if (networkAllowed) null else findUnshare()
+        val unshare = resolveUnshare(networkAllowed)
         val args = buildArgs(command, workingDir, setsid, unshare)
         return ProcessBuilder(args).redirectErrorStream(false).apply {
             environment().clear()
@@ -70,6 +77,13 @@ class ProotProcessLauncher(
         add("/bin/bash"); add("-c")
         add(resourceLimits.verifiedPreamble() + "exec " + command.joinToString(" ") { shellEscape(it) })
     }
+
+    // Network isolation is best-effort on Android. If unshare exists AND the
+    // kernel actually supports unprivileged namespaces we honor
+    // networkAllowed=false; otherwise keep the runtime usable instead of
+    // failing on unshare's "Operation not permitted".
+    internal fun resolveUnshare(networkAllowed: Boolean): String? =
+        if (networkAllowed || !networkNamespaceSupported) null else findUnshare()
 
     private fun findSetsid(): String? = executableFinder(listOf("/system/bin/setsid", "/usr/bin/setsid", "/bin/setsid"))
 

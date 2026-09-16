@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -36,8 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import com.sandbox.runtime.SandboxExecutionResult
 
 data class DiffLine(val prefix: Char, val text: String)
@@ -109,7 +116,6 @@ private fun threadEvents(viewModel: SandboxViewModel, query: String = ""): List<
     if (viewModel.activeThreadEvents.none { it is ThreadEvent.Report && it.title == "Git status" }) {
         viewModel.lastGitStatus?.let { add(ThreadEvent.Report("Git status", it)) }
     }
-    viewModel.diagnosticsReport?.let { add(ThreadEvent.Report("Diagnóstico", it)) }
 }.filter { query.isBlank() || eventText(it).contains(query, ignoreCase = true) }
 
 private fun eventText(event: ThreadEvent): String = when (event) {
@@ -145,6 +151,9 @@ private fun ThreadTopBar(viewModel: SandboxViewModel, searchOpen: Boolean, onTog
             )
             IconButton(onClick = onSearch) {
                 Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, contentDescription = if (searchOpen) "Fechar busca" else "Buscar")
+            }
+            IconButton(onClick = { viewModel.clearActiveSession() }) {
+                Icon(Icons.Default.Delete, contentDescription = "Limpar chat")
             }
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Default.Settings, contentDescription = "Configurações")
@@ -187,9 +196,25 @@ private fun phaseLabel(phase: SandboxPhase): String = when (phase) {
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    fun copy(text: String) { clipboard.setText(AnnotatedString(text)); Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show() }
     when (event) {
-        is ThreadEvent.User -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) { Text(event.text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
-        is ThreadEvent.Agent -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) { Column(modifier = Modifier.padding(12.dp)) { Text("Turno do agente", style = MaterialTheme.typography.labelSmall); Text(event.text, style = MaterialTheme.typography.bodyMedium) } }
+        is ThreadEvent.User -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) {
+            Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                SelectionContainer(modifier = Modifier.weight(1f)) { Text(event.text, style = MaterialTheme.typography.bodyMedium) }
+                IconButton(onClick = { copy(event.text) }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, contentDescription = "Copiar") }
+            }
+        }
+        is ThreadEvent.Agent -> Card(modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { viewModel.quoteEvent(event) })) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Turno do agente", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { copy(event.text) }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, contentDescription = "Copiar") }
+                }
+                SelectionContainer { Text(event.text, style = MaterialTheme.typography.bodyMedium) }
+            }
+        }
         is ThreadEvent.System -> Card {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(event.text, color = if (event.text.contains("bloqueado", true)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -199,9 +224,12 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
         }
         is ThreadEvent.Terminal -> Card {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Terminal · ${if (event.result.exitCode == 0) "sucesso" else "falha"}", style = MaterialTheme.typography.titleSmall)
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Terminal · ${if (event.result.exitCode == 0) "sucesso" else "falha"}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    event.execution?.let { IconButton(onClick = { copy("$ ${it.command.joinToString(" ")}\nexit=${it.exitCode}\n${it.stdout}") }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, contentDescription = "Copiar") } }
+                }
                 event.execution?.let { Text("${it.durationMs} ms · ${it.terminationReason.name}", style = MaterialTheme.typography.labelSmall) }
-                event.execution?.let { Text("$ ${it.command.joinToString(" ")}\nexit=${it.exitCode}\n${it.stdout.take(600)}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+                event.execution?.let { SelectionContainer { Text("$ ${it.command.joinToString(" ")}\nexit=${it.exitCode}\n${it.stdout.take(600)}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) } }
             }
         }
         is ThreadEvent.Approval -> Card {
@@ -213,8 +241,11 @@ private fun ThreadEventCard(event: ThreadEvent, viewModel: SandboxViewModel) {
         }
         is ThreadEvent.Report -> Card {
             Column(modifier = Modifier.padding(12.dp)) {
-                Text(event.title, style = MaterialTheme.typography.titleSmall)
-                Text(event.body.take(1000), fontFamily = if (event.title == "Git status") FontFamily.Monospace else FontFamily.Default, style = MaterialTheme.typography.bodySmall)
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(event.title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { copy(event.body) }, modifier = Modifier.size(28.dp)) { Icon(Icons.Default.ContentCopy, contentDescription = "Copiar") }
+                }
+                SelectionContainer { Text(event.body.take(1000), fontFamily = if (event.title == "Git status") FontFamily.Monospace else FontFamily.Default, style = MaterialTheme.typography.bodySmall) }
             }
         }
         is ThreadEvent.Diff -> Card {

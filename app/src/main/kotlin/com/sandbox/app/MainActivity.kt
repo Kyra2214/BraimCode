@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import com.sandbox.runtime.SandboxExecutionResult
 import com.sandbox.sandbox.BuiltInToolchains
 import com.sandbox.sandbox.ComponentKind
+import com.sandbox.sandbox.SelfCheckStatus
 
 open class MainActivity : ComponentActivity() {
     private val viewModel: SandboxViewModel by viewModels()
@@ -295,7 +296,13 @@ private fun SelfCheckReportSection(report: com.sandbox.sandbox.SelfCheckReport) 
 @Composable
 fun StatusSection(viewModel: SandboxViewModel) {
     var expandedManual by remember { mutableStateOf(false) }
-    val expanded = expandedManual || viewModel.selfCheckStage != null
+    val expanded = expandedManual
+    androidx.compose.runtime.LaunchedEffect(viewModel.selfCheckReport) {
+        if (viewModel.selfCheckReport != null) expandedManual = true
+    }
+    androidx.compose.runtime.LaunchedEffect(viewModel.diagnosticsReport) {
+        if (viewModel.diagnosticsReport != null) expandedManual = true
+    }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -326,6 +333,7 @@ fun StatusSection(viewModel: SandboxViewModel) {
 }
 
 private fun statusHeadline(viewModel: SandboxViewModel): String {
+    viewModel.selfCheckStage?.let { return it }
     val compat = if (viewModel.namespaceSupport.compatibilityMode) " · modo compatibilidade" else ""
     return when (val phase = viewModel.phase) {
         is SandboxPhase.NotReady -> "Sandbox não preparado"
@@ -366,6 +374,8 @@ private fun StatusPrimaryActions(viewModel: SandboxViewModel) {
 
 @Composable
 private fun StatusDetails(viewModel: SandboxViewModel) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             if (viewModel.namespaceSupport.compatibilityMode)
@@ -381,12 +391,6 @@ private fun StatusDetails(viewModel: SandboxViewModel) {
             }
             else -> {}
         }
-        viewModel.selfCheckStage?.let {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text(it, style = MaterialTheme.typography.bodySmall)
-            }
-        }
         viewModel.lastBrainCycle?.let { cycle ->
             val result = cycle.passos.singleOrNull()
             Text(
@@ -394,6 +398,29 @@ private fun StatusDetails(viewModel: SandboxViewModel) {
                 color = if (cycle.aprovado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
+        }
+        viewModel.selfCheckReport?.let { report ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Teste geral", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = {
+                        val text = report.sections.joinToString("\n") { s -> "${s.title}:\n" + s.items.joinToString("\n") { "  ${it.status} ${it.label} — ${it.detail}" } }
+                        clipboard.setText(AnnotatedString(text)); Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show()
+                    }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Copiar", style = MaterialTheme.typography.labelSmall) }
+                }
+                report.sections.forEach { section ->
+                    Text("${section.title}: ${section.items.count { it.status == SelfCheckStatus.OK }}/${section.items.size} OK", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        viewModel.diagnosticsReport?.let { text ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Diagnóstico", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { clipboard.setText(AnnotatedString(text)); Toast.makeText(context, "Copiado", Toast.LENGTH_SHORT).show() }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Copiar", style = MaterialTheme.typography.labelSmall) }
+                }
+                SelectionContainer { Text(text.take(2000), fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+            }
         }
     }
 }

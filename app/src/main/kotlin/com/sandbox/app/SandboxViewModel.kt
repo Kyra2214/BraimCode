@@ -170,6 +170,16 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
         return true
     }
 
+    fun clearActiveSession() {
+        val id = activeSessionId ?: return
+        sessions = sessions.map { session -> if (session.id != id) session else session.copy(title = "Nova tarefa", events = emptyList(), updatedAt = System.currentTimeMillis()) }
+        chatMessages.clear()
+        diagnosticsReport = null
+        lastBrainCycle = null
+        selfCheckReport = null
+        persistSessions()
+    }
+
     fun appendThreadEvent(event: ThreadEvent) {
         val id = activeSessionId ?: return
         sessions = sessions.map { session ->
@@ -330,8 +340,9 @@ class SandboxViewModel(application: Application) : AndroidViewModel(application)
     var selfCheckStage by mutableStateOf<String?>(null); private set
 
     fun runFullSelfCheck() {
-        val plat = platform ?: return
-        if (selfCheckRunning || phase != SandboxPhase.Ready) return
+        val plat = platform ?: run { appendThreadEvent(ThreadEvent.System("Teste geral indisponível: sandbox não está pronto.")); return }
+        if (selfCheckRunning) return
+        if (phase != SandboxPhase.Ready) { appendThreadEvent(ThreadEvent.System("Teste geral indisponível: sandbox ocupado.")); return }
         viewModelScope.launch {
             selfCheckRunning = true; phase = SandboxPhase.Running
             try {
